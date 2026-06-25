@@ -128,8 +128,79 @@ void main() {
     expect(find.text('معلومات عامة'), findsWidgets);
     expect(find.text('الفيديوهات'), findsOneWidget);
     expect(find.text('الريڤيوز'), findsOneWidget);
+    expect(find.text('طلبات العملاء'), findsOneWidget);
     expect(find.text('بيانات الشركة'), findsOneWidget);
     expect(find.text('الفورم'), findsOneWidget);
+  });
+
+  testWidgets('service request form accepts input and reaches admin state', (
+    tester,
+  ) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const WeaaApp(initialLocation: '/services/iron-dome'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(_field('request-name'), 'خالد');
+    await tester.enterText(_field('request-phone'), '+966500000000');
+    await tester.enterText(_field('request-email'), 'client@example.com');
+    await tester.enterText(
+      _field('request-details'),
+      'أحتاج عرض سعر وتشغيل مبدئي',
+    );
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('submit-service-request')),
+    );
+    await tester.tap(find.byKey(const ValueKey('submit-service-request')));
+    await tester.pumpAndSettle();
+
+    final requests = container.read(cmsProvider).serviceRequests;
+    expect(requests, hasLength(1));
+    expect(requests.first.name, 'خالد');
+    expect(requests.first.serviceTitle, 'القبة الحديدية');
+    expect(requests.first.details, 'أحتاج عرض سعر وتشغيل مبدئي');
+    expect(find.text('تم إرسال الطلب إلى لوحة الأدمن'), findsOneWidget);
+  });
+
+  testWidgets('admin can add a review to a service', (tester) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const WeaaApp(initialLocation: '/admin'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('الريڤيوز'));
+    await tester.tap(find.text('الريڤيوز'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      _field('new-review-customer-iron-dome'),
+      'عميل جديد',
+    );
+    await tester.enterText(
+      _field('new-review-body-iron-dome'),
+      'الخدمة وصلتني بشكل واضح ومنظم.',
+    );
+    await tester.tap(find.byKey(const ValueKey('add-review-iron-dome')));
+    await tester.pumpAndSettle();
+
+    final service = container
+        .read(cmsProvider)
+        .serviceModels
+        .firstWhere((item) => item.slug == 'iron-dome');
+    expect(service.reviews.first.customer, 'عميل جديد');
+    expect(service.reviews.first.body, 'الخدمة وصلتني بشكل واضح ومنظم.');
+    expect(service.reviews.first.dateLabel, 'من لوحة الأدمن');
   });
 
   testWidgets('CMS state edits are reflected by public pages', (tester) async {
@@ -139,6 +210,13 @@ void main() {
     expect(find.text('شركة وعاء المعدلة'), findsWidgets);
     expect(find.text('تاجلاين معدل من لوحة الأدمن'), findsWidgets);
   });
+}
+
+Finder _field(String key) {
+  return find.descendant(
+    of: find.byKey(ValueKey(key)),
+    matching: find.byType(EditableText),
+  );
 }
 
 class _CmsEditHarness extends ConsumerStatefulWidget {

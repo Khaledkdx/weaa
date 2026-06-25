@@ -219,6 +219,22 @@ class CmsController extends Notifier<CmsContent> {
     return _commit(state.copyWith(serviceModels: services));
   }
 
+  Future<void> addReview(String serviceSlug, CmsReview review) {
+    final services = [...state.serviceModels];
+    final serviceIndex = services.indexWhere(
+      (item) => item.slug == serviceSlug,
+    );
+    if (serviceIndex == -1) return Future.value();
+    final reviews = [review, ...services[serviceIndex].reviews];
+    services[serviceIndex] = services[serviceIndex].copyWith(reviews: reviews);
+    return _commit(state.copyWith(serviceModels: services));
+  }
+
+  Future<void> submitServiceRequest(ServiceRequest request) {
+    final requests = [request, ...state.serviceRequests];
+    return _commit(state.copyWith(serviceRequests: requests));
+  }
+
   Future<void> updateFormLabel(int index, String label) {
     final labels = [...state.formLabels];
     labels[index] = label;
@@ -253,6 +269,7 @@ class CmsContent {
     required this.initiatives,
     required this.values,
     required this.formLabels,
+    required this.serviceRequests,
   });
 
   final CompanyContent company;
@@ -262,6 +279,7 @@ class CmsContent {
   final List<CmsItem> initiatives;
   final List<String> values;
   final List<String> formLabels;
+  final List<ServiceRequest> serviceRequests;
 
   static CmsContent seed() {
     return const CmsContent(
@@ -467,6 +485,7 @@ class CmsContent {
         'نوع الخدمة',
         'تفاصيل الطلب',
       ],
+      serviceRequests: [],
     );
   }
 
@@ -478,6 +497,7 @@ class CmsContent {
     List<CmsItem>? initiatives,
     List<String>? values,
     List<String>? formLabels,
+    List<ServiceRequest>? serviceRequests,
   }) {
     return CmsContent(
       company: company ?? this.company,
@@ -487,6 +507,7 @@ class CmsContent {
       initiatives: initiatives ?? this.initiatives,
       values: values ?? this.values,
       formLabels: formLabels ?? this.formLabels,
+      serviceRequests: serviceRequests ?? this.serviceRequests,
     );
   }
 }
@@ -624,6 +645,28 @@ class CmsReview {
       rating,
     );
   }
+}
+
+class ServiceRequest {
+  const ServiceRequest({
+    required this.serviceSlug,
+    required this.serviceTitle,
+    required this.name,
+    required this.phone,
+    required this.email,
+    required this.details,
+    required this.createdAtLabel,
+    this.status = 'طلب جديد',
+  });
+
+  final String serviceSlug;
+  final String serviceTitle;
+  final String name;
+  final String phone;
+  final String email;
+  final String details;
+  final String createdAtLabel;
+  final String status;
 }
 
 class NavItem {
@@ -1642,7 +1685,7 @@ class _VideoCopy extends StatelessWidget {
   }
 }
 
-class ServiceRequestForm extends StatelessWidget {
+class ServiceRequestForm extends ConsumerStatefulWidget {
   const ServiceRequestForm({
     required this.service,
     required this.labels,
@@ -1653,16 +1696,116 @@ class ServiceRequestForm extends StatelessWidget {
   final List<String> labels;
 
   @override
+  ConsumerState<ServiceRequestForm> createState() => _ServiceRequestFormState();
+}
+
+class _ServiceRequestFormState extends ConsumerState<ServiceRequestForm> {
+  late final TextEditingController nameController;
+  late final TextEditingController phoneController;
+  late final TextEditingController emailController;
+  late final TextEditingController detailsController;
+  late final TextEditingController serviceController;
+
+  @override
+  void initState() {
+    super.initState();
+    nameController = TextEditingController();
+    phoneController = TextEditingController();
+    emailController = TextEditingController();
+    detailsController = TextEditingController();
+    serviceController = TextEditingController(text: widget.service.titleAr);
+  }
+
+  @override
+  void dispose() {
+    nameController.dispose();
+    phoneController.dispose();
+    emailController.dispose();
+    detailsController.dispose();
+    serviceController.dispose();
+    super.dispose();
+  }
+
+  Future<void> submit() async {
+    final request = ServiceRequest(
+      serviceSlug: widget.service.slug ?? widget.service.titleEn,
+      serviceTitle: widget.service.titleAr,
+      name: nameController.text.trim(),
+      phone: phoneController.text.trim(),
+      email: emailController.text.trim(),
+      details: detailsController.text.trim(),
+      createdAtLabel: 'الآن',
+    );
+    await ref.read(cmsProvider.notifier).submitServiceRequest(request);
+    if (!mounted) return;
+    nameController.clear();
+    phoneController.clear();
+    emailController.clear();
+    detailsController.clear();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'تم إرسال الطلب إلى لوحة الأدمن',
+          style: appText(color: AppColors.ink, weight: FontWeight.w800),
+        ),
+        backgroundColor: AppColors.surfaceStrong,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     final compact = MediaQuery.sizeOf(context).width < 800;
     final fields = [
-      FauxInput(label: labels[0]),
-      FauxInput(label: labels[1]),
-      FauxInput(label: labels[2]),
-      FauxInput(label: '${labels[3]}: ${service.titleAr}'),
-      FauxInput(label: labels[4], tall: true),
+      RequestInput(
+        key: const ValueKey('request-name'),
+        label: widget.labels[0],
+        controller: nameController,
+      ),
+      RequestInput(
+        key: const ValueKey('request-phone'),
+        label: widget.labels[1],
+        controller: phoneController,
+        ltr: true,
+      ),
+      RequestInput(
+        key: const ValueKey('request-email'),
+        label: widget.labels[2],
+        controller: emailController,
+        ltr: true,
+      ),
+      RequestInput(
+        key: const ValueKey('request-service'),
+        label: '${widget.labels[3]}: ${widget.service.titleAr}',
+        controller: serviceController,
+        enabled: false,
+      ),
+      RequestInput(
+        key: const ValueKey('request-details'),
+        label: widget.labels[4],
+        controller: detailsController,
+        tall: true,
+      ),
       const SizedBox(height: 14),
-      const PrimaryAction(label: 'إرسال طلب الخدمة'),
+      Align(
+        alignment: Alignment.centerRight,
+        child: FilledButton.icon(
+          key: const ValueKey('submit-service-request'),
+          onPressed: submit,
+          icon: const Icon(Icons.arrow_back_rounded),
+          label: const Text('إرسال طلب الخدمة'),
+          style: FilledButton.styleFrom(
+            backgroundColor: AppColors.accent,
+            foregroundColor: const Color(0xff071018),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+            textStyle: appText(fontSize: 15, weight: FontWeight.w900),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(999),
+            ),
+          ),
+        ),
+      ),
     ];
     return Container(
       padding: EdgeInsets.all(compact ? 18 : 24),
@@ -1683,6 +1826,61 @@ class ServiceRequestForm extends StatelessWidget {
                 Expanded(child: Column(children: fields.skip(3).toList())),
               ],
             ),
+    );
+  }
+}
+
+class RequestInput extends StatelessWidget {
+  const RequestInput({
+    required this.label,
+    required this.controller,
+    this.tall = false,
+    this.ltr = false,
+    this.enabled = true,
+    super.key,
+  });
+
+  final String label;
+  final TextEditingController controller;
+  final bool tall;
+  final bool ltr;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: TextField(
+        controller: controller,
+        enabled: enabled,
+        maxLines: tall ? 4 : 1,
+        textInputAction: tall ? TextInputAction.newline : TextInputAction.next,
+        keyboardType: tall
+            ? TextInputType.multiline
+            : ltr
+            ? TextInputType.emailAddress
+            : TextInputType.text,
+        textDirection: ltr ? TextDirection.ltr : TextDirection.rtl,
+        style: appText(color: AppColors.ink, weight: FontWeight.w800),
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: appText(color: AppColors.muted, weight: FontWeight.w800),
+          filled: true,
+          fillColor: veil(AppColors.background, enabled ? .42 : .22),
+          disabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: veil(AppColors.ink, .1)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: veil(AppColors.ink, .14)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: AppColors.accent, width: 1.4),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1824,6 +2022,7 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
     ('معلومات عامة', Icons.route_rounded),
     ('الفيديوهات', Icons.play_circle_rounded),
     ('الريڤيوز', Icons.reviews_rounded),
+    ('طلبات العملاء', Icons.inbox_rounded),
     ('بيانات الشركة', Icons.apartment_rounded),
     ('الفورم', Icons.dynamic_form_rounded),
   ];
@@ -1906,7 +2105,8 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
       ),
       4 => AdminVideosEditor(items: cms.serviceModels),
       5 => AdminReviewsEditor(items: cms.serviceModels),
-      6 => AdminCompanyEditor(company: cms.company),
+      6 => AdminRequestsEditor(requests: cms.serviceRequests),
+      7 => AdminCompanyEditor(company: cms.company),
       _ => AdminFormEditor(labels: cms.formLabels),
     };
   }
@@ -1928,6 +2128,7 @@ class AdminOverview extends StatelessWidget {
         '${cms.serviceModels.fold<int>(0, (sum, item) => sum + item.reviews.length)}',
         Icons.star_rounded,
       ),
+      ('طلبات', '${cms.serviceRequests.length}', Icons.inbox_rounded),
     ];
     return ResponsiveAdminGrid(
       children: [
@@ -2086,6 +2287,11 @@ class AdminReviewsEditor extends ConsumerWidget {
     return Column(
       children: [
         for (final service in items)
+          AdminPanel(
+            title: 'إضافة ريفيو: ${service.titleAr}',
+            child: NewReviewComposer(service: service),
+          ),
+        for (final service in items)
           for (var i = 0; i < service.reviews.length; i++)
             AdminPanel(
               title: 'Review: ${service.titleAr}',
@@ -2109,6 +2315,143 @@ class AdminReviewsEditor extends ConsumerWidget {
                 ],
               ),
             ),
+      ],
+    );
+  }
+}
+
+class NewReviewComposer extends ConsumerStatefulWidget {
+  const NewReviewComposer({required this.service, super.key});
+
+  final CmsItem service;
+
+  @override
+  ConsumerState<NewReviewComposer> createState() => _NewReviewComposerState();
+}
+
+class _NewReviewComposerState extends ConsumerState<NewReviewComposer> {
+  late final TextEditingController customerController;
+  late final TextEditingController bodyController;
+
+  @override
+  void initState() {
+    super.initState();
+    customerController = TextEditingController();
+    bodyController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    customerController.dispose();
+    bodyController.dispose();
+    super.dispose();
+  }
+
+  Future<void> submit() async {
+    final customer = customerController.text.trim();
+    final body = bodyController.text.trim();
+    if (customer.isEmpty && body.isEmpty) return;
+    await ref
+        .read(cmsProvider.notifier)
+        .addReview(
+          widget.service.slug!,
+          CmsReview(
+            customer.isEmpty ? 'عميل وعاء' : customer,
+            body.isEmpty ? 'تجربة ممتازة مع الخدمة.' : body,
+            'من لوحة الأدمن',
+            5,
+          ),
+        );
+    customerController.clear();
+    bodyController.clear();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        RequestInput(
+          key: ValueKey('new-review-customer-${widget.service.slug}'),
+          label: 'اسم صاحب الريفيو',
+          controller: customerController,
+        ),
+        RequestInput(
+          key: ValueKey('new-review-body-${widget.service.slug}'),
+          label: 'نص الريفيو',
+          controller: bodyController,
+          tall: true,
+        ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton.icon(
+            key: ValueKey('add-review-${widget.service.slug}'),
+            onPressed: submit,
+            icon: const Icon(Icons.add_rounded),
+            label: const Text('إضافة الريفيو'),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.gold,
+              foregroundColor: const Color(0xff071018),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+              textStyle: appText(fontSize: 13, weight: FontWeight.w900),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class AdminRequestsEditor extends StatelessWidget {
+  const AdminRequestsEditor({required this.requests, super.key});
+
+  final List<ServiceRequest> requests;
+
+  @override
+  Widget build(BuildContext context) {
+    if (requests.isEmpty) {
+      return AdminPanel(
+        title: 'طلبات العملاء',
+        child: Text(
+          'لا توجد طلبات حتى الآن. أي فورم خدمة يتم إرساله سيظهر هنا مباشرة داخل نفس الجلسة.',
+          style: appText(color: AppColors.muted, height: 1.7),
+        ),
+      );
+    }
+    return Column(
+      children: [
+        for (final request in requests)
+          AdminPanel(
+            title: '${request.status}: ${request.serviceTitle}',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    SignalPill(label: request.createdAtLabel, strong: true),
+                    SignalPill(label: request.phone),
+                    SignalPill(label: request.email),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  request.name,
+                  style: displayText(fontSize: 24, color: AppColors.ink),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  request.details.isEmpty
+                      ? 'لا توجد تفاصيل إضافية.'
+                      : request.details,
+                  style: appText(color: AppColors.muted, height: 1.7),
+                ),
+              ],
+            ),
+          ),
       ],
     );
   }
