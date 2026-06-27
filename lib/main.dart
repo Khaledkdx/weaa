@@ -1253,7 +1253,6 @@ const navItems = [
   NavItem('المبادرات', '/initiatives', Icons.diversity_3_rounded),
   NavItem('من نحن', '/about', Icons.apartment_rounded),
   NavItem('تواصل', '/contact', Icons.mark_email_unread_rounded),
-  NavItem('لوحة الأدمن', '/admin', Icons.tune_rounded),
 ];
 
 class HomePage extends ConsumerWidget {
@@ -1381,7 +1380,7 @@ class ServiceDetailPage extends StatelessWidget {
             page: const PageContent(
               'فيديو الخدمة',
               'شاهد شرح سريع قبل إرسال الطلب',
-              'رابط الفيديو قابل للتعديل من لوحة الأدمن لكل خدمة.',
+              'شاهد الفيديو التعريفي للخدمة قبل تعبئة الطلب.',
             ),
           ),
           VideoPanel(service: service),
@@ -1389,7 +1388,7 @@ class ServiceDetailPage extends StatelessWidget {
             page: const PageContent(
               'طلب الخدمة',
               'فورم مخصص للخدمة المختارة',
-              'Labels النموذج تأتي من CMS ويمكن تعديلها من لوحة الأدمن.',
+              'أرسل بياناتك وسيصل الطلب إلى فريق وعاء للمتابعة.',
             ),
           ),
           ServiceRequestForm(service: service, labels: cms.formLabels),
@@ -1397,7 +1396,7 @@ class ServiceDetailPage extends StatelessWidget {
             page: const PageContent(
               'آراء العملاء',
               'ماذا يقول العملاء عن الخدمة؟',
-              'الريڤيوز قابلة للتعديل من لوحة الأدمن لكل خدمة.',
+              'تجارب مختصرة من عملاء تعاملوا مع الخدمة.',
             ),
           ),
           ReviewsGrid(reviews: service.reviews),
@@ -4180,7 +4179,7 @@ class CtaCopy extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         Text(
-          'تواصل معنا عبر ${company.email} أو من خلال لوحة الأدمن لتعديل هذه التجربة.',
+          'تواصل معنا عبر ${company.email} وسيقوم فريق وعاء بمتابعة طلبك.',
           style: appText(
             color: AppColors.muted,
             height: 1.7,

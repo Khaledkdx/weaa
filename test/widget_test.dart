@@ -28,6 +28,7 @@ void main() {
     expect(find.text('الواجهة المعتمدة'), findsOneWidget);
     expect(find.text('معلومات عامة'), findsWidgets);
     expect(find.text('الخدمات'), findsWidgets);
+    expect(find.text('لوحة الأدمن'), findsNothing);
   });
 
   testWidgets('services route renders general sector information', (
