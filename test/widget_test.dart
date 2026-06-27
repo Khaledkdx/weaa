@@ -4,6 +4,22 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:weaa/main.dart';
 
 void main() {
+  test('youtubeEmbedUrlFrom supports common YouTube URLs', () {
+    expect(
+      youtubeEmbedUrlFrom('https://www.youtube.com/watch?v=b1RRMSReNs0'),
+      'https://www.youtube.com/embed/b1RRMSReNs0',
+    );
+    expect(
+      youtubeEmbedUrlFrom('https://youtu.be/b1RRMSReNs0'),
+      'https://www.youtube.com/embed/b1RRMSReNs0',
+    );
+    expect(
+      youtubeEmbedUrlFrom('https://www.youtube.com/embed/b1RRMSReNs0'),
+      'https://www.youtube.com/embed/b1RRMSReNs0',
+    );
+    expect(youtubeEmbedUrlFrom('https://weaa-sa.com/videos/iron-dome'), isNull);
+  });
+
   testWidgets('home route renders the WEAA production landing', (tester) async {
     await tester.pumpWidget(const ProviderScope(child: WeaaApp()));
     await tester.pumpAndSettle();
@@ -53,7 +69,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('تفاصيل الخدمة'), findsOneWidget);
-      expect(find.text('لينك فيديو الخدمة'), findsOneWidget);
+      expect(find.text('فيديو الخدمة'), findsWidgets);
       expect(find.text('https://weaa-sa.com/videos/iron-dome'), findsOneWidget);
       expect(find.text('الاسم الكامل'), findsOneWidget);
       expect(find.text('رقم الجوال'), findsOneWidget);

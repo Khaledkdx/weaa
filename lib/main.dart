@@ -8,6 +8,8 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase/supabase.dart';
 
+import 'service_video_embed.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
@@ -40,6 +42,33 @@ final cmsProvider = NotifierProvider<CmsController, CmsContent>(
 final cmsSyncProvider = NotifierProvider<CmsSyncController, CmsSyncState>(
   CmsSyncController.new,
 );
+
+String? youtubeEmbedUrlFrom(String? rawUrl) {
+  final value = rawUrl?.trim();
+  if (value == null || value.isEmpty) return null;
+  final uri = Uri.tryParse(value);
+  if (uri == null || !uri.hasScheme) return null;
+  final host = uri.host.toLowerCase().replaceFirst(RegExp(r'^www\.'), '');
+  String? videoId;
+  if (host == 'youtu.be') {
+    videoId = uri.pathSegments.isEmpty ? null : uri.pathSegments.first;
+  } else if (host == 'youtube.com' ||
+      host == 'm.youtube.com' ||
+      host == 'youtube-nocookie.com') {
+    if (uri.pathSegments.isNotEmpty && uri.pathSegments.first == 'embed') {
+      videoId = uri.pathSegments.length > 1 ? uri.pathSegments[1] : null;
+    } else if (uri.pathSegments.isNotEmpty &&
+        uri.pathSegments.first == 'shorts') {
+      videoId = uri.pathSegments.length > 1 ? uri.pathSegments[1] : null;
+    } else {
+      videoId = uri.queryParameters['v'];
+    }
+  }
+  if (videoId == null || !RegExp(r'^[A-Za-z0-9_-]{6,}$').hasMatch(videoId)) {
+    return null;
+  }
+  return 'https://www.youtube.com/embed/$videoId';
+}
 
 final adminAuthProvider = NotifierProvider<AdminAuthController, AdminAuthState>(
   AdminAuthController.new,
@@ -2127,10 +2156,12 @@ class VideoPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final compact = MediaQuery.sizeOf(context).width < 800;
+    final videoUrl = service.videoUrl?.trim();
+    final embedUrl = youtubeEmbedUrlFrom(videoUrl);
     final children = [
-      _VideoPreview(service: service),
+      _VideoPreview(service: service, embedUrl: embedUrl, sourceUrl: videoUrl),
       const SizedBox(height: 18),
-      _VideoCopy(service: service),
+      _VideoCopy(service: service, hasEmbeddedVideo: embedUrl != null),
     ];
     return Container(
       padding: EdgeInsets.all(compact ? 18 : 24),
@@ -2156,69 +2187,104 @@ class VideoPanel extends StatelessWidget {
 }
 
 class _VideoPreview extends StatelessWidget {
-  const _VideoPreview({required this.service});
+  const _VideoPreview({
+    required this.service,
+    required this.embedUrl,
+    required this.sourceUrl,
+  });
 
   final CmsItem service;
+  final String? embedUrl;
+  final String? sourceUrl;
 
   @override
   Widget build(BuildContext context) {
+    final embedded = embedUrl;
     return AspectRatio(
       aspectRatio: 16 / 9,
       child: Container(
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: veil(AppColors.background, .48),
           borderRadius: BorderRadius.circular(24),
           border: Border.all(color: veil(AppColors.ink, .12)),
         ),
-        child: Stack(
-          children: [
-            const Positioned.fill(
-              child: CustomPaint(painter: VideoGridPainter()),
-            ),
-            Center(
-              child: Container(
-                width: 76,
-                height: 76,
-                decoration: BoxDecoration(
-                  color: AppColors.accent,
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: const Icon(
-                  Icons.play_arrow_rounded,
-                  color: Color(0xff071018),
-                  size: 44,
-                ),
+        child: embedded == null
+            ? Stack(
+                children: [
+                  const Positioned.fill(
+                    child: CustomPaint(painter: VideoGridPainter()),
+                  ),
+                  Center(
+                    child: Container(
+                      width: 76,
+                      height: 76,
+                      decoration: BoxDecoration(
+                        color: AppColors.accent,
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: const Icon(
+                        Icons.play_arrow_rounded,
+                        color: Color(0xff071018),
+                        size: 44,
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    right: 18,
+                    bottom: 16,
+                    child: Text(
+                      sourceUrl == null || sourceUrl!.isEmpty
+                          ? 'أضف رابط الفيديو من لوحة الأدمن'
+                          : 'رابط غير قابل للعرض داخل الموقع',
+                      style: appText(
+                        color: AppColors.ink,
+                        weight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            : Stack(
+                children: [
+                  Positioned.fill(
+                    child: ServiceVideoEmbed(
+                      embedUrl: embedded,
+                      title: 'فيديو ${service.titleAr}',
+                    ),
+                  ),
+                  Positioned(
+                    right: 14,
+                    top: 14,
+                    child: SignalPill(label: 'YouTube Embed', strong: true),
+                  ),
+                ],
               ),
-            ),
-            Positioned(
-              right: 18,
-              bottom: 16,
-              child: Text(
-                service.titleAr,
-                style: appText(color: AppColors.ink, weight: FontWeight.w900),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
 }
 
 class _VideoCopy extends StatelessWidget {
-  const _VideoCopy({required this.service});
+  const _VideoCopy({required this.service, required this.hasEmbeddedVideo});
 
   final CmsItem service;
+  final bool hasEmbeddedVideo;
 
   @override
   Widget build(BuildContext context) {
+    final videoUrl = service.videoUrl?.trim();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('لينك فيديو الخدمة', style: displayText(fontSize: 34)),
+        Text('فيديو الخدمة', style: displayText(fontSize: 34)),
         const SizedBox(height: 12),
         Text(
-          'افتح الفيديو التعريفي لفهم نطاق الخدمة، طريقة العمل، والنتيجة المتوقعة قبل إرسال الفورم.',
+          hasEmbeddedVideo
+              ? 'شاهد الفيديو التعريفي داخل الصفحة لفهم نطاق الخدمة، طريقة العمل، والنتيجة المتوقعة قبل إرسال الفورم.'
+              : videoUrl == null || videoUrl.isEmpty
+              ? 'أضف رابط YouTube من لوحة الأدمن ليظهر الفيديو هنا مباشرة داخل الموقع.'
+              : 'الرابط الحالي متاح للفتح، لكنه ليس رابط YouTube قابل للعرض داخل الموقع.',
           style: appText(
             color: AppColors.muted,
             height: 1.7,
@@ -2227,9 +2293,11 @@ class _VideoCopy extends StatelessWidget {
         ),
         const SizedBox(height: 18),
         SecondaryAction(
-          label: service.videoUrl ?? 'https://weaa-sa.com/videos',
+          label: videoUrl == null || videoUrl.isEmpty
+              ? 'أضف الرابط من لوحة الأدمن'
+              : videoUrl,
           icon: Icons.open_in_new_rounded,
-          ltr: true,
+          ltr: videoUrl != null && videoUrl.isNotEmpty,
         ),
       ],
     );
