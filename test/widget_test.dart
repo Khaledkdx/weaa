@@ -258,6 +258,106 @@ void main() {
     expect(service.reviews.first.dateLabel, 'من لوحة الأدمن');
   });
 
+  testWidgets(
+    'admin CMS can add services, benefits, reviews, and form fields',
+    (tester) async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      final controller = container.read(cmsProvider.notifier);
+      await controller.addItem(CmsCollection.serviceModels);
+      final added = container.read(cmsProvider).serviceModels.last;
+      expect(added.slug, isNotEmpty);
+
+      await controller.updateItem(
+        collection: CmsCollection.serviceModels,
+        index: container.read(cmsProvider).serviceModels.length - 1,
+        titleAr: 'خدمة اختبار',
+        titleEn: 'Test Service',
+        slug: 'test-service',
+      );
+      expect(
+        container.read(cmsProvider).serviceModels.last.slug,
+        'test-service',
+      );
+
+      await controller.addBenefit('test-service');
+      await controller.updateBenefit('test-service', 0, 'مخرج اختبار');
+      expect(
+        container.read(cmsProvider).serviceModels.last.benefits.first,
+        'مخرج اختبار',
+      );
+
+      await controller.addReview(
+        'test-service',
+        const CmsReview('عميل', 'تجربة واضحة', 'اليوم', 4),
+      );
+      await controller.updateReview('test-service', 0, rating: 5);
+      expect(
+        container.read(cmsProvider).serviceModels.last.reviews.first.rating,
+        5,
+      );
+
+      await controller.addFormLabel();
+      await controller.updateFormLabel(
+        container.read(cmsProvider).formLabels.length - 1,
+        'حقل اختبار',
+      );
+      expect(container.read(cmsProvider).formLabels.last, 'حقل اختبار');
+    },
+  );
+
+  testWidgets('admin CMS rejects duplicate service slugs', (tester) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    expect(
+      () => container
+          .read(cmsProvider.notifier)
+          .updateItem(
+            collection: CmsCollection.serviceModels,
+            index: 1,
+            slug: 'iron-dome',
+          ),
+      throwsA(isA<StateError>()),
+    );
+  });
+
+  testWidgets('new CMS service appears on public routes', (tester) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final controller = container.read(cmsProvider.notifier);
+
+    await controller.addItem(CmsCollection.serviceModels);
+    await controller.updateItem(
+      collection: CmsCollection.serviceModels,
+      index: container.read(cmsProvider).serviceModels.length - 1,
+      titleAr: 'خدمة اختبار عامة',
+      titleEn: 'Public Test Service',
+      slug: 'public-test-service',
+      description: 'وصف خدمة الاختبار العامة.',
+    );
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const WeaaApp(initialLocation: '/frameworks'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('خدمة اختبار عامة'), findsWidgets);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const WeaaApp(initialLocation: '/services/public-test-service'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('تفاصيل الخدمة'), findsOneWidget);
+    expect(find.text('خدمة اختبار عامة'), findsWidgets);
+  });
+
   testWidgets('CMS state edits are reflected by public pages', (tester) async {
     await tester.pumpWidget(const ProviderScope(child: _CmsEditHarness()));
     await tester.pumpAndSettle();

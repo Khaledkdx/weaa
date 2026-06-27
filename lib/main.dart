@@ -70,6 +70,15 @@ String? youtubeEmbedUrlFrom(String? rawUrl) {
   return 'https://www.youtube.com/embed/$videoId';
 }
 
+String normalizeSlug(String value) {
+  final lower = value.trim().toLowerCase();
+  final slug = lower
+      .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+      .replaceAll(RegExp(r'-+'), '-')
+      .replaceAll(RegExp(r'^-|-$'), '');
+  return slug;
+}
+
 final adminAuthProvider = NotifierProvider<AdminAuthController, AdminAuthState>(
   AdminAuthController.new,
 );
@@ -444,10 +453,15 @@ class CmsController extends Notifier<CmsContent> {
 
   Future<void> updateCompany({
     String? nameAr,
+    String? nameEn,
     String? taglineAr,
+    String? taglineEn,
     String? phone,
     String? email,
+    String? website,
     String? headquarters,
+    String? vat,
+    String? cr,
     String? vision,
     String? mission,
   }) {
@@ -455,10 +469,15 @@ class CmsController extends Notifier<CmsContent> {
       state.copyWith(
         company: state.company.copyWith(
           nameAr: nameAr,
+          nameEn: nameEn,
           taglineAr: taglineAr,
+          taglineEn: taglineEn,
           phone: phone,
           email: email,
+          website: website,
           headquarters: headquarters,
+          vat: vat,
+          cr: cr,
           vision: vision,
           mission: mission,
         ),
@@ -466,10 +485,40 @@ class CmsController extends Notifier<CmsContent> {
     );
   }
 
-  Future<void> updatePage(String key, {String? title, String? body}) {
+  Future<void> updatePage(
+    String key, {
+    String? kicker,
+    String? title,
+    String? body,
+  }) {
     final pages = {...state.pages};
     final current = pages[key] ?? const PageContent('', '', '');
-    pages[key] = current.copyWith(title: title, body: body);
+    pages[key] = current.copyWith(kicker: kicker, title: title, body: body);
+    return _commit(state.copyWith(pages: pages));
+  }
+
+  Future<void> addPage() {
+    final pages = {...state.pages};
+    final key = _uniqueKey('page', pages.keys.toSet());
+    pages[key] = const PageContent(
+      'صفحة جديدة',
+      'عنوان الصفحة الجديدة',
+      'اكتب وصف الصفحة هنا.',
+    );
+    return _commit(state.copyWith(pages: pages));
+  }
+
+  Future<void> deletePage(String key) {
+    if (const {
+      'home',
+      'services',
+      'frameworks',
+      'contact',
+      'admin',
+    }.contains(key)) {
+      return Future.value();
+    }
+    final pages = {...state.pages}..remove(key);
     return _commit(state.copyWith(pages: pages));
   }
 
@@ -477,16 +526,105 @@ class CmsController extends Notifier<CmsContent> {
     required CmsCollection collection,
     required int index,
     String? titleAr,
+    String? titleEn,
+    String? slug,
     String? description,
     String? videoUrl,
   }) {
     final items = [..._itemsFor(collection)];
+    if (index < 0 || index >= items.length) return Future.value();
+    if (collection == CmsCollection.serviceModels && slug != null) {
+      final normalized = normalizeSlug(slug);
+      if (normalized.isEmpty || _serviceSlugExists(normalized, except: index)) {
+        throw StateError('slug غير صالح أو مكرر');
+      }
+      slug = normalized;
+    }
     items[index] = items[index].copyWith(
       titleAr: titleAr,
+      titleEn: titleEn,
+      slug: slug,
       description: description,
       videoUrl: videoUrl,
     );
     return _commit(_contentWith(collection, items));
+  }
+
+  Future<void> addItem(CmsCollection collection) {
+    final items = [..._itemsFor(collection)];
+    final count = items.length + 1;
+    final isService = collection == CmsCollection.serviceModels;
+    final titleAr = switch (collection) {
+      CmsCollection.generalInfo => 'معلومة عامة جديدة',
+      CmsCollection.serviceModels => 'خدمة جديدة',
+      CmsCollection.initiatives => 'مبادرة جديدة',
+    };
+    final slug = isService
+        ? _uniqueSlug(normalizeSlug('new-service-$count'), items)
+        : null;
+    items.add(
+      CmsItem(
+        titleAr,
+        isService ? 'New Service' : 'New Item',
+        'اكتب وصف العنصر هنا.',
+        isService ? Icons.extension_rounded : Icons.add_circle_rounded,
+        slug: slug,
+        videoUrl: isService ? 'https://www.youtube.com/watch?v=' : null,
+        benefits: isService ? const ['مخرج قابل للتعديل'] : const [],
+      ),
+    );
+    return _commit(_contentWith(collection, items));
+  }
+
+  Future<void> deleteItem(CmsCollection collection, int index) {
+    final items = [..._itemsFor(collection)];
+    if (items.length <= 1 || index < 0 || index >= items.length) {
+      return Future.value();
+    }
+    items.removeAt(index);
+    return _commit(_contentWith(collection, items));
+  }
+
+  Future<void> reorderItem(CmsCollection collection, int index, int delta) {
+    final items = [..._itemsFor(collection)];
+    final target = index + delta;
+    if (index < 0 ||
+        index >= items.length ||
+        target < 0 ||
+        target >= items.length) {
+      return Future.value();
+    }
+    final item = items.removeAt(index);
+    items.insert(target, item);
+    return _commit(_contentWith(collection, items));
+  }
+
+  Future<void> addBenefit(String serviceSlug) {
+    return _updateBenefits(
+      serviceSlug,
+      (benefits) => [...benefits, 'مخرج جديد'],
+    );
+  }
+
+  Future<void> updateBenefit(
+    String serviceSlug,
+    int benefitIndex,
+    String value,
+  ) {
+    return _updateBenefits(serviceSlug, (benefits) {
+      if (benefitIndex < 0 || benefitIndex >= benefits.length) return benefits;
+      final next = [...benefits];
+      next[benefitIndex] = value;
+      return next;
+    });
+  }
+
+  Future<void> deleteBenefit(String serviceSlug, int benefitIndex) {
+    return _updateBenefits(serviceSlug, (benefits) {
+      if (benefitIndex < 0 || benefitIndex >= benefits.length) return benefits;
+      final next = [...benefits]..removeAt(benefitIndex);
+      return next;
+    });
   }
 
   Future<void> updateReview(
@@ -494,6 +632,8 @@ class CmsController extends Notifier<CmsContent> {
     int reviewIndex, {
     String? customer,
     String? body,
+    String? dateLabel,
+    int? rating,
   }) {
     final services = [...state.serviceModels];
     final serviceIndex = services.indexWhere(
@@ -505,6 +645,8 @@ class CmsController extends Notifier<CmsContent> {
     reviews[reviewIndex] = reviews[reviewIndex].copyWith(
       customer: customer,
       body: body,
+      dateLabel: dateLabel,
+      rating: rating,
     );
     services[serviceIndex] = services[serviceIndex].copyWith(reviews: reviews);
     return _commit(state.copyWith(serviceModels: services));
@@ -576,7 +718,36 @@ class CmsController extends Notifier<CmsContent> {
 
   Future<void> updateFormLabel(int index, String label) {
     final labels = [...state.formLabels];
+    if (index < 0 || index >= labels.length) return Future.value();
     labels[index] = label;
+    return _commit(state.copyWith(formLabels: labels));
+  }
+
+  Future<void> addFormLabel() {
+    final labels = [...state.formLabels, 'حقل جديد'];
+    return _commit(state.copyWith(formLabels: labels));
+  }
+
+  Future<void> deleteFormLabel(int index) {
+    final labels = [...state.formLabels];
+    if (labels.length <= 1 || index < 0 || index >= labels.length) {
+      return Future.value();
+    }
+    labels.removeAt(index);
+    return _commit(state.copyWith(formLabels: labels));
+  }
+
+  Future<void> reorderFormLabel(int index, int delta) {
+    final labels = [...state.formLabels];
+    final target = index + delta;
+    if (index < 0 ||
+        index >= labels.length ||
+        target < 0 ||
+        target >= labels.length) {
+      return Future.value();
+    }
+    final item = labels.removeAt(index);
+    labels.insert(target, item);
     return _commit(state.copyWith(formLabels: labels));
   }
 
@@ -594,6 +765,49 @@ class CmsController extends Notifier<CmsContent> {
       CmsCollection.serviceModels => state.copyWith(serviceModels: items),
       CmsCollection.initiatives => state.copyWith(initiatives: items),
     };
+  }
+
+  Future<void> _updateBenefits(
+    String serviceSlug,
+    List<String> Function(List<String> benefits) update,
+  ) {
+    final services = [...state.serviceModels];
+    final serviceIndex = services.indexWhere(
+      (item) => item.slug == serviceSlug,
+    );
+    if (serviceIndex == -1) return Future.value();
+    services[serviceIndex] = services[serviceIndex].copyWith(
+      benefits: update(services[serviceIndex].benefits),
+    );
+    return _commit(state.copyWith(serviceModels: services));
+  }
+
+  bool _serviceSlugExists(String slug, {required int except}) {
+    for (var i = 0; i < state.serviceModels.length; i++) {
+      if (i != except && state.serviceModels[i].slug == slug) return true;
+    }
+    return false;
+  }
+
+  String _uniqueSlug(String base, List<CmsItem> items) {
+    var slug = base.isEmpty ? 'service' : base;
+    var index = 2;
+    final slugs = {for (final item in items) item.slug};
+    while (slugs.contains(slug)) {
+      slug = '$base-$index';
+      index++;
+    }
+    return slug;
+  }
+
+  String _uniqueKey(String base, Set<String> keys) {
+    var key = base;
+    var index = 2;
+    while (keys.contains(key)) {
+      key = '$base-$index';
+      index++;
+    }
+    return key;
   }
 }
 
@@ -1059,8 +1273,10 @@ class CmsItem {
   CmsItem copyWith({
     String? titleAr,
     String? titleEn,
+    String? slug,
     String? description,
     String? videoUrl,
+    List<String>? benefits,
     List<CmsReview>? reviews,
   }) {
     return CmsItem(
@@ -1068,9 +1284,9 @@ class CmsItem {
       titleEn ?? this.titleEn,
       description ?? this.description,
       icon,
-      slug: slug,
+      slug: slug ?? this.slug,
       videoUrl: videoUrl ?? this.videoUrl,
-      benefits: benefits,
+      benefits: benefits ?? this.benefits,
       reviews: reviews ?? this.reviews,
     );
   }
@@ -1117,12 +1333,17 @@ class CmsReview {
   final String dateLabel;
   final int rating;
 
-  CmsReview copyWith({String? customer, String? body}) {
+  CmsReview copyWith({
+    String? customer,
+    String? body,
+    String? dateLabel,
+    int? rating,
+  }) {
     return CmsReview(
       customer ?? this.customer,
       body ?? this.body,
-      dateLabel,
-      rating,
+      dateLabel ?? this.dateLabel,
+      rating ?? this.rating,
     );
   }
 
@@ -2456,6 +2677,7 @@ class RequestInput extends StatelessWidget {
     this.ltr = false,
     this.enabled = true,
     this.obscure = false,
+    this.onChanged,
     super.key,
   });
 
@@ -2465,6 +2687,7 @@ class RequestInput extends StatelessWidget {
   final bool ltr;
   final bool enabled;
   final bool obscure;
+  final ValueChanged<String>? onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -2483,6 +2706,7 @@ class RequestInput extends StatelessWidget {
             : TextInputType.text,
         textDirection: ltr ? TextDirection.ltr : TextDirection.rtl,
         style: appText(color: AppColors.ink, weight: FontWeight.w800),
+        onChanged: onChanged,
         decoration: InputDecoration(
           labelText: label,
           labelStyle: appText(color: AppColors.muted, weight: FontWeight.w800),
@@ -2756,6 +2980,7 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
     ('الصفحات', Icons.article_rounded),
     ('الخدمات', Icons.account_tree_rounded),
     ('معلومات عامة', Icons.route_rounded),
+    ('المبادرات', Icons.diversity_3_rounded),
     ('الفيديوهات', Icons.play_circle_rounded),
     ('الريڤيوز', Icons.reviews_rounded),
     ('طلبات العملاء', Icons.inbox_rounded),
@@ -2839,10 +3064,15 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
         title: 'معلومات عامة',
         items: cms.generalInfo,
       ),
-      4 => AdminVideosEditor(items: cms.serviceModels),
-      5 => AdminReviewsEditor(items: cms.serviceModels),
-      6 => AdminRequestsEditor(requests: cms.serviceRequests),
-      7 => AdminCompanyEditor(company: cms.company),
+      4 => AdminItemsEditor(
+        collection: CmsCollection.initiatives,
+        title: 'المبادرات',
+        items: cms.initiatives,
+      ),
+      5 => AdminVideosEditor(items: cms.serviceModels),
+      6 => AdminReviewsEditor(items: cms.serviceModels),
+      7 => AdminRequestsEditor(requests: cms.serviceRequests),
+      8 => AdminCompanyEditor(company: cms.company),
       _ => AdminFormEditor(labels: cms.formLabels),
     };
   }
@@ -2859,6 +3089,7 @@ class AdminOverview extends StatelessWidget {
       ('صفحات', '${cms.pages.length}', Icons.article_rounded),
       ('خدمات', '${cms.serviceModels.length}', Icons.account_tree_rounded),
       ('معلومات عامة', '${cms.generalInfo.length}', Icons.route_rounded),
+      ('مبادرات', '${cms.initiatives.length}', Icons.diversity_3_rounded),
       (
         'ريڤيوز',
         '${cms.serviceModels.fold<int>(0, (sum, item) => sum + item.reviews.length)}',
@@ -2903,11 +3134,31 @@ class AdminPagesEditor extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Column(
       children: [
+        Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton.icon(
+            onPressed: () => ref.read(cmsProvider.notifier).addPage(),
+            icon: const Icon(Icons.add_rounded),
+            label: const Text('إضافة صفحة'),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.gold,
+              foregroundColor: const Color(0xff071018),
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
         for (final entry in cms.pages.entries)
           AdminPanel(
             title: 'صفحة: ${entry.key}',
             child: Column(
               children: [
+                CmsTextField(
+                  label: 'العنوان الصغير',
+                  initialValue: entry.value.kicker,
+                  onSave: (value) => ref
+                      .read(cmsProvider.notifier)
+                      .updatePage(entry.key, kicker: value),
+                ),
                 CmsTextField(
                   label: 'العنوان',
                   initialValue: entry.value.title,
@@ -2922,6 +3173,26 @@ class AdminPagesEditor extends ConsumerWidget {
                   onSave: (value) => ref
                       .read(cmsProvider.notifier)
                       .updatePage(entry.key, body: value),
+                ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: AdminActionButton(
+                    label: 'حذف الصفحة',
+                    icon: Icons.delete_rounded,
+                    danger: true,
+                    onPressed:
+                        const {
+                          'home',
+                          'services',
+                          'frameworks',
+                          'contact',
+                          'admin',
+                        }.contains(entry.key)
+                        ? null
+                        : () => ref
+                              .read(cmsProvider.notifier)
+                              .deletePage(entry.key),
+                  ),
                 ),
               ],
             ),
@@ -2945,40 +3216,152 @@ class AdminItemsEditor extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final controller = ref.read(cmsProvider.notifier);
     return Column(
       children: [
+        Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton.icon(
+            onPressed: () => controller.addItem(collection),
+            icon: const Icon(Icons.add_rounded),
+            label: Text('إضافة $title'),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.gold,
+              foregroundColor: const Color(0xff071018),
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
         for (var i = 0; i < items.length; i++)
           AdminPanel(
             title: '$title: ${items[i].titleAr}',
             child: Column(
               children: [
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    AdminActionButton(
+                      label: 'أعلى',
+                      icon: Icons.keyboard_arrow_up_rounded,
+                      onPressed: i == 0
+                          ? null
+                          : () => controller.reorderItem(collection, i, -1),
+                    ),
+                    AdminActionButton(
+                      label: 'أسفل',
+                      icon: Icons.keyboard_arrow_down_rounded,
+                      onPressed: i == items.length - 1
+                          ? null
+                          : () => controller.reorderItem(collection, i, 1),
+                    ),
+                    AdminActionButton(
+                      label: 'حذف',
+                      icon: Icons.delete_rounded,
+                      danger: true,
+                      onPressed: items.length <= 1
+                          ? null
+                          : () => controller.deleteItem(collection, i),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
                 CmsTextField(
                   label: 'الاسم',
                   initialValue: items[i].titleAr,
-                  onSave: (value) => ref
-                      .read(cmsProvider.notifier)
-                      .updateItem(
-                        collection: collection,
-                        index: i,
-                        titleAr: value,
-                      ),
+                  onSave: (value) => controller.updateItem(
+                    collection: collection,
+                    index: i,
+                    titleAr: value,
+                  ),
                 ),
+                CmsTextField(
+                  label: 'English Name',
+                  initialValue: items[i].titleEn,
+                  ltr: true,
+                  onSave: (value) => controller.updateItem(
+                    collection: collection,
+                    index: i,
+                    titleEn: value,
+                  ),
+                ),
+                if (collection == CmsCollection.serviceModels)
+                  CmsTextField(
+                    label: 'Slug',
+                    initialValue: items[i].slug ?? '',
+                    ltr: true,
+                    onSave: (value) => controller.updateItem(
+                      collection: collection,
+                      index: i,
+                      slug: value,
+                    ),
+                  ),
+                if (collection == CmsCollection.serviceModels)
+                  AdminBenefitsEditor(service: items[i]),
                 CmsTextField(
                   label: 'الوصف',
                   initialValue: items[i].description,
                   tall: true,
-                  onSave: (value) => ref
-                      .read(cmsProvider.notifier)
-                      .updateItem(
-                        collection: collection,
-                        index: i,
-                        description: value,
-                      ),
+                  onSave: (value) => controller.updateItem(
+                    collection: collection,
+                    index: i,
+                    description: value,
+                  ),
                 ),
               ],
             ),
           ),
       ],
+    );
+  }
+}
+
+class AdminBenefitsEditor extends ConsumerWidget {
+  const AdminBenefitsEditor({required this.service, super.key});
+
+  final CmsItem service;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final controller = ref.read(cmsProvider.notifier);
+    final slug = service.slug;
+    if (slug == null || slug.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return AdminPanel(
+      title: 'مخرجات الخدمة',
+      child: Column(
+        children: [
+          for (var i = 0; i < service.benefits.length; i++)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: CmsTextField(
+                    label: 'مخرج ${i + 1}',
+                    initialValue: service.benefits[i],
+                    onSave: (value) => controller.updateBenefit(slug, i, value),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                AdminActionButton(
+                  label: 'حذف',
+                  icon: Icons.close_rounded,
+                  danger: true,
+                  onPressed: () => controller.deleteBenefit(slug, i),
+                ),
+              ],
+            ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: AdminActionButton(
+              label: 'إضافة مخرج',
+              icon: Icons.add_rounded,
+              onPressed: () => controller.addBenefit(slug),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -2995,17 +3378,27 @@ class AdminVideosEditor extends ConsumerWidget {
         for (var i = 0; i < items.length; i++)
           AdminPanel(
             title: 'فيديو: ${items[i].titleAr}',
-            child: CmsTextField(
-              label: 'Video URL',
-              initialValue: items[i].videoUrl ?? '',
-              ltr: true,
-              onSave: (value) => ref
-                  .read(cmsProvider.notifier)
-                  .updateItem(
-                    collection: CmsCollection.serviceModels,
-                    index: i,
-                    videoUrl: value,
-                  ),
+            child: Column(
+              children: [
+                CmsTextField(
+                  label: 'Video URL',
+                  initialValue: items[i].videoUrl ?? '',
+                  ltr: true,
+                  onSave: (value) => ref
+                      .read(cmsProvider.notifier)
+                      .updateItem(
+                        collection: CmsCollection.serviceModels,
+                        index: i,
+                        videoUrl: value,
+                      ),
+                ),
+                const SizedBox(height: 10),
+                _VideoPreview(
+                  service: items[i],
+                  embedUrl: youtubeEmbedUrlFrom(items[i].videoUrl),
+                  sourceUrl: items[i].videoUrl,
+                ),
+              ],
             ),
           ),
       ],
@@ -3048,6 +3441,25 @@ class AdminReviewsEditor extends ConsumerWidget {
                         .read(cmsProvider.notifier)
                         .updateReview(service.slug!, i, body: value),
                   ),
+                  CmsTextField(
+                    label: 'التاريخ/الحالة',
+                    initialValue: service.reviews[i].dateLabel,
+                    onSave: (value) => ref
+                        .read(cmsProvider.notifier)
+                        .updateReview(service.slug!, i, dateLabel: value),
+                  ),
+                  CmsTextField(
+                    label: 'التقييم 1-5',
+                    initialValue: service.reviews[i].rating.toString(),
+                    ltr: true,
+                    onSave: (value) => ref
+                        .read(cmsProvider.notifier)
+                        .updateReview(
+                          service.slug!,
+                          i,
+                          rating: int.tryParse(value)?.clamp(1, 5).toInt(),
+                        ),
+                  ),
                   Align(
                     alignment: Alignment.centerLeft,
                     child: TextButton.icon(
@@ -3085,24 +3497,33 @@ class NewReviewComposer extends ConsumerStatefulWidget {
 class _NewReviewComposerState extends ConsumerState<NewReviewComposer> {
   late final TextEditingController customerController;
   late final TextEditingController bodyController;
+  late final TextEditingController dateController;
+  late final TextEditingController ratingController;
 
   @override
   void initState() {
     super.initState();
     customerController = TextEditingController();
     bodyController = TextEditingController();
+    dateController = TextEditingController(text: 'من لوحة الأدمن');
+    ratingController = TextEditingController(text: '5');
   }
 
   @override
   void dispose() {
     customerController.dispose();
     bodyController.dispose();
+    dateController.dispose();
+    ratingController.dispose();
     super.dispose();
   }
 
   Future<void> submit() async {
     final customer = customerController.text.trim();
     final body = bodyController.text.trim();
+    final date = dateController.text.trim();
+    final rating =
+        int.tryParse(ratingController.text.trim())?.clamp(1, 5).toInt() ?? 5;
     if (customer.isEmpty && body.isEmpty) return;
     await ref
         .read(cmsProvider.notifier)
@@ -3111,8 +3532,8 @@ class _NewReviewComposerState extends ConsumerState<NewReviewComposer> {
           CmsReview(
             customer.isEmpty ? 'عميل وعاء' : customer,
             body.isEmpty ? 'تجربة ممتازة مع الخدمة.' : body,
-            'من لوحة الأدمن',
-            5,
+            date.isEmpty ? 'من لوحة الأدمن' : date,
+            rating,
           ),
         );
     customerController.clear();
@@ -3133,6 +3554,16 @@ class _NewReviewComposerState extends ConsumerState<NewReviewComposer> {
           label: 'نص الريفيو',
           controller: bodyController,
           tall: true,
+        ),
+        RequestInput(
+          key: ValueKey('new-review-date-${widget.service.slug}'),
+          label: 'التاريخ/الحالة',
+          controller: dateController,
+        ),
+        RequestInput(
+          key: ValueKey('new-review-rating-${widget.service.slug}'),
+          label: 'التقييم 1-5',
+          controller: ratingController,
         ),
         Align(
           alignment: Alignment.centerRight,
@@ -3157,24 +3588,55 @@ class _NewReviewComposerState extends ConsumerState<NewReviewComposer> {
   }
 }
 
-class AdminRequestsEditor extends ConsumerWidget {
+class AdminRequestsEditor extends ConsumerStatefulWidget {
   const AdminRequestsEditor({required this.requests, super.key});
 
   final List<ServiceRequest> requests;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AdminRequestsEditor> createState() =>
+      _AdminRequestsEditorState();
+}
+
+class _AdminRequestsEditorState extends ConsumerState<AdminRequestsEditor> {
+  String filter = 'الكل';
+  String query = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final requests = widget.requests.where((request) {
+      final matchesStatus = filter == 'الكل' || request.status == filter;
+      final haystack =
+          '${request.name} ${request.phone} ${request.email} ${request.serviceTitle} ${request.details}';
+      return matchesStatus && haystack.contains(query.trim());
+    }).toList();
     if (requests.isEmpty) {
-      return AdminPanel(
-        title: 'طلبات العملاء',
-        child: Text(
-          'لا توجد طلبات حتى الآن. أي فورم خدمة يتم إرساله سيظهر هنا مباشرة داخل نفس الجلسة.',
-          style: appText(color: AppColors.muted, height: 1.7),
-        ),
+      return Column(
+        children: [
+          _RequestFilters(
+            filter: filter,
+            query: query,
+            onFilter: (value) => setState(() => filter = value),
+            onQuery: (value) => setState(() => query = value),
+          ),
+          AdminPanel(
+            title: 'طلبات العملاء',
+            child: Text(
+              'لا توجد طلبات مطابقة. أي فورم خدمة يتم إرساله سيظهر هنا بعد الحفظ.',
+              style: appText(color: AppColors.muted, height: 1.7),
+            ),
+          ),
+        ],
       );
     }
     return Column(
       children: [
+        _RequestFilters(
+          filter: filter,
+          query: query,
+          onFilter: (value) => setState(() => filter = value),
+          onQuery: (value) => setState(() => query = value),
+        ),
         for (final request in requests)
           AdminPanel(
             title: '${request.status}: ${request.serviceTitle}',
@@ -3211,6 +3673,7 @@ class AdminRequestsEditor extends ConsumerWidget {
                       'طلب جديد',
                       'قيد المتابعة',
                       'تم التواصل',
+                      'مغلق',
                     ])
                       ChoiceChip(
                         selected: request.status == status,
@@ -3239,6 +3702,66 @@ class AdminRequestsEditor extends ConsumerWidget {
   }
 }
 
+class _RequestFilters extends StatelessWidget {
+  const _RequestFilters({
+    required this.filter,
+    required this.query,
+    required this.onFilter,
+    required this.onQuery,
+  });
+
+  final String filter;
+  final String query;
+  final ValueChanged<String> onFilter;
+  final ValueChanged<String> onQuery;
+
+  @override
+  Widget build(BuildContext context) {
+    return AdminPanel(
+      title: 'فلترة الطلبات',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final status in const [
+                'الكل',
+                'طلب جديد',
+                'قيد المتابعة',
+                'تم التواصل',
+                'مغلق',
+              ])
+                ChoiceChip(
+                  selected: filter == status,
+                  label: Text(status),
+                  onSelected: (_) => onFilter(status),
+                  selectedColor: AppColors.accent,
+                  backgroundColor: veil(AppColors.surfaceStrong, .72),
+                  labelStyle: appText(
+                    fontSize: 12,
+                    color: filter == status
+                        ? const Color(0xff071018)
+                        : AppColors.ink,
+                    weight: FontWeight.w900,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          RequestInput(
+            label: 'بحث بالاسم أو الجوال أو الخدمة',
+            controller: TextEditingController(text: query)
+              ..selection = TextSelection.collapsed(offset: query.length),
+            onChanged: onQuery,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class AdminCompanyEditor extends ConsumerWidget {
   const AdminCompanyEditor({required this.company, super.key});
 
@@ -3257,9 +3780,21 @@ class AdminCompanyEditor extends ConsumerWidget {
             onSave: (value) => controller.updateCompany(nameAr: value),
           ),
           CmsTextField(
+            label: 'Company English Name',
+            initialValue: company.nameEn,
+            ltr: true,
+            onSave: (value) => controller.updateCompany(nameEn: value),
+          ),
+          CmsTextField(
             label: 'التاجلاين',
             initialValue: company.taglineAr,
             onSave: (value) => controller.updateCompany(taglineAr: value),
+          ),
+          CmsTextField(
+            label: 'English Tagline',
+            initialValue: company.taglineEn,
+            ltr: true,
+            onSave: (value) => controller.updateCompany(taglineEn: value),
           ),
           CmsTextField(
             label: 'الهاتف',
@@ -3274,9 +3809,27 @@ class AdminCompanyEditor extends ConsumerWidget {
             onSave: (value) => controller.updateCompany(email: value),
           ),
           CmsTextField(
+            label: 'الموقع الإلكتروني',
+            initialValue: company.website,
+            ltr: true,
+            onSave: (value) => controller.updateCompany(website: value),
+          ),
+          CmsTextField(
             label: 'العنوان',
             initialValue: company.headquarters,
             onSave: (value) => controller.updateCompany(headquarters: value),
+          ),
+          CmsTextField(
+            label: 'السجل التجاري',
+            initialValue: company.cr,
+            ltr: true,
+            onSave: (value) => controller.updateCompany(cr: value),
+          ),
+          CmsTextField(
+            label: 'الرقم الضريبي',
+            initialValue: company.vat,
+            ltr: true,
+            onSave: (value) => controller.updateCompany(vat: value),
           ),
           CmsTextField(
             label: 'الرؤية',
@@ -3303,17 +3856,65 @@ class AdminFormEditor extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final controller = ref.read(cmsProvider.notifier);
     return AdminPanel(
       title: 'إعدادات الفورم',
       child: Column(
         children: [
           for (var i = 0; i < labels.length; i++)
-            CmsTextField(
-              label: 'Field ${i + 1}',
-              initialValue: labels[i],
-              onSave: (value) =>
-                  ref.read(cmsProvider.notifier).updateFormLabel(i, value),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: CmsTextField(
+                    label: 'Field ${i + 1}',
+                    initialValue: labels[i],
+                    onSave: (value) => controller.updateFormLabel(i, value),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Column(
+                  children: [
+                    AdminActionButton(
+                      label: 'أعلى',
+                      icon: Icons.keyboard_arrow_up_rounded,
+                      onPressed: i == 0
+                          ? null
+                          : () => controller.reorderFormLabel(i, -1),
+                    ),
+                    const SizedBox(height: 8),
+                    AdminActionButton(
+                      label: 'أسفل',
+                      icon: Icons.keyboard_arrow_down_rounded,
+                      onPressed: i == labels.length - 1
+                          ? null
+                          : () => controller.reorderFormLabel(i, 1),
+                    ),
+                    const SizedBox(height: 8),
+                    AdminActionButton(
+                      label: 'حذف',
+                      icon: Icons.delete_rounded,
+                      danger: true,
+                      onPressed: labels.length <= 1
+                          ? null
+                          : () => controller.deleteFormLabel(i),
+                    ),
+                  ],
+                ),
+              ],
             ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.icon(
+              onPressed: controller.addFormLabel,
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('إضافة حقل'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.gold,
+                foregroundColor: const Color(0xff071018),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -3371,108 +3972,118 @@ class _CmsTextFieldState extends State<CmsTextField> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          TextField(
-            key: ValueKey('cms-field-${widget.label}'),
-            controller: controller,
-            maxLines: widget.tall ? 4 : 1,
-            textDirection: widget.ltr ? TextDirection.ltr : TextDirection.rtl,
-            style: appText(color: AppColors.ink, weight: FontWeight.w700),
-            onChanged: (value) {
-              final dirty = value != widget.initialValue;
-              if (dirty != isDirty || statusLabel == 'تم الحفظ') {
-                setState(() {
-                  isDirty = dirty;
-                  statusLabel = dirty ? 'تعديلات غير محفوظة' : 'محفوظ';
-                });
-              }
-            },
-            decoration: InputDecoration(
-              labelText: widget.label,
-              labelStyle: appText(
-                color: AppColors.muted,
-                weight: FontWeight.w700,
-              ),
-              filled: true,
-              fillColor: veil(AppColors.background, .34),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(color: veil(AppColors.ink, .12)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: const BorderSide(color: AppColors.accent),
-              ),
+    final field = TextField(
+      key: ValueKey('cms-field-${widget.label}'),
+      controller: controller,
+      maxLines: widget.tall ? 4 : 1,
+      textDirection: widget.ltr ? TextDirection.ltr : TextDirection.rtl,
+      style: appText(color: AppColors.ink, weight: FontWeight.w700),
+      onChanged: (value) {
+        final dirty = value != widget.initialValue;
+        if (dirty != isDirty || statusLabel == 'تم الحفظ') {
+          setState(() {
+            isDirty = dirty;
+            statusLabel = dirty ? 'تعديلات غير محفوظة' : 'محفوظ';
+          });
+        }
+      },
+      decoration: InputDecoration(
+        labelText: widget.label,
+        labelStyle: appText(color: AppColors.muted, weight: FontWeight.w700),
+        filled: true,
+        fillColor: veil(AppColors.background, .34),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: veil(AppColors.ink, .12)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: AppColors.accent),
+        ),
+      ),
+    );
+    final actions = Wrap(
+      alignment: WrapAlignment.end,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 10,
+      runSpacing: 8,
+      children: [
+        SignalPill(label: statusLabel, strong: isDirty),
+        FilledButton.icon(
+          key: ValueKey('cms-save-${widget.label}'),
+          onPressed: !isDirty || isSaving
+              ? null
+              : () async {
+                  setState(() {
+                    isSaving = true;
+                    statusLabel = 'جاري الحفظ...';
+                  });
+                  try {
+                    await widget.onSave(controller.text.trim());
+                    if (!mounted) return;
+                    setState(() {
+                      isDirty = false;
+                      statusLabel = 'تم الحفظ';
+                    });
+                  } catch (_) {
+                    if (!mounted) return;
+                    setState(() {
+                      statusLabel = 'تعذر الحفظ';
+                    });
+                  } finally {
+                    if (mounted) {
+                      setState(() => isSaving = false);
+                    }
+                  }
+                },
+          icon: isSaving
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Color(0xff071018),
+                  ),
+                )
+              : const Icon(Icons.save_rounded, size: 18),
+          label: Text(isSaving ? 'جاري الحفظ' : 'حفظ'),
+          style: FilledButton.styleFrom(
+            backgroundColor: AppColors.accent,
+            foregroundColor: const Color(0xff071018),
+            disabledBackgroundColor: veil(AppColors.ink, .08),
+            disabledForegroundColor: veil(AppColors.ink, .42),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+            textStyle: appText(fontSize: 13, weight: FontWeight.w900),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(999),
             ),
           ),
-          const SizedBox(height: 10),
-          Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 12,
-            runSpacing: 10,
+        ),
+      ],
+    );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final inline = !widget.tall && constraints.maxWidth >= 720;
+          if (!inline) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [field, const SizedBox(height: 10), actions],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              SignalPill(label: statusLabel, strong: isDirty),
-              FilledButton.icon(
-                key: ValueKey('cms-save-${widget.label}'),
-                onPressed: !isDirty || isSaving
-                    ? null
-                    : () async {
-                        setState(() {
-                          isSaving = true;
-                          statusLabel = 'جاري الحفظ...';
-                        });
-                        try {
-                          await widget.onSave(controller.text.trim());
-                          if (!mounted) return;
-                          setState(() {
-                            isDirty = false;
-                            statusLabel = 'تم الحفظ';
-                          });
-                        } catch (_) {
-                          if (!mounted) return;
-                          setState(() {
-                            statusLabel = 'تعذر الحفظ';
-                          });
-                        } finally {
-                          if (mounted) {
-                            setState(() => isSaving = false);
-                          }
-                        }
-                      },
-                icon: isSaving
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Color(0xff071018),
-                        ),
-                      )
-                    : const Icon(Icons.save_rounded, size: 18),
-                label: Text(isSaving ? 'جاري الحفظ' : 'حفظ'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.accent,
-                  foregroundColor: const Color(0xff071018),
-                  disabledBackgroundColor: veil(AppColors.ink, .08),
-                  disabledForegroundColor: veil(AppColors.ink, .42),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 12,
-                  ),
-                  textStyle: appText(fontSize: 13, weight: FontWeight.w900),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
+              Expanded(child: field),
+              const SizedBox(width: 12),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 260),
+                child: actions,
               ),
             ],
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -3502,6 +4113,39 @@ class ResponsiveAdminGrid extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class AdminActionButton extends StatelessWidget {
+  const AdminActionButton({
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+    this.danger = false,
+    super.key,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 18),
+      label: Text(label),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: danger ? AppColors.danger : AppColors.ink,
+        side: BorderSide(
+          color: veil(danger ? AppColors.danger : AppColors.ink, .22),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        textStyle: appText(fontSize: 12, weight: FontWeight.w900),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+      ),
     );
   }
 }
