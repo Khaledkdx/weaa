@@ -29,6 +29,7 @@ void main() {
     expect(find.text('معلومات عامة'), findsWidgets);
     expect(find.text('الخدمات'), findsWidgets);
     expect(find.text('لوحة الأدمن'), findsNothing);
+    expect(find.byType(Image), findsWidgets);
   });
 
   testWidgets('services route renders general sector information', (

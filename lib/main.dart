@@ -4457,27 +4457,33 @@ class LogoMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final size = large ? 48.0 : 42.0;
+    final width = large ? 112.0 : 86.0;
+    final height = large ? 74.0 : 56.0;
     return Container(
-      width: size,
-      height: size,
+      width: width,
+      height: height,
       alignment: Alignment.center,
+      padding: EdgeInsets.all(large ? 7 : 5),
       decoration: BoxDecoration(
-        color: AppColors.accent,
-        borderRadius: BorderRadius.circular(large ? 15 : 13),
+        color: Colors.black,
+        border: Border.all(color: veil(AppColors.gold, .32)),
+        borderRadius: BorderRadius.circular(large ? 18 : 15),
         boxShadow: [
           BoxShadow(
-            color: veil(AppColors.accent, .28),
+            color: veil(AppColors.gold, .22),
             blurRadius: 24,
             offset: const Offset(0, 10),
           ),
         ],
       ),
-      child: Text(
-        'و',
-        style: displayText(
-          fontSize: large ? 27 : 23,
-          color: const Color(0xff071018),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(large ? 13 : 11),
+        child: Image.asset(
+          'assets/brand/weaa-logo.jpeg',
+          width: double.infinity,
+          height: double.infinity,
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.high,
         ),
       ),
     );
