@@ -133,6 +133,43 @@ void main() {
     expect(find.text('الفورم'), findsOneWidget);
   });
 
+  testWidgets('admin text edits save only after pressing the save button', (
+    tester,
+  ) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const WeaaApp(initialLocation: '/admin'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('بيانات الشركة'));
+    await tester.tap(find.text('بيانات الشركة'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('cms-field-اسم الشركة')),
+      'شركة وعاء الجديدة',
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      container.read(cmsProvider).company.nameAr,
+      isNot('شركة وعاء الجديدة'),
+    );
+    expect(find.text('تعديلات غير محفوظة'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('cms-save-اسم الشركة')));
+    await tester.pumpAndSettle();
+
+    expect(container.read(cmsProvider).company.nameAr, 'شركة وعاء الجديدة');
+    expect(find.text('تم الحفظ'), findsWidgets);
+  });
+
   testWidgets('service request form accepts input and reaches admin state', (
     tester,
   ) async {

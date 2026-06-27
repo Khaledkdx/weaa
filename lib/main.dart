@@ -409,6 +409,7 @@ class CmsController extends Notifier<CmsContent> {
       ref.read(cmsSyncProvider.notifier).saved();
     } catch (error) {
       ref.read(cmsSyncProvider.notifier).failed(error);
+      rethrow;
     }
   }
 
@@ -540,6 +541,7 @@ class CmsController extends Notifier<CmsContent> {
       ref.read(cmsSyncProvider.notifier).saved();
     } catch (error) {
       ref.read(cmsSyncProvider.notifier).failed(error);
+      rethrow;
     }
   }
 
@@ -2842,7 +2844,7 @@ class AdminPagesEditor extends ConsumerWidget {
                 CmsTextField(
                   label: 'العنوان',
                   initialValue: entry.value.title,
-                  onSubmitted: (value) => ref
+                  onSave: (value) => ref
                       .read(cmsProvider.notifier)
                       .updatePage(entry.key, title: value),
                 ),
@@ -2850,7 +2852,7 @@ class AdminPagesEditor extends ConsumerWidget {
                   label: 'الوصف',
                   initialValue: entry.value.body,
                   tall: true,
-                  onSubmitted: (value) => ref
+                  onSave: (value) => ref
                       .read(cmsProvider.notifier)
                       .updatePage(entry.key, body: value),
                 ),
@@ -2886,7 +2888,7 @@ class AdminItemsEditor extends ConsumerWidget {
                 CmsTextField(
                   label: 'الاسم',
                   initialValue: items[i].titleAr,
-                  onSubmitted: (value) => ref
+                  onSave: (value) => ref
                       .read(cmsProvider.notifier)
                       .updateItem(
                         collection: collection,
@@ -2898,7 +2900,7 @@ class AdminItemsEditor extends ConsumerWidget {
                   label: 'الوصف',
                   initialValue: items[i].description,
                   tall: true,
-                  onSubmitted: (value) => ref
+                  onSave: (value) => ref
                       .read(cmsProvider.notifier)
                       .updateItem(
                         collection: collection,
@@ -2930,7 +2932,7 @@ class AdminVideosEditor extends ConsumerWidget {
               label: 'Video URL',
               initialValue: items[i].videoUrl ?? '',
               ltr: true,
-              onSubmitted: (value) => ref
+              onSave: (value) => ref
                   .read(cmsProvider.notifier)
                   .updateItem(
                     collection: CmsCollection.serviceModels,
@@ -2967,7 +2969,7 @@ class AdminReviewsEditor extends ConsumerWidget {
                   CmsTextField(
                     label: 'اسم العميل',
                     initialValue: service.reviews[i].customer,
-                    onSubmitted: (value) => ref
+                    onSave: (value) => ref
                         .read(cmsProvider.notifier)
                         .updateReview(service.slug!, i, customer: value),
                   ),
@@ -2975,7 +2977,7 @@ class AdminReviewsEditor extends ConsumerWidget {
                     label: 'نص الريڤيو',
                     initialValue: service.reviews[i].body,
                     tall: true,
-                    onSubmitted: (value) => ref
+                    onSave: (value) => ref
                         .read(cmsProvider.notifier)
                         .updateReview(service.slug!, i, body: value),
                   ),
@@ -3185,42 +3187,41 @@ class AdminCompanyEditor extends ConsumerWidget {
           CmsTextField(
             label: 'اسم الشركة',
             initialValue: company.nameAr,
-            onSubmitted: (value) => controller.updateCompany(nameAr: value),
+            onSave: (value) => controller.updateCompany(nameAr: value),
           ),
           CmsTextField(
             label: 'التاجلاين',
             initialValue: company.taglineAr,
-            onSubmitted: (value) => controller.updateCompany(taglineAr: value),
+            onSave: (value) => controller.updateCompany(taglineAr: value),
           ),
           CmsTextField(
             label: 'الهاتف',
             initialValue: company.phone,
             ltr: true,
-            onSubmitted: (value) => controller.updateCompany(phone: value),
+            onSave: (value) => controller.updateCompany(phone: value),
           ),
           CmsTextField(
             label: 'البريد',
             initialValue: company.email,
             ltr: true,
-            onSubmitted: (value) => controller.updateCompany(email: value),
+            onSave: (value) => controller.updateCompany(email: value),
           ),
           CmsTextField(
             label: 'العنوان',
             initialValue: company.headquarters,
-            onSubmitted: (value) =>
-                controller.updateCompany(headquarters: value),
+            onSave: (value) => controller.updateCompany(headquarters: value),
           ),
           CmsTextField(
             label: 'الرؤية',
             initialValue: company.vision,
             tall: true,
-            onSubmitted: (value) => controller.updateCompany(vision: value),
+            onSave: (value) => controller.updateCompany(vision: value),
           ),
           CmsTextField(
             label: 'الرسالة',
             initialValue: company.mission,
             tall: true,
-            onSubmitted: (value) => controller.updateCompany(mission: value),
+            onSave: (value) => controller.updateCompany(mission: value),
           ),
         ],
       ),
@@ -3243,7 +3244,7 @@ class AdminFormEditor extends ConsumerWidget {
             CmsTextField(
               label: 'Field ${i + 1}',
               initialValue: labels[i],
-              onSubmitted: (value) =>
+              onSave: (value) =>
                   ref.read(cmsProvider.notifier).updateFormLabel(i, value),
             ),
         ],
@@ -3256,7 +3257,7 @@ class CmsTextField extends StatefulWidget {
   const CmsTextField({
     required this.label,
     required this.initialValue,
-    required this.onSubmitted,
+    required this.onSave,
     this.tall = false,
     this.ltr = false,
     super.key,
@@ -3264,7 +3265,7 @@ class CmsTextField extends StatefulWidget {
 
   final String label;
   final String initialValue;
-  final ValueChanged<String> onSubmitted;
+  final Future<void> Function(String value) onSave;
   final bool tall;
   final bool ltr;
 
@@ -3274,6 +3275,9 @@ class CmsTextField extends StatefulWidget {
 
 class _CmsTextFieldState extends State<CmsTextField> {
   late final TextEditingController controller;
+  bool isDirty = false;
+  bool isSaving = false;
+  String statusLabel = 'محفوظ';
 
   @override
   void initState() {
@@ -3287,6 +3291,8 @@ class _CmsTextFieldState extends State<CmsTextField> {
     if (oldWidget.initialValue != widget.initialValue &&
         controller.text != widget.initialValue) {
       controller.text = widget.initialValue;
+      isDirty = false;
+      statusLabel = 'محفوظ';
     }
   }
 
@@ -3300,27 +3306,106 @@ class _CmsTextFieldState extends State<CmsTextField> {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: TextField(
-        controller: controller,
-        maxLines: widget.tall ? 4 : 1,
-        textDirection: widget.ltr ? TextDirection.ltr : TextDirection.rtl,
-        style: appText(color: AppColors.ink, weight: FontWeight.w700),
-        onSubmitted: widget.onSubmitted,
-        onEditingComplete: () => widget.onSubmitted(controller.text),
-        decoration: InputDecoration(
-          labelText: widget.label,
-          labelStyle: appText(color: AppColors.muted, weight: FontWeight.w700),
-          filled: true,
-          fillColor: veil(AppColors.background, .34),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: veil(AppColors.ink, .12)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            key: ValueKey('cms-field-${widget.label}'),
+            controller: controller,
+            maxLines: widget.tall ? 4 : 1,
+            textDirection: widget.ltr ? TextDirection.ltr : TextDirection.rtl,
+            style: appText(color: AppColors.ink, weight: FontWeight.w700),
+            onChanged: (value) {
+              final dirty = value != widget.initialValue;
+              if (dirty != isDirty || statusLabel == 'تم الحفظ') {
+                setState(() {
+                  isDirty = dirty;
+                  statusLabel = dirty ? 'تعديلات غير محفوظة' : 'محفوظ';
+                });
+              }
+            },
+            decoration: InputDecoration(
+              labelText: widget.label,
+              labelStyle: appText(
+                color: AppColors.muted,
+                weight: FontWeight.w700,
+              ),
+              filled: true,
+              fillColor: veil(AppColors.background, .34),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide(color: veil(AppColors.ink, .12)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: const BorderSide(color: AppColors.accent),
+              ),
+            ),
           ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: AppColors.accent),
+          const SizedBox(height: 10),
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 12,
+            runSpacing: 10,
+            children: [
+              SignalPill(label: statusLabel, strong: isDirty),
+              FilledButton.icon(
+                key: ValueKey('cms-save-${widget.label}'),
+                onPressed: !isDirty || isSaving
+                    ? null
+                    : () async {
+                        setState(() {
+                          isSaving = true;
+                          statusLabel = 'جاري الحفظ...';
+                        });
+                        try {
+                          await widget.onSave(controller.text.trim());
+                          if (!mounted) return;
+                          setState(() {
+                            isDirty = false;
+                            statusLabel = 'تم الحفظ';
+                          });
+                        } catch (_) {
+                          if (!mounted) return;
+                          setState(() {
+                            statusLabel = 'تعذر الحفظ';
+                          });
+                        } finally {
+                          if (mounted) {
+                            setState(() => isSaving = false);
+                          }
+                        }
+                      },
+                icon: isSaving
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Color(0xff071018),
+                        ),
+                      )
+                    : const Icon(Icons.save_rounded, size: 18),
+                label: Text(isSaving ? 'جاري الحفظ' : 'حفظ'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: const Color(0xff071018),
+                  disabledBackgroundColor: veil(AppColors.ink, .08),
+                  disabledForegroundColor: veil(AppColors.ink, .42),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 12,
+                  ),
+                  textStyle: appText(fontSize: 13, weight: FontWeight.w900),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ),
+        ],
       ),
     );
   }
