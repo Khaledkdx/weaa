@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,17 +8,41 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase/supabase.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await dotenv.load();
+  } catch (_) {
+    // Production uses --dart-define. Local .env is optional.
+  }
   usePathUrlStrategy();
   runApp(const ProviderScope(child: WeaaApp()));
 }
 
-final cmsRepositoryProvider = Provider<CmsRepository>(
-  (ref) => InMemoryCmsRepository(),
-);
+final appConfigProvider = Provider<AppConfig>((ref) => AppConfig.fromEnv());
+
+final supabaseClientProvider = Provider<SupabaseClient?>((ref) {
+  final config = ref.watch(appConfigProvider);
+  if (!config.hasSupabase) return null;
+  return SupabaseClient(config.supabaseUrl, config.supabaseAnonKey);
+});
+
+final cmsRepositoryProvider = Provider<CmsRepository>((ref) {
+  final client = ref.watch(supabaseClientProvider);
+  if (client == null) return InMemoryCmsRepository();
+  return SupabaseCmsRepository(client);
+});
 
 final cmsProvider = NotifierProvider<CmsController, CmsContent>(
   CmsController.new,
+);
+
+final cmsSyncProvider = NotifierProvider<CmsSyncController, CmsSyncState>(
+  CmsSyncController.new,
+);
+
+final adminAuthProvider = NotifierProvider<AdminAuthController, AdminAuthState>(
+  AdminAuthController.new,
 );
 
 final _routerProvider = Provider.family<GoRouter, String>((
@@ -84,9 +110,71 @@ class AppColors {
   static const danger = Color(0xffff6b6b);
 }
 
+class AppConfig {
+  const AppConfig({required this.supabaseUrl, required this.supabaseAnonKey});
+
+  final String supabaseUrl;
+  final String supabaseAnonKey;
+
+  bool get hasSupabase => supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty;
+
+  static AppConfig fromEnv() {
+    const defineUrl = String.fromEnvironment('SUPABASE_URL');
+    const defineKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+    final dotenvValues = _safeDotEnv();
+    return AppConfig(
+      supabaseUrl: defineUrl.isNotEmpty
+          ? defineUrl
+          : (dotenvValues['SUPABASE_URL'] ?? ''),
+      supabaseAnonKey: defineKey.isNotEmpty
+          ? defineKey
+          : (dotenvValues['SUPABASE_ANON_KEY'] ?? ''),
+    );
+  }
+
+  static Map<String, String> _safeDotEnv() {
+    try {
+      return dotenv.env;
+    } catch (_) {
+      return const {};
+    }
+  }
+}
+
+class CmsSyncState {
+  const CmsSyncState({required this.label, required this.isBusy, this.error});
+
+  const CmsSyncState.ready() : label = 'جاهز', isBusy = false, error = null;
+
+  final String label;
+  final bool isBusy;
+  final String? error;
+}
+
+class CmsSyncController extends Notifier<CmsSyncState> {
+  @override
+  CmsSyncState build() => const CmsSyncState.ready();
+
+  void loading() => state = const CmsSyncState(label: 'تحميل...', isBusy: true);
+
+  void saving() =>
+      state = const CmsSyncState(label: 'جاري الحفظ...', isBusy: true);
+
+  void saved() => state = const CmsSyncState(label: 'تم الحفظ', isBusy: false);
+
+  void failed(Object error) => state = CmsSyncState(
+    label: 'تعذر الحفظ',
+    isBusy: false,
+    error: error.toString(),
+  );
+}
+
 abstract class CmsRepository {
   Future<CmsContent> load();
   Future<void> save(CmsContent content);
+  Future<ServiceRequest> createServiceRequest(ServiceRequest request);
+  Future<List<ServiceRequest>> loadServiceRequests();
+  Future<void> updateServiceRequestStatus(String requestId, String status);
 }
 
 class InMemoryCmsRepository implements CmsRepository {
@@ -99,6 +187,36 @@ class InMemoryCmsRepository implements CmsRepository {
   Future<void> save(CmsContent content) async {
     _content = content;
   }
+
+  @override
+  Future<ServiceRequest> createServiceRequest(ServiceRequest request) async {
+    final stored = request.id.isEmpty ? request.withGeneratedId() : request;
+    _content = _content.copyWith(
+      serviceRequests: [stored, ..._content.serviceRequests],
+    );
+    return stored;
+  }
+
+  @override
+  Future<List<ServiceRequest>> loadServiceRequests() async {
+    return _content.serviceRequests;
+  }
+
+  @override
+  Future<void> updateServiceRequestStatus(
+    String requestId,
+    String status,
+  ) async {
+    _content = _content.copyWith(
+      serviceRequests: [
+        for (final request in _content.serviceRequests)
+          if (request.id == requestId)
+            request.copyWith(status: status)
+          else
+            request,
+      ],
+    );
+  }
 }
 
 class SupabaseCmsRepository implements CmsRepository {
@@ -106,28 +224,151 @@ class SupabaseCmsRepository implements CmsRepository {
 
   final SupabaseClient client;
 
-  static Future<SupabaseCmsRepository?> fromEnv() async {
-    try {
-      await dotenv.load();
-    } catch (_) {
-      // Local prototype mode: no .env is expected until Supabase is connected.
-    }
-    final url = dotenv.env['SUPABASE_URL'];
-    final key = dotenv.env['SUPABASE_ANON_KEY'];
-    if (url == null || key == null) return null;
-    final client = SupabaseClient(url, key);
-    return SupabaseCmsRepository(client);
-  }
-
   @override
   Future<CmsContent> load() async {
-    // Ready for a future `site_content` table once schema/RLS are created.
-    return CmsContent.seed();
+    final response = await client
+        .from('cms_content')
+        .select('content')
+        .eq('id', 'main')
+        .maybeSingle();
+    final content = response == null
+        ? CmsContent.seed()
+        : CmsContent.fromJson(
+            Map<String, dynamic>.from(response['content'] as Map),
+          );
+    final requests = await loadServiceRequests();
+    return content.copyWith(serviceRequests: requests);
   }
 
   @override
   Future<void> save(CmsContent content) async {
-    // Future integration point: upsert serialized CMS content to Supabase.
+    await client.from('cms_content').upsert({
+      'id': 'main',
+      'content': content.toJson(includeRequests: false),
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    });
+  }
+
+  @override
+  Future<ServiceRequest> createServiceRequest(ServiceRequest request) async {
+    final response = await client
+        .from('service_requests')
+        .insert(request.toJson(includeId: false))
+        .select()
+        .single();
+    return ServiceRequest.fromJson(Map<String, dynamic>.from(response));
+  }
+
+  @override
+  Future<List<ServiceRequest>> loadServiceRequests() async {
+    final response = await client
+        .from('service_requests')
+        .select()
+        .order('created_at', ascending: false);
+    return [
+      for (final item in response)
+        ServiceRequest.fromJson(Map<String, dynamic>.from(item as Map)),
+    ];
+  }
+
+  @override
+  Future<void> updateServiceRequestStatus(
+    String requestId,
+    String status,
+  ) async {
+    await client
+        .from('service_requests')
+        .update({'status': status})
+        .eq('id', requestId);
+  }
+}
+
+class AdminAuthState {
+  const AdminAuthState({
+    required this.isLoading,
+    required this.isAuthenticated,
+    required this.isConfigured,
+    this.email,
+    this.error,
+  });
+
+  const AdminAuthState.loading()
+    : isLoading = true,
+      isAuthenticated = false,
+      isConfigured = false,
+      email = null,
+      error = null;
+
+  final bool isLoading;
+  final bool isAuthenticated;
+  final bool isConfigured;
+  final String? email;
+  final String? error;
+}
+
+class AdminAuthController extends Notifier<AdminAuthState> {
+  SupabaseClient? get _client => ref.read(supabaseClientProvider);
+
+  @override
+  AdminAuthState build() {
+    final client = ref.watch(supabaseClientProvider);
+    if (client == null) {
+      return const AdminAuthState(
+        isLoading: false,
+        isAuthenticated: true,
+        isConfigured: false,
+      );
+    }
+    final user = client.auth.currentUser;
+    return AdminAuthState(
+      isLoading: false,
+      isAuthenticated: user != null,
+      isConfigured: true,
+      email: user?.email,
+    );
+  }
+
+  Future<void> signIn(String email, String password) async {
+    final client = _client;
+    if (client == null) return;
+    state = AdminAuthState(
+      isLoading: true,
+      isAuthenticated: false,
+      isConfigured: true,
+      email: email,
+    );
+    try {
+      final response = await client.auth.signInWithPassword(
+        email: email,
+        password: password,
+      );
+      state = AdminAuthState(
+        isLoading: false,
+        isAuthenticated: response.user != null,
+        isConfigured: true,
+        email: response.user?.email ?? email,
+      );
+      unawaited(ref.read(cmsProvider.notifier).refresh());
+    } catch (error) {
+      state = AdminAuthState(
+        isLoading: false,
+        isAuthenticated: false,
+        isConfigured: true,
+        email: email,
+        error: 'تعذر تسجيل الدخول. تأكد من البريد وكلمة المرور.',
+      );
+    }
+  }
+
+  Future<void> signOut() async {
+    final client = _client;
+    if (client == null) return;
+    await client.auth.signOut();
+    state = const AdminAuthState(
+      isLoading: false,
+      isAuthenticated: false,
+      isConfigured: true,
+    );
   }
 }
 
@@ -137,18 +378,38 @@ class CmsController extends Notifier<CmsContent> {
   @override
   CmsContent build() {
     final repository = ref.watch(cmsRepositoryProvider);
-    repository.load().then((content) {
+    Future.microtask(() => _load(repository));
+    return CmsContent.seed();
+  }
+
+  Future<void> _load(CmsRepository repository) async {
+    ref.read(cmsSyncProvider.notifier).loading();
+    try {
+      final content = await repository.load();
       if (!_hasCommittedLocalChange) {
         state = content;
       }
-    });
-    return CmsContent.seed();
+      ref.read(cmsSyncProvider.notifier).saved();
+    } catch (error) {
+      ref.read(cmsSyncProvider.notifier).failed(error);
+    }
+  }
+
+  Future<void> refresh() async {
+    _hasCommittedLocalChange = false;
+    await _load(ref.read(cmsRepositoryProvider));
   }
 
   Future<void> _commit(CmsContent content) async {
     _hasCommittedLocalChange = true;
     state = content;
-    await ref.read(cmsRepositoryProvider).save(content);
+    ref.read(cmsSyncProvider.notifier).saving();
+    try {
+      await ref.read(cmsRepositoryProvider).save(content);
+      ref.read(cmsSyncProvider.notifier).saved();
+    } catch (error) {
+      ref.read(cmsSyncProvider.notifier).failed(error);
+    }
   }
 
   Future<void> updateCompany({
@@ -230,9 +491,56 @@ class CmsController extends Notifier<CmsContent> {
     return _commit(state.copyWith(serviceModels: services));
   }
 
-  Future<void> submitServiceRequest(ServiceRequest request) {
-    final requests = [request, ...state.serviceRequests];
-    return _commit(state.copyWith(serviceRequests: requests));
+  Future<void> deleteReview(String serviceSlug, int reviewIndex) {
+    final services = [...state.serviceModels];
+    final serviceIndex = services.indexWhere(
+      (item) => item.slug == serviceSlug,
+    );
+    if (serviceIndex == -1) return Future.value();
+    final reviews = [...services[serviceIndex].reviews];
+    if (reviewIndex < 0 || reviewIndex >= reviews.length) return Future.value();
+    reviews.removeAt(reviewIndex);
+    services[serviceIndex] = services[serviceIndex].copyWith(reviews: reviews);
+    return _commit(state.copyWith(serviceModels: services));
+  }
+
+  Future<void> submitServiceRequest(ServiceRequest request) async {
+    ref.read(cmsSyncProvider.notifier).saving();
+    try {
+      final stored = await ref
+          .read(cmsRepositoryProvider)
+          .createServiceRequest(request);
+      state = state.copyWith(
+        serviceRequests: [stored, ...state.serviceRequests],
+      );
+      ref.read(cmsSyncProvider.notifier).saved();
+    } catch (error) {
+      ref.read(cmsSyncProvider.notifier).failed(error);
+      rethrow;
+    }
+  }
+
+  Future<void> updateServiceRequestStatus(
+    String requestId,
+    String status,
+  ) async {
+    final requests = [
+      for (final request in state.serviceRequests)
+        if (request.id == requestId)
+          request.copyWith(status: status)
+        else
+          request,
+    ];
+    state = state.copyWith(serviceRequests: requests);
+    ref.read(cmsSyncProvider.notifier).saving();
+    try {
+      await ref
+          .read(cmsRepositoryProvider)
+          .updateServiceRequestStatus(requestId, status);
+      ref.read(cmsSyncProvider.notifier).saved();
+    } catch (error) {
+      ref.read(cmsSyncProvider.notifier).failed(error);
+    }
   }
 
   Future<void> updateFormLabel(int index, String label) {
@@ -510,6 +818,67 @@ class CmsContent {
       serviceRequests: serviceRequests ?? this.serviceRequests,
     );
   }
+
+  Map<String, dynamic> toJson({bool includeRequests = true}) {
+    return {
+      'company': company.toJson(),
+      'pages': pages.map((key, value) => MapEntry(key, value.toJson())),
+      'generalInfo': [for (final item in generalInfo) item.toJson()],
+      'serviceModels': [for (final item in serviceModels) item.toJson()],
+      'initiatives': [for (final item in initiatives) item.toJson()],
+      'values': values,
+      'formLabels': formLabels,
+      if (includeRequests)
+        'serviceRequests': [
+          for (final request in serviceRequests) request.toJson(),
+        ],
+    };
+  }
+
+  static CmsContent fromJson(Map<String, dynamic> json) {
+    final seed = CmsContent.seed();
+    return CmsContent(
+      company: json['company'] is Map
+          ? CompanyContent.fromJson(
+              Map<String, dynamic>.from(json['company'] as Map),
+            )
+          : seed.company,
+      pages: json['pages'] is Map
+          ? {
+              for (final entry in (json['pages'] as Map).entries)
+                entry.key.toString(): PageContent.fromJson(
+                  Map<String, dynamic>.from(entry.value as Map),
+                ),
+            }
+          : seed.pages,
+      generalInfo: _itemsFromJson(json['generalInfo'], seed.generalInfo),
+      serviceModels: _itemsFromJson(json['serviceModels'], seed.serviceModels),
+      initiatives: _itemsFromJson(json['initiatives'], seed.initiatives),
+      values: json['values'] is List
+          ? [for (final value in json['values'] as List) value.toString()]
+          : seed.values,
+      formLabels: json['formLabels'] is List
+          ? [for (final value in json['formLabels'] as List) value.toString()]
+          : seed.formLabels,
+      serviceRequests: json['serviceRequests'] is List
+          ? [
+              for (final item in json['serviceRequests'] as List)
+                ServiceRequest.fromJson(Map<String, dynamic>.from(item as Map)),
+            ]
+          : const [],
+    );
+  }
+
+  static List<CmsItem> _itemsFromJson(Object? source, List<CmsItem> fallback) {
+    if (source is! List) return fallback;
+    return [
+      for (var i = 0; i < source.length; i++)
+        CmsItem.fromJson(
+          Map<String, dynamic>.from(source[i] as Map),
+          fallback.length > i ? fallback[i] : null,
+        ),
+    ];
+  }
 }
 
 class CompanyContent {
@@ -570,6 +939,41 @@ class CompanyContent {
       mission: mission ?? this.mission,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'nameAr': nameAr,
+      'nameEn': nameEn,
+      'taglineAr': taglineAr,
+      'taglineEn': taglineEn,
+      'phone': phone,
+      'email': email,
+      'website': website,
+      'headquarters': headquarters,
+      'vat': vat,
+      'cr': cr,
+      'vision': vision,
+      'mission': mission,
+    };
+  }
+
+  static CompanyContent fromJson(Map<String, dynamic> json) {
+    final seed = CmsContent.seed().company;
+    return CompanyContent(
+      nameAr: json['nameAr']?.toString() ?? seed.nameAr,
+      nameEn: json['nameEn']?.toString() ?? seed.nameEn,
+      taglineAr: json['taglineAr']?.toString() ?? seed.taglineAr,
+      taglineEn: json['taglineEn']?.toString() ?? seed.taglineEn,
+      phone: json['phone']?.toString() ?? seed.phone,
+      email: json['email']?.toString() ?? seed.email,
+      website: json['website']?.toString() ?? seed.website,
+      headquarters: json['headquarters']?.toString() ?? seed.headquarters,
+      vat: json['vat']?.toString() ?? seed.vat,
+      cr: json['cr']?.toString() ?? seed.cr,
+      vision: json['vision']?.toString() ?? seed.vision,
+      mission: json['mission']?.toString() ?? seed.mission,
+    );
+  }
 }
 
 class PageContent {
@@ -584,6 +988,18 @@ class PageContent {
       kicker ?? this.kicker,
       title ?? this.title,
       body ?? this.body,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {'kicker': kicker, 'title': title, 'body': body};
+  }
+
+  static PageContent fromJson(Map<String, dynamic> json) {
+    return PageContent(
+      json['kicker']?.toString() ?? '',
+      json['title']?.toString() ?? '',
+      json['body']?.toString() ?? '',
     );
   }
 }
@@ -627,6 +1043,39 @@ class CmsItem {
       reviews: reviews ?? this.reviews,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'titleAr': titleAr,
+      'titleEn': titleEn,
+      'description': description,
+      'iconCodePoint': icon.codePoint,
+      'slug': slug,
+      'videoUrl': videoUrl,
+      'benefits': benefits,
+      'reviews': [for (final review in reviews) review.toJson()],
+    };
+  }
+
+  static CmsItem fromJson(Map<String, dynamic> json, CmsItem? fallback) {
+    return CmsItem(
+      json['titleAr']?.toString() ?? fallback?.titleAr ?? '',
+      json['titleEn']?.toString() ?? fallback?.titleEn ?? '',
+      json['description']?.toString() ?? fallback?.description ?? '',
+      fallback?.icon ?? Icons.circle_rounded,
+      slug: json['slug']?.toString() ?? fallback?.slug,
+      videoUrl: json['videoUrl']?.toString() ?? fallback?.videoUrl,
+      benefits: json['benefits'] is List
+          ? [for (final item in json['benefits'] as List) item.toString()]
+          : fallback?.benefits ?? const [],
+      reviews: json['reviews'] is List
+          ? [
+              for (final item in json['reviews'] as List)
+                CmsReview.fromJson(Map<String, dynamic>.from(item as Map)),
+            ]
+          : fallback?.reviews ?? const [],
+    );
+  }
 }
 
 class CmsReview {
@@ -645,10 +1094,29 @@ class CmsReview {
       rating,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'customer': customer,
+      'body': body,
+      'dateLabel': dateLabel,
+      'rating': rating,
+    };
+  }
+
+  static CmsReview fromJson(Map<String, dynamic> json) {
+    return CmsReview(
+      json['customer']?.toString() ?? '',
+      json['body']?.toString() ?? '',
+      json['dateLabel']?.toString() ?? '',
+      json['rating'] is int ? json['rating'] as int : 5,
+    );
+  }
 }
 
 class ServiceRequest {
   const ServiceRequest({
+    this.id = '',
     required this.serviceSlug,
     required this.serviceTitle,
     required this.name,
@@ -659,6 +1127,7 @@ class ServiceRequest {
     this.status = 'طلب جديد',
   });
 
+  final String id;
   final String serviceSlug;
   final String serviceTitle;
   final String name;
@@ -667,6 +1136,75 @@ class ServiceRequest {
   final String details;
   final String createdAtLabel;
   final String status;
+
+  ServiceRequest withGeneratedId() {
+    return copyWith(
+      id: id.isEmpty ? DateTime.now().microsecondsSinceEpoch.toString() : id,
+      createdAtLabel: createdAtLabel,
+    );
+  }
+
+  ServiceRequest copyWith({
+    String? id,
+    String? serviceSlug,
+    String? serviceTitle,
+    String? name,
+    String? phone,
+    String? email,
+    String? details,
+    String? createdAtLabel,
+    String? status,
+  }) {
+    return ServiceRequest(
+      id: id ?? this.id,
+      serviceSlug: serviceSlug ?? this.serviceSlug,
+      serviceTitle: serviceTitle ?? this.serviceTitle,
+      name: name ?? this.name,
+      phone: phone ?? this.phone,
+      email: email ?? this.email,
+      details: details ?? this.details,
+      createdAtLabel: createdAtLabel ?? this.createdAtLabel,
+      status: status ?? this.status,
+    );
+  }
+
+  Map<String, dynamic> toJson({bool includeId = true}) {
+    return {
+      if (includeId && id.isNotEmpty) 'id': id,
+      'service_slug': serviceSlug,
+      'service_title': serviceTitle,
+      'name': name,
+      'phone': phone,
+      'email': email,
+      'details': details,
+      'created_at_label': createdAtLabel,
+      'status': status,
+    };
+  }
+
+  static ServiceRequest fromJson(Map<String, dynamic> json) {
+    final createdAt = json['created_at']?.toString();
+    return ServiceRequest(
+      id: json['id']?.toString() ?? '',
+      serviceSlug:
+          json['service_slug']?.toString() ??
+          json['serviceSlug']?.toString() ??
+          '',
+      serviceTitle:
+          json['service_title']?.toString() ??
+          json['serviceTitle']?.toString() ??
+          '',
+      name: json['name']?.toString() ?? '',
+      phone: json['phone']?.toString() ?? '',
+      email: json['email']?.toString() ?? '',
+      details: json['details']?.toString() ?? '',
+      createdAtLabel:
+          json['created_at_label']?.toString() ??
+          json['createdAtLabel']?.toString() ??
+          (createdAt == null ? 'الآن' : 'من Supabase'),
+      status: json['status']?.toString() ?? 'طلب جديد',
+    );
+  }
 }
 
 class NavItem {
@@ -917,6 +1455,7 @@ class AdminPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final auth = ref.watch(adminAuthProvider);
     final cms = ref.watch(cmsProvider);
     final page = cms.pages['admin']!;
     return AppShell(
@@ -925,9 +1464,19 @@ class AdminPage extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           PageHero(page: page),
-          const AdminModeBanner(),
+          AdminModeBanner(auth: auth),
           const SizedBox(height: 18),
-          AdminDashboard(cms: cms),
+          if (auth.isLoading)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(32),
+                child: CircularProgressIndicator(color: AppColors.accent),
+              ),
+            )
+          else if (!auth.isAuthenticated)
+            const AdminLoginPanel()
+          else
+            AdminDashboard(cms: cms),
         ],
       ),
     );
@@ -1837,6 +2386,7 @@ class RequestInput extends StatelessWidget {
     this.tall = false,
     this.ltr = false,
     this.enabled = true,
+    this.obscure = false,
     super.key,
   });
 
@@ -1845,6 +2395,7 @@ class RequestInput extends StatelessWidget {
   final bool tall;
   final bool ltr;
   final bool enabled;
+  final bool obscure;
 
   @override
   Widget build(BuildContext context) {
@@ -1853,6 +2404,7 @@ class RequestInput extends StatelessWidget {
       child: TextField(
         controller: controller,
         enabled: enabled,
+        obscureText: obscure,
         maxLines: tall ? 4 : 1,
         textInputAction: tall ? TextInputAction.newline : TextInputAction.next,
         keyboardType: tall
@@ -1972,11 +2524,14 @@ class ReviewCard extends StatelessWidget {
   }
 }
 
-class AdminModeBanner extends StatelessWidget {
-  const AdminModeBanner({super.key});
+class AdminModeBanner extends ConsumerWidget {
+  const AdminModeBanner({required this.auth, super.key});
+
+  final AdminAuthState auth;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sync = ref.watch(cmsSyncProvider);
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: panelDecoration(
@@ -1989,11 +2544,123 @@ class AdminModeBanner extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Admin Mode UI فقط الآن: التعديلات تنعكس فورًا داخل الجلسة الحالية، وتجهيز Supabase موجود كـ repository لاحق.',
+              auth.isConfigured
+                  ? 'Admin متصل بـ Supabase Auth. حالة البيانات: ${sync.label}'
+                  : 'وضع تطوير محلي: أضف SUPABASE_URL و SUPABASE_ANON_KEY لتفعيل الحفظ الحقيقي والحماية.',
               style: appText(
                 color: AppColors.ink,
                 height: 1.6,
                 weight: FontWeight.w800,
+              ),
+            ),
+          ),
+          if (sync.isBusy) ...[
+            const SizedBox(width: 10),
+            const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: AppColors.accent,
+              ),
+            ),
+          ],
+          if (auth.isAuthenticated && auth.isConfigured) ...[
+            const SizedBox(width: 12),
+            OutlinedButton.icon(
+              onPressed: () => ref.read(adminAuthProvider.notifier).signOut(),
+              icon: const Icon(Icons.logout_rounded, size: 18),
+              label: const Text('خروج'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.ink,
+                side: BorderSide(color: veil(AppColors.ink, .22)),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class AdminLoginPanel extends ConsumerStatefulWidget {
+  const AdminLoginPanel({super.key});
+
+  @override
+  ConsumerState<AdminLoginPanel> createState() => _AdminLoginPanelState();
+}
+
+class _AdminLoginPanelState extends ConsumerState<AdminLoginPanel> {
+  late final TextEditingController emailController;
+  late final TextEditingController passwordController;
+
+  @override
+  void initState() {
+    super.initState();
+    emailController = TextEditingController();
+    passwordController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    emailController.dispose();
+    passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> submit() async {
+    await ref
+        .read(adminAuthProvider.notifier)
+        .signIn(emailController.text.trim(), passwordController.text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = ref.watch(adminAuthProvider);
+    return AdminPanel(
+      title: 'تسجيل دخول الأدمن',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          RequestInput(
+            key: const ValueKey('admin-email'),
+            label: 'بريد الأدمن',
+            controller: emailController,
+            ltr: true,
+          ),
+          RequestInput(
+            key: const ValueKey('admin-password'),
+            label: 'كلمة المرور',
+            controller: passwordController,
+            ltr: true,
+            obscure: true,
+          ),
+          if (auth.error != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              auth.error!,
+              style: appText(color: AppColors.danger, weight: FontWeight.w800),
+            ),
+          ],
+          const SizedBox(height: 14),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.icon(
+              key: const ValueKey('admin-login-submit'),
+              onPressed: auth.isLoading ? null : submit,
+              icon: const Icon(Icons.lock_open_rounded),
+              label: const Text('دخول لوحة الأدمن'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.accent,
+                foregroundColor: const Color(0xff071018),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 22,
+                  vertical: 16,
+                ),
+                textStyle: appText(fontSize: 14, weight: FontWeight.w900),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(999),
+                ),
               ),
             ),
           ),
@@ -2312,6 +2979,23 @@ class AdminReviewsEditor extends ConsumerWidget {
                         .read(cmsProvider.notifier)
                         .updateReview(service.slug!, i, body: value),
                   ),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: () => ref
+                          .read(cmsProvider.notifier)
+                          .deleteReview(service.slug!, i),
+                      icon: const Icon(Icons.delete_rounded, size: 18),
+                      label: const Text('حذف الريفيو'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.danger,
+                        textStyle: appText(
+                          fontSize: 13,
+                          weight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -2404,13 +3088,13 @@ class _NewReviewComposerState extends ConsumerState<NewReviewComposer> {
   }
 }
 
-class AdminRequestsEditor extends StatelessWidget {
+class AdminRequestsEditor extends ConsumerWidget {
   const AdminRequestsEditor({required this.requests, super.key});
 
   final List<ServiceRequest> requests;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     if (requests.isEmpty) {
       return AdminPanel(
         title: 'طلبات العملاء',
@@ -2448,6 +3132,35 @@ class AdminRequestsEditor extends StatelessWidget {
                       ? 'لا توجد تفاصيل إضافية.'
                       : request.details,
                   style: appText(color: AppColors.muted, height: 1.7),
+                ),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    for (final status in const [
+                      'طلب جديد',
+                      'قيد المتابعة',
+                      'تم التواصل',
+                    ])
+                      ChoiceChip(
+                        selected: request.status == status,
+                        label: Text(status),
+                        onSelected: (_) => ref
+                            .read(cmsProvider.notifier)
+                            .updateServiceRequestStatus(request.id, status),
+                        selectedColor: AppColors.accent,
+                        backgroundColor: veil(AppColors.surfaceStrong, .72),
+                        labelStyle: appText(
+                          fontSize: 12,
+                          color: request.status == status
+                              ? const Color(0xff071018)
+                              : AppColors.ink,
+                          weight: FontWeight.w900,
+                        ),
+                        side: BorderSide(color: veil(AppColors.ink, .12)),
+                      ),
+                  ],
                 ),
               ],
             ),
