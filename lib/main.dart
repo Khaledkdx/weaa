@@ -43,6 +43,23 @@ final cmsSyncProvider = NotifierProvider<CmsSyncController, CmsSyncState>(
   CmsSyncController.new,
 );
 
+final appThemeProvider = NotifierProvider<AppThemeController, WeaaThemeMode>(
+  AppThemeController.new,
+);
+
+enum WeaaThemeMode { dark, light }
+
+class AppThemeController extends Notifier<WeaaThemeMode> {
+  @override
+  WeaaThemeMode build() => WeaaThemeMode.dark;
+
+  void toggle() {
+    state = state == WeaaThemeMode.dark
+        ? WeaaThemeMode.light
+        : WeaaThemeMode.dark;
+  }
+}
+
 String? youtubeEmbedUrlFrom(String? rawUrl) {
   final value = rawUrl?.trim();
   if (value == null || value.isEmpty) return null;
@@ -123,13 +140,20 @@ class WeaaApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final themeMode = ref.watch(appThemeProvider);
+    AppColors.use(themeMode);
     return MaterialApp.router(
       title: 'WEAA Logistics',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
         visualDensity: VisualDensity.standard,
-        colorScheme: ColorScheme.fromSeed(seedColor: AppColors.accent),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: AppColors.accent,
+          brightness: themeMode == WeaaThemeMode.dark
+              ? Brightness.dark
+              : Brightness.light,
+        ),
       ),
       routerConfig: ref.watch(_routerProvider(initialLocation)),
     );
@@ -137,15 +161,79 @@ class WeaaApp extends ConsumerWidget {
 }
 
 class AppColors {
-  static const background = Color(0xff060b11);
-  static const surface = Color(0xff121b28);
-  static const surfaceStrong = Color(0xff172338);
-  static const ink = Color(0xfff1f7ff);
-  static const muted = Color(0xff97a6b8);
-  static const accent = Color(0xff57b8ff);
-  static const gold = Color(0xffffcc66);
-  static const green = Color(0xff2bd49a);
-  static const danger = Color(0xffff6b6b);
+  static AppPalette _palette = AppPalette.dark;
+
+  static void use(WeaaThemeMode mode) {
+    _palette = mode == WeaaThemeMode.dark ? AppPalette.dark : AppPalette.light;
+  }
+
+  static Color get background => _palette.background;
+  static Color get surface => _palette.surface;
+  static Color get surfaceStrong => _palette.surfaceStrong;
+  static Color get ink => _palette.ink;
+  static Color get muted => _palette.muted;
+  static Color get accent => _palette.accent;
+  static Color get gold => _palette.gold;
+  static Color get green => _palette.green;
+  static Color get danger => _palette.danger;
+  static Color get onAccent => _palette.onAccent;
+  static bool get isLight => _palette.isLight;
+}
+
+class AppPalette {
+  const AppPalette({
+    required this.background,
+    required this.surface,
+    required this.surfaceStrong,
+    required this.ink,
+    required this.muted,
+    required this.accent,
+    required this.gold,
+    required this.green,
+    required this.danger,
+    required this.onAccent,
+    required this.isLight,
+  });
+
+  final Color background;
+  final Color surface;
+  final Color surfaceStrong;
+  final Color ink;
+  final Color muted;
+  final Color accent;
+  final Color gold;
+  final Color green;
+  final Color danger;
+  final Color onAccent;
+  final bool isLight;
+
+  static const dark = AppPalette(
+    background: Color(0xff060b11),
+    surface: Color(0xff121b28),
+    surfaceStrong: Color(0xff172338),
+    ink: Color(0xfff1f7ff),
+    muted: Color(0xff97a6b8),
+    accent: Color(0xff57b8ff),
+    gold: Color(0xffffcc66),
+    green: Color(0xff2bd49a),
+    danger: Color(0xffff6b6b),
+    onAccent: Color(0xff071018),
+    isLight: false,
+  );
+
+  static const light = AppPalette(
+    background: Color(0xfff4f7fb),
+    surface: Color(0xffffffff),
+    surfaceStrong: Color(0xffe6edf6),
+    ink: Color(0xff102033),
+    muted: Color(0xff607086),
+    accent: Color(0xff1578c7),
+    gold: Color(0xffb8860b),
+    green: Color(0xff15845f),
+    danger: Color(0xffc33b3b),
+    onAccent: Color(0xffffffff),
+    isLight: true,
+  );
 }
 
 class AppConfig {
@@ -1718,9 +1806,9 @@ class AdminPage extends ConsumerWidget {
           AdminModeBanner(auth: auth),
           const SizedBox(height: 18),
           if (auth.isLoading)
-            const Center(
+            Center(
               child: Padding(
-                padding: EdgeInsets.all(32),
+                padding: const EdgeInsets.all(32),
                 child: CircularProgressIndicator(color: AppColors.accent),
               ),
             )
@@ -1831,10 +1919,12 @@ class TopNavigation extends StatelessWidget {
             ),
           ),
           if (!compact) NavDock(activePath: activePath),
+          const SizedBox(width: 10),
+          const ThemeModeButton(),
           if (compact)
             IconButton(
               tooltip: 'القائمة',
-              icon: const Icon(Icons.menu_rounded, color: AppColors.ink),
+              icon: Icon(Icons.menu_rounded, color: AppColors.ink),
               onPressed: () => showModalBottomSheet<void>(
                 context: context,
                 backgroundColor: AppColors.surface,
@@ -1872,6 +1962,37 @@ class TopNavigation extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class ThemeModeButton extends ConsumerWidget {
+  const ThemeModeButton({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final mode = ref.watch(appThemeProvider);
+    final isLight = mode == WeaaThemeMode.light;
+    return Tooltip(
+      message: isLight ? 'تفعيل الوضع الداكن' : 'تفعيل الوضع الفاتح',
+      child: OutlinedButton.icon(
+        onPressed: () => ref.read(appThemeProvider.notifier).toggle(),
+        icon: Icon(
+          isLight ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
+          size: 18,
+        ),
+        label: Text(isLight ? 'داكن' : 'فاتح'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.ink,
+          side: BorderSide(color: veil(AppColors.ink, .18)),
+          backgroundColor: veil(AppColors.surface, .62),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          textStyle: appText(fontSize: 12, weight: FontWeight.w900),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(999),
+          ),
+        ),
       ),
     );
   }
@@ -1915,7 +2036,7 @@ class NavDock extends StatelessWidget {
                   style: appText(
                     fontSize: 12,
                     color: item.path == activePath
-                        ? const Color(0xff071018)
+                        ? AppColors.onAccent
                         : AppColors.ink,
                     weight: FontWeight.w900,
                   ),
@@ -2200,7 +2321,7 @@ class FeatureCard extends StatelessWidget {
                 ),
               ),
               if (item.slug != null)
-                const Icon(
+                Icon(
                   Icons.arrow_back_rounded,
                   color: AppColors.accent,
                   size: 18,
@@ -2286,7 +2407,7 @@ class ServiceDetailHero extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 12),
               child: Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.check_circle_rounded,
                     color: AppColors.green,
                     size: 20,
@@ -2350,7 +2471,7 @@ class RatingBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.star_rounded, color: AppColors.gold, size: 20),
+          Icon(Icons.star_rounded, color: AppColors.gold, size: 20),
           const SizedBox(width: 8),
           Text(
             '${average.toStringAsFixed(1)} / 5',
@@ -2443,9 +2564,9 @@ class _VideoPreview extends StatelessWidget {
                         color: AppColors.accent,
                         borderRadius: BorderRadius.circular(24),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.play_arrow_rounded,
-                        color: Color(0xff071018),
+                        color: AppColors.onAccent,
                         size: 44,
                       ),
                     ),
@@ -2636,7 +2757,7 @@ class _ServiceRequestFormState extends ConsumerState<ServiceRequestForm> {
           label: const Text('إرسال طلب الخدمة'),
           style: FilledButton.styleFrom(
             backgroundColor: AppColors.accent,
-            foregroundColor: const Color(0xff071018),
+            foregroundColor: AppColors.onAccent,
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
             textStyle: appText(fontSize: 15, weight: FontWeight.w900),
             shape: RoundedRectangleBorder(
@@ -2722,7 +2843,7 @@ class RequestInput extends StatelessWidget {
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: AppColors.accent, width: 1.4),
+            borderSide: BorderSide(color: AppColors.accent, width: 1.4),
           ),
         ),
       ),
@@ -2799,7 +2920,7 @@ class ReviewCard extends StatelessWidget {
           Row(
             children: [
               for (var i = 0; i < review.rating; i++)
-                const Icon(Icons.star_rounded, color: AppColors.gold, size: 18),
+                Icon(Icons.star_rounded, color: AppColors.gold, size: 18),
             ],
           ),
           const SizedBox(height: 12),
@@ -2833,7 +2954,7 @@ class AdminModeBanner extends ConsumerWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.admin_panel_settings_rounded, color: AppColors.gold),
+          Icon(Icons.admin_panel_settings_rounded, color: AppColors.gold),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
@@ -2849,7 +2970,7 @@ class AdminModeBanner extends ConsumerWidget {
           ),
           if (sync.isBusy) ...[
             const SizedBox(width: 10),
-            const SizedBox(
+            SizedBox(
               width: 18,
               height: 18,
               child: CircularProgressIndicator(
@@ -2945,7 +3066,7 @@ class _AdminLoginPanelState extends ConsumerState<AdminLoginPanel> {
               label: const Text('دخول لوحة الأدمن'),
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.accent,
-                foregroundColor: const Color(0xff071018),
+                foregroundColor: AppColors.onAccent,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 22,
                   vertical: 16,
@@ -3019,18 +3140,14 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
                       Icon(
                         tabs[i].$2,
                         size: 17,
-                        color: tab == i
-                            ? const Color(0xff071018)
-                            : AppColors.muted,
+                        color: tab == i ? AppColors.onAccent : AppColors.muted,
                       ),
                       const SizedBox(width: 7),
                       Text(
                         tabs[i].$1,
                         style: appText(
                           fontSize: 12,
-                          color: tab == i
-                              ? const Color(0xff071018)
-                              : AppColors.ink,
+                          color: tab == i ? AppColors.onAccent : AppColors.ink,
                           weight: FontWeight.w900,
                         ),
                       ),
@@ -3142,7 +3259,7 @@ class AdminPagesEditor extends ConsumerWidget {
             label: const Text('إضافة صفحة'),
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.gold,
-              foregroundColor: const Color(0xff071018),
+              foregroundColor: AppColors.onAccent,
             ),
           ),
         ),
@@ -3227,7 +3344,7 @@ class AdminItemsEditor extends ConsumerWidget {
             label: Text('إضافة $title'),
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.gold,
-              foregroundColor: const Color(0xff071018),
+              foregroundColor: AppColors.onAccent,
             ),
           ),
         ),
@@ -3574,7 +3691,7 @@ class _NewReviewComposerState extends ConsumerState<NewReviewComposer> {
             label: const Text('إضافة الريفيو'),
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.gold,
-              foregroundColor: const Color(0xff071018),
+              foregroundColor: AppColors.onAccent,
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
               textStyle: appText(fontSize: 13, weight: FontWeight.w900),
               shape: RoundedRectangleBorder(
@@ -3686,7 +3803,7 @@ class _AdminRequestsEditorState extends ConsumerState<AdminRequestsEditor> {
                         labelStyle: appText(
                           fontSize: 12,
                           color: request.status == status
-                              ? const Color(0xff071018)
+                              ? AppColors.onAccent
                               : AppColors.ink,
                           weight: FontWeight.w900,
                         ),
@@ -3742,7 +3859,7 @@ class _RequestFilters extends StatelessWidget {
                   labelStyle: appText(
                     fontSize: 12,
                     color: filter == status
-                        ? const Color(0xff071018)
+                        ? AppColors.onAccent
                         : AppColors.ink,
                     weight: FontWeight.w900,
                   ),
@@ -3911,7 +4028,7 @@ class AdminFormEditor extends ConsumerWidget {
               label: const Text('إضافة حقل'),
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.gold,
-                foregroundColor: const Color(0xff071018),
+                foregroundColor: AppColors.onAccent,
               ),
             ),
           ),
@@ -3998,7 +4115,7 @@ class _CmsTextFieldState extends State<CmsTextField> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.accent),
+          borderSide: BorderSide(color: AppColors.accent),
         ),
       ),
     );
@@ -4037,19 +4154,19 @@ class _CmsTextFieldState extends State<CmsTextField> {
                   }
                 },
           icon: isSaving
-              ? const SizedBox(
+              ? SizedBox(
                   width: 16,
                   height: 16,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: Color(0xff071018),
+                    color: AppColors.onAccent,
                   ),
                 )
               : const Icon(Icons.save_rounded, size: 18),
           label: Text(isSaving ? 'جاري الحفظ' : 'حفظ'),
           style: FilledButton.styleFrom(
             backgroundColor: AppColors.accent,
-            foregroundColor: const Color(0xff071018),
+            foregroundColor: AppColors.onAccent,
             disabledBackgroundColor: veil(AppColors.ink, .08),
             disabledForegroundColor: veil(AppColors.ink, .42),
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
@@ -5001,7 +5118,7 @@ class SignalPill extends StatelessWidget {
         label,
         style: appText(
           fontSize: 12,
-          color: strong ? const Color(0xff071018) : AppColors.ink,
+          color: strong ? AppColors.onAccent : AppColors.ink,
           weight: FontWeight.w900,
         ),
       ),
@@ -5022,7 +5139,7 @@ class PrimaryAction extends StatelessWidget {
       label: Text(label),
       style: FilledButton.styleFrom(
         backgroundColor: AppColors.accent,
-        foregroundColor: const Color(0xff071018),
+        foregroundColor: AppColors.onAccent,
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
         textStyle: appText(fontSize: 15, weight: FontWeight.w900),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
@@ -5272,14 +5389,14 @@ BoxDecoration panelDecoration({Color? borderColor, double radius = 22}) {
 
 TextStyle appText({
   double fontSize = 14,
-  Color color = AppColors.ink,
+  Color? color,
   FontWeight weight = FontWeight.w600,
   double height = 1.35,
 }) {
   return GoogleFonts.getFont(
     'Tajawal',
     fontSize: fontSize,
-    color: color,
+    color: color ?? AppColors.ink,
     fontWeight: weight,
     height: height,
   );
@@ -5287,14 +5404,14 @@ TextStyle appText({
 
 TextStyle displayText({
   double fontSize = 42,
-  Color color = AppColors.ink,
+  Color? color,
   FontWeight weight = FontWeight.w900,
   double height = 1.1,
 }) {
   return GoogleFonts.getFont(
     'Cairo',
     fontSize: fontSize,
-    color: color,
+    color: color ?? AppColors.ink,
     fontWeight: weight,
     height: height,
   );

@@ -32,6 +32,27 @@ void main() {
     expect(find.byType(Image), findsWidgets);
   });
 
+  testWidgets('theme toggle switches between dark and light palettes', (
+    tester,
+  ) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(container: container, child: const WeaaApp()),
+    );
+    await tester.pumpAndSettle();
+
+    expect(container.read(appThemeProvider), WeaaThemeMode.dark);
+    expect(find.text('فاتح'), findsOneWidget);
+
+    await tester.tap(find.text('فاتح'));
+    await tester.pumpAndSettle();
+
+    expect(container.read(appThemeProvider), WeaaThemeMode.light);
+    expect(find.text('داكن'), findsOneWidget);
+  });
+
   testWidgets('services route renders general sector information', (
     tester,
   ) async {
