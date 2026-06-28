@@ -44,13 +44,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(container.read(appThemeProvider), WeaaThemeMode.dark);
-    expect(find.text('فاتح'), findsOneWidget);
+    expect(find.text('الوضع الفاتح'), findsOneWidget);
 
-    await tester.tap(find.text('فاتح'));
+    await tester.tap(find.byKey(const ValueKey('theme-toggle')));
     await tester.pumpAndSettle();
 
     expect(container.read(appThemeProvider), WeaaThemeMode.light);
-    expect(find.text('داكن'), findsOneWidget);
+    expect(find.text('الوضع الداكن'), findsOneWidget);
   });
 
   testWidgets('services route renders general sector information', (

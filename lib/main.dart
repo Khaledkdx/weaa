@@ -1859,6 +1859,11 @@ class AppShell extends ConsumerWidget {
                 ),
               ),
             ),
+            const PositionedDirectional(
+              start: 18,
+              bottom: 18,
+              child: FloatingThemeModeButton(),
+            ),
           ],
         ),
       ),
@@ -1919,8 +1924,6 @@ class TopNavigation extends StatelessWidget {
             ),
           ),
           if (!compact) NavDock(activePath: activePath),
-          const SizedBox(width: 10),
-          const ThemeModeButton(),
           if (compact)
             IconButton(
               tooltip: 'القائمة',
@@ -1967,30 +1970,35 @@ class TopNavigation extends StatelessWidget {
   }
 }
 
-class ThemeModeButton extends ConsumerWidget {
-  const ThemeModeButton({super.key});
+class FloatingThemeModeButton extends ConsumerWidget {
+  const FloatingThemeModeButton({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final mode = ref.watch(appThemeProvider);
     final isLight = mode == WeaaThemeMode.light;
-    return Tooltip(
-      message: isLight ? 'تفعيل الوضع الداكن' : 'تفعيل الوضع الفاتح',
-      child: OutlinedButton.icon(
-        onPressed: () => ref.read(appThemeProvider.notifier).toggle(),
-        icon: Icon(
-          isLight ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
-          size: 18,
-        ),
-        label: Text(isLight ? 'داكن' : 'فاتح'),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.ink,
-          side: BorderSide(color: veil(AppColors.ink, .18)),
-          backgroundColor: veil(AppColors.surface, .62),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          textStyle: appText(fontSize: 12, weight: FontWeight.w900),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(999),
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Tooltip(
+        message: isLight ? 'تفعيل الوضع الداكن' : 'تفعيل الوضع الفاتح',
+        child: FilledButton.icon(
+          key: const ValueKey('theme-toggle'),
+          onPressed: () => ref.read(appThemeProvider.notifier).toggle(),
+          icon: Icon(
+            isLight ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
+            size: 19,
+          ),
+          label: Text(isLight ? 'الوضع الداكن' : 'الوضع الفاتح'),
+          style: FilledButton.styleFrom(
+            foregroundColor: AppColors.onAccent,
+            backgroundColor: AppColors.accent,
+            elevation: 18,
+            shadowColor: veil(AppColors.accent, .32),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
+            textStyle: appText(fontSize: 13, weight: FontWeight.w900),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(999),
+            ),
           ),
         ),
       ),
