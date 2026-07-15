@@ -175,7 +175,7 @@ void main() {
     expect(find.text('الفورم'), findsOneWidget);
   });
 
-  testWidgets('operations matrix hides payments and shows active admin ops', (
+  testWidgets('services route hides public admin operations matrix', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -185,9 +185,12 @@ void main() {
 
     expect(find.text('المدفوعات'), findsNothing);
     expect(find.text('Stripe لاحقًا'), findsNothing);
-    expect(find.text('الحجوزات'), findsOneWidget);
-    expect(find.text('الرسائل'), findsOneWidget);
-    expect(find.text('الصلاحيات'), findsOneWidget);
+    expect(find.text('الحجوزات'), findsNothing);
+    expect(find.text('الرسائل'), findsNothing);
+    expect(find.text('الصلاحيات'), findsNothing);
+    expect(find.text('من طلبات العملاء'), findsNothing);
+    expect(find.text('تصل إلى الأدمن'), findsNothing);
+    expect(find.text('أدوار CMS'), findsNothing);
   });
 
   testWidgets('contact form sends message to admin state', (tester) async {

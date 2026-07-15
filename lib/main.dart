@@ -2006,7 +2006,6 @@ class GeneralInfoPage extends ConsumerWidget {
             items: cms.generalInfo,
             featuredCount: cms.generalInfo.length,
           ),
-          const OperationsMatrix(),
           FinalCta(company: cms.company),
         ],
       ),
