@@ -1940,6 +1940,18 @@ const navItems = [
   NavItem('تواصل', '/contact', Icons.mark_email_unread_rounded),
 ];
 
+const bookingStatuses = [
+  'طلب جديد',
+  'قيد المتابعة',
+  'تم التواصل',
+  'مؤكد',
+  'مغلق',
+];
+
+const operationalBookingStatuses = {'قيد المتابعة', 'تم التواصل', 'مؤكد'};
+
+const messageStatuses = ['جديدة', 'قيد الرد', 'تم الرد', 'مؤرشفة'];
+
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
 
@@ -3080,22 +3092,18 @@ class _ServiceRequestFormState extends ConsumerState<ServiceRequestForm> {
       details: detailsController.text.trim(),
       createdAtLabel: 'الآن',
     );
-    await ref.read(cmsProvider.notifier).submitServiceRequest(request);
-    if (!mounted) return;
-    nameController.clear();
-    phoneController.clear();
-    emailController.clear();
-    detailsController.clear();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'تم إرسال الطلب إلى لوحة الأدمن',
-          style: appText(color: AppColors.ink, weight: FontWeight.w800),
-        ),
-        backgroundColor: AppColors.surfaceStrong,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    try {
+      await ref.read(cmsProvider.notifier).submitServiceRequest(request);
+      if (!mounted) return;
+      nameController.clear();
+      phoneController.clear();
+      emailController.clear();
+      detailsController.clear();
+      showAdminSnack(context, 'تم إرسال الطلب إلى لوحة الأدمن');
+    } catch (_) {
+      if (!mounted) return;
+      showAdminSnack(context, 'تعذر إرسال الطلب، حاول مرة أخرى', error: true);
+    }
   }
 
   @override
@@ -3605,7 +3613,7 @@ class AdminOverview extends StatelessWidget {
       ('طلبات', '${cms.serviceRequests.length}', Icons.inbox_rounded),
       (
         'حجوزات',
-        '${cms.serviceRequests.where((request) => const {'قيد المتابعة', 'تم التواصل', 'مؤكد'}.contains(request.status)).length}',
+        '${cms.serviceRequests.where((request) => operationalBookingStatuses.contains(request.status)).length}',
         Icons.event_available_rounded,
       ),
       (
@@ -3640,6 +3648,143 @@ class AdminOverview extends StatelessWidget {
       ],
     );
   }
+}
+
+class AdminStatsStrip extends StatelessWidget {
+  const AdminStatsStrip({required this.items, super.key});
+
+  final List<(String, String, IconData, Color)> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return AdminPanel(
+      child: Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        children: [
+          for (final item in items)
+            Container(
+              width: 176,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: veil(item.$4, .1),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: veil(item.$4, .22)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: veil(item.$4, .16),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(item.$3, color: item.$4, size: 20),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.$2,
+                          style: displayText(
+                            fontSize: 24,
+                            color: AppColors.ink,
+                          ),
+                        ),
+                        Text(
+                          item.$1,
+                          style: appText(
+                            fontSize: 11,
+                            color: AppColors.muted,
+                            weight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class AdminInfoTile extends StatelessWidget {
+  const AdminInfoTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.ltr = false,
+    super.key,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final bool ltr;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 230,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: veil(AppColors.surfaceStrong, .52),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: veil(AppColors.ink, .1)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: AppColors.accent, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: appText(
+                    fontSize: 11,
+                    color: AppColors.muted,
+                    weight: FontWeight.w800,
+                  ),
+                ),
+                Text(
+                  value.isEmpty ? 'غير مسجل' : value,
+                  textDirection: ltr ? TextDirection.ltr : TextDirection.rtl,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: appText(color: AppColors.ink, weight: FontWeight.w900),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+void showAdminSnack(
+  BuildContext context,
+  String message, {
+  bool error = false,
+}) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(
+        message,
+        style: appText(color: AppColors.ink, weight: FontWeight.w800),
+      ),
+      backgroundColor: error ? AppColors.danger : AppColors.surfaceStrong,
+      behavior: SnackBarBehavior.floating,
+    ),
+  );
 }
 
 class AdminPagesEditor extends ConsumerWidget {
@@ -4131,8 +4276,11 @@ class _AdminRequestsEditorState extends ConsumerState<AdminRequestsEditor> {
       return Column(
         children: [
           _RequestFilters(
+            title: 'فلترة الطلبات',
+            searchLabel: 'بحث بالاسم أو الجوال أو الخدمة',
             filter: filter,
             query: query,
+            statuses: bookingStatuses,
             onFilter: (value) => setState(() => filter = value),
             onQuery: (value) => setState(() => query = value),
           ),
@@ -4149,8 +4297,11 @@ class _AdminRequestsEditorState extends ConsumerState<AdminRequestsEditor> {
     return Column(
       children: [
         _RequestFilters(
+          title: 'فلترة الطلبات',
+          searchLabel: 'بحث بالاسم أو الجوال أو الخدمة',
           filter: filter,
           query: query,
+          statuses: bookingStatuses,
           onFilter: (value) => setState(() => filter = value),
           onQuery: (value) => setState(() => query = value),
         ),
@@ -4222,21 +4373,27 @@ class _AdminRequestsEditorState extends ConsumerState<AdminRequestsEditor> {
 
 class _RequestFilters extends StatelessWidget {
   const _RequestFilters({
+    required this.title,
+    required this.searchLabel,
     required this.filter,
     required this.query,
+    required this.statuses,
     required this.onFilter,
     required this.onQuery,
   });
 
+  final String title;
+  final String searchLabel;
   final String filter;
   final String query;
+  final List<String> statuses;
   final ValueChanged<String> onFilter;
   final ValueChanged<String> onQuery;
 
   @override
   Widget build(BuildContext context) {
     return AdminPanel(
-      title: 'فلترة الطلبات',
+      title: title,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -4244,14 +4401,7 @@ class _RequestFilters extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
-              for (final status in const [
-                'الكل',
-                'طلب جديد',
-                'قيد المتابعة',
-                'تم التواصل',
-                'مؤكد',
-                'مغلق',
-              ])
+              for (final status in ['الكل', ...statuses])
                 ChoiceChip(
                   selected: filter == status,
                   label: Text(status),
@@ -4270,7 +4420,7 @@ class _RequestFilters extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           RequestInput(
-            label: 'بحث بالاسم أو الجوال أو الخدمة',
+            label: searchLabel,
             controller: TextEditingController(text: query)
               ..selection = TextSelection.collapsed(offset: query.length),
             onChanged: onQuery,
@@ -4295,6 +4445,19 @@ class _AdminBookingsEditorState extends ConsumerState<AdminBookingsEditor> {
   String filter = 'الكل';
   String query = '';
 
+  Future<void> setBookingStatus(ServiceRequest booking, String status) async {
+    try {
+      await ref
+          .read(cmsProvider.notifier)
+          .updateBookingStatus(booking.id, status);
+      if (!mounted) return;
+      showAdminSnack(context, 'تم تحديث حالة الحجز إلى $status');
+    } catch (_) {
+      if (!mounted) return;
+      showAdminSnack(context, 'تعذر تحديث حالة الحجز', error: true);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final bookings = widget.requests.where((request) {
@@ -4303,11 +4466,37 @@ class _AdminBookingsEditorState extends ConsumerState<AdminBookingsEditor> {
           '${request.name} ${request.phone} ${request.email} ${request.serviceTitle} ${request.details}';
       return matchesStatus && haystack.contains(query.trim());
     }).toList();
+    final confirmed = widget.requests
+        .where((request) => request.status == 'مؤكد')
+        .length;
+    final inProgress = widget.requests
+        .where((request) => operationalBookingStatuses.contains(request.status))
+        .length;
+    final closed = widget.requests
+        .where((request) => request.status == 'مغلق')
+        .length;
     return Column(
       children: [
+        AdminStatsStrip(
+          key: const ValueKey('booking-stats-strip'),
+          items: [
+            (
+              'كل الطلبات',
+              '${widget.requests.length}',
+              Icons.inbox_rounded,
+              AppColors.accent,
+            ),
+            ('حجوزات نشطة', '$inProgress', Icons.bolt_rounded, AppColors.green),
+            ('مؤكد', '$confirmed', Icons.verified_rounded, AppColors.gold),
+            ('مغلق', '$closed', Icons.lock_rounded, AppColors.muted),
+          ],
+        ),
         _RequestFilters(
+          title: 'فلترة الحجوزات',
+          searchLabel: 'بحث باسم العميل أو الخدمة أو الجوال',
           filter: filter,
           query: query,
+          statuses: bookingStatuses,
           onFilter: (value) => setState(() => filter = value),
           onQuery: (value) => setState(() => query = value),
         ),
@@ -4322,7 +4511,7 @@ class _AdminBookingsEditorState extends ConsumerState<AdminBookingsEditor> {
         else
           for (final booking in bookings)
             AdminPanel(
-              title: 'حجز: ${booking.serviceTitle}',
+              title: '${booking.status}: ${booking.serviceTitle}',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -4337,11 +4526,35 @@ class _AdminBookingsEditorState extends ConsumerState<AdminBookingsEditor> {
                     ],
                   ),
                   const SizedBox(height: 14),
-                  Text(
-                    booking.name,
-                    style: displayText(fontSize: 24, color: AppColors.ink),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      AdminInfoTile(
+                        icon: Icons.person_rounded,
+                        label: 'العميل',
+                        value: booking.name,
+                      ),
+                      AdminInfoTile(
+                        icon: Icons.local_offer_rounded,
+                        label: 'الخدمة',
+                        value: booking.serviceTitle,
+                      ),
+                      AdminInfoTile(
+                        icon: Icons.call_rounded,
+                        label: 'الجوال',
+                        value: booking.phone,
+                        ltr: true,
+                      ),
+                      AdminInfoTile(
+                        icon: Icons.mail_rounded,
+                        label: 'البريد',
+                        value: booking.email,
+                        ltr: true,
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 14),
                   Text(
                     booking.details.isEmpty
                         ? 'لا توجد تفاصيل إضافية.'
@@ -4353,19 +4566,12 @@ class _AdminBookingsEditorState extends ConsumerState<AdminBookingsEditor> {
                     spacing: 10,
                     runSpacing: 10,
                     children: [
-                      for (final status in const [
-                        'طلب جديد',
-                        'قيد المتابعة',
-                        'تم التواصل',
-                        'مؤكد',
-                        'مغلق',
-                      ])
+                      for (final status in bookingStatuses)
                         ChoiceChip(
+                          key: ValueKey('booking-status-${booking.id}-$status'),
                           selected: booking.status == status,
                           label: Text(status),
-                          onSelected: (_) => ref
-                              .read(cmsProvider.notifier)
-                              .updateBookingStatus(booking.id, status),
+                          onSelected: (_) => setBookingStatus(booking, status),
                           selectedColor: AppColors.accent,
                           backgroundColor: veil(AppColors.surfaceStrong, .72),
                           labelStyle: appText(
@@ -4401,6 +4607,19 @@ class _AdminMessagesEditorState extends ConsumerState<AdminMessagesEditor> {
   String filter = 'الكل';
   String query = '';
 
+  Future<void> setMessageStatus(ContactMessage message, String status) async {
+    try {
+      await ref
+          .read(cmsProvider.notifier)
+          .updateContactMessageStatus(message.id, status);
+      if (!mounted) return;
+      showAdminSnack(context, 'تم تحديث حالة الرسالة إلى $status');
+    } catch (_) {
+      if (!mounted) return;
+      showAdminSnack(context, 'تعذر تحديث حالة الرسالة', error: true);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final messages = widget.messages.where((message) {
@@ -4409,8 +4628,35 @@ class _AdminMessagesEditorState extends ConsumerState<AdminMessagesEditor> {
           '${message.name} ${message.phone} ${message.email} ${message.subject} ${message.body}';
       return matchesStatus && haystack.contains(query.trim());
     }).toList();
+    final fresh = widget.messages
+        .where((message) => message.status == 'جديدة')
+        .length;
+    final replying = widget.messages
+        .where((message) => message.status == 'قيد الرد')
+        .length;
+    final done = widget.messages
+        .where((message) => message.status == 'تم الرد')
+        .length;
+    final archived = widget.messages
+        .where((message) => message.status == 'مؤرشفة')
+        .length;
     return Column(
       children: [
+        AdminStatsStrip(
+          key: const ValueKey('message-stats-strip'),
+          items: [
+            (
+              'كل الرسائل',
+              '${widget.messages.length}',
+              Icons.mark_email_unread_rounded,
+              AppColors.accent,
+            ),
+            ('جديدة', '$fresh', Icons.fiber_new_rounded, AppColors.gold),
+            ('قيد الرد', '$replying', Icons.reply_rounded, AppColors.green),
+            ('تم الرد', '$done', Icons.done_all_rounded, AppColors.accent),
+            ('مؤرشفة', '$archived', Icons.archive_rounded, AppColors.muted),
+          ],
+        ),
         AdminPanel(
           title: 'فلترة الرسائل',
           child: Column(
@@ -4420,13 +4666,7 @@ class _AdminMessagesEditorState extends ConsumerState<AdminMessagesEditor> {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  for (final status in const [
-                    'الكل',
-                    'جديدة',
-                    'قيد الرد',
-                    'تم الرد',
-                    'مؤرشفة',
-                  ])
+                  for (final status in const ['الكل', ...messageStatuses])
                     ChoiceChip(
                       selected: filter == status,
                       label: Text(status),
@@ -4478,11 +4718,35 @@ class _AdminMessagesEditorState extends ConsumerState<AdminMessagesEditor> {
                     ],
                   ),
                   const SizedBox(height: 14),
-                  Text(
-                    message.name,
-                    style: displayText(fontSize: 24, color: AppColors.ink),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      AdminInfoTile(
+                        icon: Icons.person_rounded,
+                        label: 'المرسل',
+                        value: message.name,
+                      ),
+                      AdminInfoTile(
+                        icon: Icons.subject_rounded,
+                        label: 'الموضوع',
+                        value: message.subject,
+                      ),
+                      AdminInfoTile(
+                        icon: Icons.call_rounded,
+                        label: 'الجوال',
+                        value: message.phone,
+                        ltr: true,
+                      ),
+                      AdminInfoTile(
+                        icon: Icons.mail_rounded,
+                        label: 'البريد',
+                        value: message.email,
+                        ltr: true,
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 14),
                   Text(
                     message.body.isEmpty ? 'لا يوجد نص رسالة.' : message.body,
                     style: appText(color: AppColors.muted, height: 1.7),
@@ -4492,18 +4756,12 @@ class _AdminMessagesEditorState extends ConsumerState<AdminMessagesEditor> {
                     spacing: 10,
                     runSpacing: 10,
                     children: [
-                      for (final status in const [
-                        'جديدة',
-                        'قيد الرد',
-                        'تم الرد',
-                        'مؤرشفة',
-                      ])
+                      for (final status in messageStatuses)
                         ChoiceChip(
+                          key: ValueKey('message-status-${message.id}-$status'),
                           selected: message.status == status,
                           label: Text(status),
-                          onSelected: (_) => ref
-                              .read(cmsProvider.notifier)
-                              .updateContactMessageStatus(message.id, status),
+                          onSelected: (_) => setMessageStatus(message, status),
                           selectedColor: AppColors.accent,
                           backgroundColor: veil(AppColors.surfaceStrong, .72),
                           labelStyle: appText(
@@ -4533,13 +4791,63 @@ class AdminPermissionsEditor extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final controller = ref.read(cmsProvider.notifier);
+    Future<void> runPermissionAction(
+      Future<void> Function() action,
+      String success,
+    ) async {
+      try {
+        await action();
+        if (!context.mounted) return;
+        showAdminSnack(context, success);
+      } catch (_) {
+        if (!context.mounted) return;
+        showAdminSnack(context, 'تعذر حفظ تعديل الصلاحيات', error: true);
+      }
+    }
+
+    final enabledPermissions = roles.fold<int>(
+      0,
+      (sum, role) => sum + role.permissions.length,
+    );
     return Column(
       children: [
+        AdminStatsStrip(
+          key: const ValueKey('permissions-stats-strip'),
+          items: [
+            (
+              'الأدوار',
+              '${roles.length}',
+              Icons.admin_panel_settings_rounded,
+              AppColors.accent,
+            ),
+            (
+              'صلاحيات مفعلة',
+              '$enabledPermissions',
+              Icons.check_circle_rounded,
+              AppColors.green,
+            ),
+            (
+              'صلاحيات متاحة',
+              '${AdminRole.allPermissions.length}',
+              Icons.tune_rounded,
+              AppColors.gold,
+            ),
+          ],
+        ),
         AdminPanel(
           title: 'الصلاحيات',
-          child: Text(
-            'هذه واجهة صلاحيات داخل CMS فقط. الربط الحقيقي مع Supabase Auth/RBAC يحتاج مرحلة backend لاحقة بدون وضع service_role داخل Flutter Web.',
-            style: appText(color: AppColors.muted, height: 1.7),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.info_rounded, color: AppColors.gold),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'هذه واجهة صلاحيات داخل CMS فقط. الربط الحقيقي مع Supabase Auth/RBAC يحتاج مرحلة backend لاحقة بدون وضع service_role داخل Flutter Web.',
+                  style: appText(color: AppColors.muted, height: 1.7),
+                ),
+              ),
+            ],
           ),
         ),
         for (final role in roles)
@@ -4558,13 +4866,29 @@ class AdminPermissionsEditor extends ConsumerWidget {
                   spacing: 10,
                   runSpacing: 10,
                   children: [
+                    SignalPill(
+                      label: '${role.permissions.length} صلاحيات مفعلة',
+                      strong: true,
+                    ),
+                    SignalPill(label: role.id),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
                     for (final permission in AdminRole.allPermissions)
                       FilterChip(
+                        key: ValueKey('permission-${role.id}-$permission'),
                         selected: role.permissions.contains(permission),
                         label: Text(permission),
-                        onSelected: (_) => controller.toggleAdminRolePermission(
-                          role.id,
-                          permission,
+                        onSelected: (_) => runPermissionAction(
+                          () => controller.toggleAdminRolePermission(
+                            role.id,
+                            permission,
+                          ),
+                          'تم تحديث صلاحيات ${role.name}',
                         ),
                         selectedColor: AppColors.accent,
                         backgroundColor: veil(AppColors.surfaceStrong, .72),
@@ -4586,7 +4910,10 @@ class AdminPermissionsEditor extends ConsumerWidget {
                   child: OutlinedButton.icon(
                     onPressed: roles.length <= 1
                         ? null
-                        : () => controller.deleteAdminRole(role.id),
+                        : () => runPermissionAction(
+                            () => controller.deleteAdminRole(role.id),
+                            'تم حذف الدور',
+                          ),
                     icon: const Icon(Icons.delete_outline_rounded),
                     label: const Text('حذف الدور'),
                   ),
@@ -4597,7 +4924,11 @@ class AdminPermissionsEditor extends ConsumerWidget {
         Align(
           alignment: Alignment.centerRight,
           child: FilledButton.icon(
-            onPressed: controller.addAdminRole,
+            key: const ValueKey('add-admin-role'),
+            onPressed: () => runPermissionAction(
+              controller.addAdminRole,
+              'تم إضافة دور جديد',
+            ),
             icon: const Icon(Icons.add_rounded),
             label: const Text('إضافة دور'),
             style: FilledButton.styleFrom(
@@ -5616,36 +5947,32 @@ class _ContactFormPreviewState extends ConsumerState<ContactFormPreview> {
   }
 
   Future<void> submit() async {
-    await ref
-        .read(cmsProvider.notifier)
-        .submitContactMessage(
-          ContactMessage(
-            name: nameController.text.trim(),
-            phone: phoneController.text.trim(),
-            email: emailController.text.trim(),
-            subject: subjectController.text.trim().isEmpty
-                ? 'رسالة من صفحة تواصل'
-                : subjectController.text.trim(),
-            body: bodyController.text.trim(),
-            createdAtLabel: 'الآن',
-          ),
-        );
-    if (!mounted) return;
-    nameController.clear();
-    phoneController.clear();
-    emailController.clear();
-    subjectController.clear();
-    bodyController.clear();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'تم إرسال الرسالة إلى لوحة الأدمن',
-          style: appText(color: AppColors.ink, weight: FontWeight.w800),
-        ),
-        backgroundColor: AppColors.surfaceStrong,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    try {
+      await ref
+          .read(cmsProvider.notifier)
+          .submitContactMessage(
+            ContactMessage(
+              name: nameController.text.trim(),
+              phone: phoneController.text.trim(),
+              email: emailController.text.trim(),
+              subject: subjectController.text.trim().isEmpty
+                  ? 'رسالة من صفحة تواصل'
+                  : subjectController.text.trim(),
+              body: bodyController.text.trim(),
+              createdAtLabel: 'الآن',
+            ),
+          );
+      if (!mounted) return;
+      nameController.clear();
+      phoneController.clear();
+      emailController.clear();
+      subjectController.clear();
+      bodyController.clear();
+      showAdminSnack(context, 'تم إرسال الرسالة إلى لوحة الأدمن');
+    } catch (_) {
+      if (!mounted) return;
+      showAdminSnack(context, 'تعذر إرسال الرسالة، حاول مرة أخرى', error: true);
+    }
   }
 
   @override

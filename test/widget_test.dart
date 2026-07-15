@@ -413,6 +413,132 @@ void main() {
     },
   );
 
+  testWidgets('admin bookings tab updates a booking to confirmed', (
+    tester,
+  ) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final controller = container.read(cmsProvider.notifier);
+    await controller.submitServiceRequest(
+      const ServiceRequest(
+        id: 'booking-test',
+        serviceSlug: 'iron-dome',
+        serviceTitle: 'القبة الحديدية',
+        name: 'عميل حجز',
+        phone: '+966533333333',
+        email: 'booking@example.com',
+        details: 'تفاصيل حجز تشغيلية',
+        createdAtLabel: 'الآن',
+      ),
+    );
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const WeaaApp(initialLocation: '/admin'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('الحجوزات'));
+    await tester.tap(find.text('الحجوزات'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('booking-stats-strip')), findsOneWidget);
+    expect(find.text('عميل حجز'), findsOneWidget);
+    expect(find.text('تفاصيل حجز تشغيلية'), findsOneWidget);
+
+    final confirmedChip = find.byKey(
+      const ValueKey('booking-status-booking-test-مؤكد'),
+    );
+    await tester.ensureVisible(confirmedChip);
+    await tester.tap(confirmedChip);
+    await tester.pumpAndSettle();
+
+    expect(container.read(cmsProvider).serviceRequests.first.status, 'مؤكد');
+    expect(find.text('تم تحديث حالة الحجز إلى مؤكد'), findsOneWidget);
+  });
+
+  testWidgets('admin messages tab updates a message status', (tester) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final controller = container.read(cmsProvider.notifier);
+    await controller.submitContactMessage(
+      const ContactMessage(
+        id: 'message-test',
+        name: 'مرسل رسالة',
+        phone: '+966544444444',
+        email: 'message-ui@example.com',
+        subject: 'رسالة متابعة',
+        body: 'نص رسالة للوحة الأدمن',
+        createdAtLabel: 'الآن',
+      ),
+    );
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const WeaaApp(initialLocation: '/admin'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('الرسائل'));
+    await tester.tap(find.text('الرسائل'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('message-stats-strip')), findsOneWidget);
+    expect(find.text('مرسل رسالة'), findsOneWidget);
+    expect(find.text('نص رسالة للوحة الأدمن'), findsOneWidget);
+
+    final repliedChip = find.byKey(
+      const ValueKey('message-status-message-test-تم الرد'),
+    );
+    await tester.ensureVisible(repliedChip);
+    await tester.tap(repliedChip);
+    await tester.pumpAndSettle();
+
+    expect(container.read(cmsProvider).contactMessages.first.status, 'تم الرد');
+    expect(find.text('تم تحديث حالة الرسالة إلى تم الرد'), findsOneWidget);
+  });
+
+  testWidgets('admin permissions tab toggles CMS role permissions', (
+    tester,
+  ) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const WeaaApp(initialLocation: '/admin'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('الصلاحيات'));
+    await tester.tap(find.text('الصلاحيات'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('permissions-stats-strip')),
+      findsOneWidget,
+    );
+    final pagesPermission = find.byKey(
+      const ValueKey('permission-requests-agent-الصفحات'),
+    );
+    await tester.ensureVisible(pagesPermission);
+    await tester.tap(pagesPermission);
+    await tester.pumpAndSettle();
+
+    final role = container
+        .read(cmsProvider)
+        .adminRoles
+        .firstWhere((item) => item.id == 'requests-agent');
+    expect(role.permissions, contains('الصفحات'));
+    expect(find.text('تم تحديث صلاحيات متابع طلبات'), findsOneWidget);
+  });
+
   testWidgets('admin CMS rejects duplicate service slugs', (tester) async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
