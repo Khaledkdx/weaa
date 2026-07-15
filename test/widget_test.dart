@@ -168,8 +168,60 @@ void main() {
     expect(find.text('الفيديوهات'), findsOneWidget);
     expect(find.text('الريڤيوز'), findsOneWidget);
     expect(find.text('طلبات العملاء'), findsOneWidget);
+    expect(find.text('الحجوزات'), findsOneWidget);
+    expect(find.text('الرسائل'), findsOneWidget);
+    expect(find.text('الصلاحيات'), findsOneWidget);
     expect(find.text('بيانات الشركة'), findsOneWidget);
     expect(find.text('الفورم'), findsOneWidget);
+  });
+
+  testWidgets('operations matrix hides payments and shows active admin ops', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const ProviderScope(child: WeaaApp(initialLocation: '/services')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('المدفوعات'), findsNothing);
+    expect(find.text('Stripe لاحقًا'), findsNothing);
+    expect(find.text('الحجوزات'), findsOneWidget);
+    expect(find.text('الرسائل'), findsOneWidget);
+    expect(find.text('الصلاحيات'), findsOneWidget);
+  });
+
+  testWidgets('contact form sends message to admin state', (tester) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const WeaaApp(initialLocation: '/contact'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(_field('contact-name'), 'عميل تواصل');
+    await tester.enterText(_field('contact-phone'), '+966511111111');
+    await tester.enterText(_field('contact-email'), 'message@example.com');
+    await tester.enterText(_field('contact-subject'), 'استفسار تشغيل');
+    await tester.enterText(
+      _field('contact-body'),
+      'أحتاج معرفة تفاصيل الخدمة.',
+    );
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('submit-contact-message')),
+    );
+    await tester.tap(find.byKey(const ValueKey('submit-contact-message')));
+    await tester.pumpAndSettle();
+
+    final messages = container.read(cmsProvider).contactMessages;
+    expect(messages, hasLength(1));
+    expect(messages.first.name, 'عميل تواصل');
+    expect(messages.first.subject, 'استفسار تشغيل');
+    expect(messages.first.status, 'جديدة');
+    expect(find.text('تم إرسال الرسالة إلى لوحة الأدمن'), findsOneWidget);
   });
 
   testWidgets('admin text edits save only after pressing the save button', (
@@ -267,6 +319,9 @@ void main() {
       _field('new-review-body-iron-dome'),
       'الخدمة وصلتني بشكل واضح ومنظم.',
     );
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('add-review-iron-dome')),
+    );
     await tester.tap(find.byKey(const ValueKey('add-review-iron-dome')));
     await tester.pumpAndSettle();
 
@@ -325,6 +380,36 @@ void main() {
         'حقل اختبار',
       );
       expect(container.read(cmsProvider).formLabels.last, 'حقل اختبار');
+
+      await controller.submitContactMessage(
+        const ContactMessage(
+          name: 'مرسل',
+          phone: '+966522222222',
+          email: 'sender@example.com',
+          subject: 'موضوع',
+          body: 'رسالة اختبار',
+          createdAtLabel: 'الآن',
+        ),
+      );
+      expect(container.read(cmsProvider).contactMessages.first.status, 'جديدة');
+      await controller.updateContactMessageStatus(
+        container.read(cmsProvider).contactMessages.first.id,
+        'قيد الرد',
+      );
+      expect(
+        container.read(cmsProvider).contactMessages.first.status,
+        'قيد الرد',
+      );
+
+      await controller.addAdminRole();
+      final role = container.read(cmsProvider).adminRoles.last;
+      await controller.updateAdminRole(role.id, name: 'مختبر صلاحيات');
+      await controller.toggleAdminRolePermission(role.id, 'الرسائل');
+      expect(container.read(cmsProvider).adminRoles.last.name, 'مختبر صلاحيات');
+      expect(
+        container.read(cmsProvider).adminRoles.last.permissions,
+        contains('الرسائل'),
+      );
     },
   );
 

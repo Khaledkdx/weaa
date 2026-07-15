@@ -301,6 +301,9 @@ abstract class CmsRepository {
   Future<ServiceRequest> createServiceRequest(ServiceRequest request);
   Future<List<ServiceRequest>> loadServiceRequests();
   Future<void> updateServiceRequestStatus(String requestId, String status);
+  Future<ContactMessage> createContactMessage(ContactMessage message);
+  Future<List<ContactMessage>> loadContactMessages();
+  Future<void> updateContactMessageStatus(String messageId, String status);
 }
 
 class InMemoryCmsRepository implements CmsRepository {
@@ -343,6 +346,36 @@ class InMemoryCmsRepository implements CmsRepository {
       ],
     );
   }
+
+  @override
+  Future<ContactMessage> createContactMessage(ContactMessage message) async {
+    final stored = message.id.isEmpty ? message.withGeneratedId() : message;
+    _content = _content.copyWith(
+      contactMessages: [stored, ..._content.contactMessages],
+    );
+    return stored;
+  }
+
+  @override
+  Future<List<ContactMessage>> loadContactMessages() async {
+    return _content.contactMessages;
+  }
+
+  @override
+  Future<void> updateContactMessageStatus(
+    String messageId,
+    String status,
+  ) async {
+    _content = _content.copyWith(
+      contactMessages: [
+        for (final message in _content.contactMessages)
+          if (message.id == messageId)
+            message.copyWith(status: status)
+          else
+            message,
+      ],
+    );
+  }
 }
 
 class SupabaseCmsRepository implements CmsRepository {
@@ -363,7 +396,11 @@ class SupabaseCmsRepository implements CmsRepository {
             Map<String, dynamic>.from(response['content'] as Map),
           );
     final requests = await loadServiceRequests();
-    return content.copyWith(serviceRequests: requests);
+    final messages = await loadContactMessages();
+    return content.copyWith(
+      serviceRequests: requests,
+      contactMessages: messages,
+    );
   }
 
   @override
@@ -390,6 +427,7 @@ class SupabaseCmsRepository implements CmsRepository {
     final response = await client
         .from('service_requests')
         .select()
+        .neq('service_slug', ContactMessage.contactSlug)
         .order('created_at', ascending: false);
     return [
       for (final item in response)
@@ -406,6 +444,44 @@ class SupabaseCmsRepository implements CmsRepository {
         .from('service_requests')
         .update({'status': status})
         .eq('id', requestId);
+  }
+
+  @override
+  Future<ContactMessage> createContactMessage(ContactMessage message) async {
+    final response = await client
+        .from('service_requests')
+        .insert(message.toServiceRequest().toJson(includeId: false))
+        .select()
+        .single();
+    return ContactMessage.fromServiceRequest(
+      ServiceRequest.fromJson(Map<String, dynamic>.from(response)),
+    );
+  }
+
+  @override
+  Future<List<ContactMessage>> loadContactMessages() async {
+    final response = await client
+        .from('service_requests')
+        .select()
+        .eq('service_slug', ContactMessage.contactSlug)
+        .order('created_at', ascending: false);
+    return [
+      for (final item in response)
+        ContactMessage.fromServiceRequest(
+          ServiceRequest.fromJson(Map<String, dynamic>.from(item as Map)),
+        ),
+    ];
+  }
+
+  @override
+  Future<void> updateContactMessageStatus(
+    String messageId,
+    String status,
+  ) async {
+    await client
+        .from('service_requests')
+        .update({'status': status})
+        .eq('id', messageId);
   }
 }
 
@@ -804,6 +880,97 @@ class CmsController extends Notifier<CmsContent> {
     }
   }
 
+  Future<void> updateBookingStatus(String requestId, String status) {
+    return updateServiceRequestStatus(requestId, status);
+  }
+
+  Future<void> submitContactMessage(ContactMessage message) async {
+    ref.read(cmsSyncProvider.notifier).saving();
+    try {
+      final stored = await ref
+          .read(cmsRepositoryProvider)
+          .createContactMessage(message);
+      state = state.copyWith(
+        contactMessages: [stored, ...state.contactMessages],
+      );
+      ref.read(cmsSyncProvider.notifier).saved();
+    } catch (error) {
+      ref.read(cmsSyncProvider.notifier).failed(error);
+      rethrow;
+    }
+  }
+
+  Future<void> updateContactMessageStatus(
+    String messageId,
+    String status,
+  ) async {
+    final messages = [
+      for (final message in state.contactMessages)
+        if (message.id == messageId)
+          message.copyWith(status: status)
+        else
+          message,
+    ];
+    state = state.copyWith(contactMessages: messages);
+    ref.read(cmsSyncProvider.notifier).saving();
+    try {
+      await ref
+          .read(cmsRepositoryProvider)
+          .updateContactMessageStatus(messageId, status);
+      ref.read(cmsSyncProvider.notifier).saved();
+    } catch (error) {
+      ref.read(cmsSyncProvider.notifier).failed(error);
+      rethrow;
+    }
+  }
+
+  Future<void> addAdminRole() {
+    final roles = [
+      ...state.adminRoles,
+      AdminRole(
+        id: _uniqueKey('role', {for (final role in state.adminRoles) role.id}),
+        name: 'دور جديد',
+        permissions: const [],
+      ),
+    ];
+    return _commit(state.copyWith(adminRoles: roles));
+  }
+
+  Future<void> updateAdminRole(String roleId, {String? name}) {
+    final roles = [
+      for (final role in state.adminRoles)
+        if (role.id == roleId) role.copyWith(name: name) else role,
+    ];
+    return _commit(state.copyWith(adminRoles: roles));
+  }
+
+  Future<void> toggleAdminRolePermission(String roleId, String permission) {
+    final roles = [
+      for (final role in state.adminRoles)
+        if (role.id == roleId)
+          role.copyWith(
+            permissions: role.permissions.contains(permission)
+                ? [
+                    for (final item in role.permissions)
+                      if (item != permission) item,
+                  ]
+                : [...role.permissions, permission],
+          )
+        else
+          role,
+    ];
+    return _commit(state.copyWith(adminRoles: roles));
+  }
+
+  Future<void> deleteAdminRole(String roleId) {
+    if (state.adminRoles.length <= 1) return Future.value();
+    final roles = [
+      for (final role in state.adminRoles)
+        if (role.id != roleId) role,
+    ];
+    return _commit(state.copyWith(adminRoles: roles));
+  }
+
   Future<void> updateFormLabel(int index, String label) {
     final labels = [...state.formLabels];
     if (index < 0 || index >= labels.length) return Future.value();
@@ -911,6 +1078,8 @@ class CmsContent {
     required this.values,
     required this.formLabels,
     required this.serviceRequests,
+    required this.contactMessages,
+    required this.adminRoles,
   });
 
   final CompanyContent company;
@@ -921,6 +1090,8 @@ class CmsContent {
   final List<String> values;
   final List<String> formLabels;
   final List<ServiceRequest> serviceRequests;
+  final List<ContactMessage> contactMessages;
+  final List<AdminRole> adminRoles;
 
   static CmsContent seed() {
     return const CmsContent(
@@ -969,7 +1140,7 @@ class CmsContent {
         'contact': PageContent(
           'تواصل',
           'ابدأ المحادثة من قناة واضحة',
-          'هذه الصفحة جاهزة لاحقًا للربط مع صندوق رسائل Supabase.',
+          'أرسل رسالتك وسيظهر الطلب مباشرة داخل لوحة الأدمن.',
         ),
         'admin': PageContent(
           'لوحة الأدمن',
@@ -1127,6 +1298,31 @@ class CmsContent {
         'تفاصيل الطلب',
       ],
       serviceRequests: [],
+      contactMessages: [],
+      adminRoles: [
+        AdminRole(
+          id: 'owner',
+          name: 'مالك',
+          permissions: [
+            'الصفحات',
+            'الخدمات',
+            'الريفيوز',
+            'الرسائل',
+            'الحجوزات',
+            'بيانات الشركة',
+          ],
+        ),
+        AdminRole(
+          id: 'content-editor',
+          name: 'محرر محتوى',
+          permissions: ['الصفحات', 'الخدمات', 'الريفيوز', 'بيانات الشركة'],
+        ),
+        AdminRole(
+          id: 'requests-agent',
+          name: 'متابع طلبات',
+          permissions: ['الرسائل', 'الحجوزات'],
+        ),
+      ],
     );
   }
 
@@ -1139,6 +1335,8 @@ class CmsContent {
     List<String>? values,
     List<String>? formLabels,
     List<ServiceRequest>? serviceRequests,
+    List<ContactMessage>? contactMessages,
+    List<AdminRole>? adminRoles,
   }) {
     return CmsContent(
       company: company ?? this.company,
@@ -1149,6 +1347,8 @@ class CmsContent {
       values: values ?? this.values,
       formLabels: formLabels ?? this.formLabels,
       serviceRequests: serviceRequests ?? this.serviceRequests,
+      contactMessages: contactMessages ?? this.contactMessages,
+      adminRoles: adminRoles ?? this.adminRoles,
     );
   }
 
@@ -1165,6 +1365,11 @@ class CmsContent {
         'serviceRequests': [
           for (final request in serviceRequests) request.toJson(),
         ],
+      if (includeRequests)
+        'contactMessages': [
+          for (final message in contactMessages) message.toJson(),
+        ],
+      'adminRoles': [for (final role in adminRoles) role.toJson()],
     };
   }
 
@@ -1199,6 +1404,18 @@ class CmsContent {
                 ServiceRequest.fromJson(Map<String, dynamic>.from(item as Map)),
             ]
           : const [],
+      contactMessages: json['contactMessages'] is List
+          ? [
+              for (final item in json['contactMessages'] as List)
+                ContactMessage.fromJson(Map<String, dynamic>.from(item as Map)),
+            ]
+          : const [],
+      adminRoles: json['adminRoles'] is List
+          ? [
+              for (final item in json['adminRoles'] as List)
+                AdminRole.fromJson(Map<String, dynamic>.from(item as Map)),
+            ]
+          : seed.adminRoles,
     );
   }
 
@@ -1543,6 +1760,165 @@ class ServiceRequest {
           json['createdAtLabel']?.toString() ??
           (createdAt == null ? 'الآن' : 'من Supabase'),
       status: json['status']?.toString() ?? 'طلب جديد',
+    );
+  }
+}
+
+class ContactMessage {
+  const ContactMessage({
+    this.id = '',
+    required this.name,
+    required this.phone,
+    required this.email,
+    required this.subject,
+    required this.body,
+    required this.createdAtLabel,
+    this.status = 'جديدة',
+  });
+
+  static const contactSlug = 'contact-message';
+  static const contactTitle = 'رسالة تواصل';
+
+  final String id;
+  final String name;
+  final String phone;
+  final String email;
+  final String subject;
+  final String body;
+  final String createdAtLabel;
+  final String status;
+
+  ContactMessage withGeneratedId() {
+    return copyWith(
+      id: id.isEmpty ? DateTime.now().microsecondsSinceEpoch.toString() : id,
+    );
+  }
+
+  ContactMessage copyWith({
+    String? id,
+    String? name,
+    String? phone,
+    String? email,
+    String? subject,
+    String? body,
+    String? createdAtLabel,
+    String? status,
+  }) {
+    return ContactMessage(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      phone: phone ?? this.phone,
+      email: email ?? this.email,
+      subject: subject ?? this.subject,
+      body: body ?? this.body,
+      createdAtLabel: createdAtLabel ?? this.createdAtLabel,
+      status: status ?? this.status,
+    );
+  }
+
+  ServiceRequest toServiceRequest() {
+    return ServiceRequest(
+      id: id,
+      serviceSlug: contactSlug,
+      serviceTitle: contactTitle,
+      name: name,
+      phone: phone,
+      email: email,
+      details: '$subject\n\n$body',
+      createdAtLabel: createdAtLabel,
+      status: status,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (id.isNotEmpty) 'id': id,
+      'name': name,
+      'phone': phone,
+      'email': email,
+      'subject': subject,
+      'body': body,
+      'createdAtLabel': createdAtLabel,
+      'status': status,
+    };
+  }
+
+  static ContactMessage fromServiceRequest(ServiceRequest request) {
+    final parts = request.details.split('\n\n');
+    final subject = parts.isNotEmpty && parts.first.trim().isNotEmpty
+        ? parts.first.trim()
+        : contactTitle;
+    final body = parts.length > 1
+        ? parts.skip(1).join('\n\n').trim()
+        : request.details.trim();
+    return ContactMessage(
+      id: request.id,
+      name: request.name,
+      phone: request.phone,
+      email: request.email,
+      subject: subject,
+      body: body,
+      createdAtLabel: request.createdAtLabel,
+      status: request.status.isEmpty ? 'جديدة' : request.status,
+    );
+  }
+
+  static ContactMessage fromJson(Map<String, dynamic> json) {
+    return ContactMessage(
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      phone: json['phone']?.toString() ?? '',
+      email: json['email']?.toString() ?? '',
+      subject: json['subject']?.toString() ?? '',
+      body: json['body']?.toString() ?? '',
+      createdAtLabel: json['createdAtLabel']?.toString() ?? 'الآن',
+      status: json['status']?.toString() ?? 'جديدة',
+    );
+  }
+}
+
+class AdminRole {
+  const AdminRole({
+    required this.id,
+    required this.name,
+    required this.permissions,
+  });
+
+  static const allPermissions = [
+    'الصفحات',
+    'الخدمات',
+    'الريفيوز',
+    'الرسائل',
+    'الحجوزات',
+    'بيانات الشركة',
+  ];
+
+  final String id;
+  final String name;
+  final List<String> permissions;
+
+  AdminRole copyWith({String? id, String? name, List<String>? permissions}) {
+    return AdminRole(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      permissions: permissions ?? this.permissions,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {'id': id, 'name': name, 'permissions': permissions};
+  }
+
+  static AdminRole fromJson(Map<String, dynamic> json) {
+    return AdminRole(
+      id: json['id']?.toString() ?? 'role',
+      name: json['name']?.toString() ?? 'دور',
+      permissions: json['permissions'] is List
+          ? [
+              for (final permission in json['permissions'] as List)
+                permission.toString(),
+            ]
+          : const [],
     );
   }
 }
@@ -3113,6 +3489,9 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
     ('الفيديوهات', Icons.play_circle_rounded),
     ('الريڤيوز', Icons.reviews_rounded),
     ('طلبات العملاء', Icons.inbox_rounded),
+    ('الحجوزات', Icons.event_available_rounded),
+    ('الرسائل', Icons.mark_email_unread_rounded),
+    ('الصلاحيات', Icons.admin_panel_settings_rounded),
     ('بيانات الشركة', Icons.apartment_rounded),
     ('الفورم', Icons.dynamic_form_rounded),
   ];
@@ -3197,7 +3576,10 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
       5 => AdminVideosEditor(items: cms.serviceModels),
       6 => AdminReviewsEditor(items: cms.serviceModels),
       7 => AdminRequestsEditor(requests: cms.serviceRequests),
-      8 => AdminCompanyEditor(company: cms.company),
+      8 => AdminBookingsEditor(requests: cms.serviceRequests),
+      9 => AdminMessagesEditor(messages: cms.contactMessages),
+      10 => AdminPermissionsEditor(roles: cms.adminRoles),
+      11 => AdminCompanyEditor(company: cms.company),
       _ => AdminFormEditor(labels: cms.formLabels),
     };
   }
@@ -3221,6 +3603,16 @@ class AdminOverview extends StatelessWidget {
         Icons.star_rounded,
       ),
       ('طلبات', '${cms.serviceRequests.length}', Icons.inbox_rounded),
+      (
+        'حجوزات',
+        '${cms.serviceRequests.where((request) => const {'قيد المتابعة', 'تم التواصل', 'مؤكد'}.contains(request.status)).length}',
+        Icons.event_available_rounded,
+      ),
+      (
+        'رسائل',
+        '${cms.contactMessages.length}',
+        Icons.mark_email_unread_rounded,
+      ),
     ];
     return ResponsiveAdminGrid(
       children: [
@@ -3798,6 +4190,7 @@ class _AdminRequestsEditorState extends ConsumerState<AdminRequestsEditor> {
                       'طلب جديد',
                       'قيد المتابعة',
                       'تم التواصل',
+                      'مؤكد',
                       'مغلق',
                     ])
                       ChoiceChip(
@@ -3856,6 +4249,7 @@ class _RequestFilters extends StatelessWidget {
                 'طلب جديد',
                 'قيد المتابعة',
                 'تم التواصل',
+                'مؤكد',
                 'مغلق',
               ])
                 ChoiceChip(
@@ -3883,6 +4277,338 @@ class _RequestFilters extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class AdminBookingsEditor extends ConsumerStatefulWidget {
+  const AdminBookingsEditor({required this.requests, super.key});
+
+  final List<ServiceRequest> requests;
+
+  @override
+  ConsumerState<AdminBookingsEditor> createState() =>
+      _AdminBookingsEditorState();
+}
+
+class _AdminBookingsEditorState extends ConsumerState<AdminBookingsEditor> {
+  String filter = 'الكل';
+  String query = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final bookings = widget.requests.where((request) {
+      final matchesStatus = filter == 'الكل' || request.status == filter;
+      final haystack =
+          '${request.name} ${request.phone} ${request.email} ${request.serviceTitle} ${request.details}';
+      return matchesStatus && haystack.contains(query.trim());
+    }).toList();
+    return Column(
+      children: [
+        _RequestFilters(
+          filter: filter,
+          query: query,
+          onFilter: (value) => setState(() => filter = value),
+          onQuery: (value) => setState(() => query = value),
+        ),
+        if (bookings.isEmpty)
+          AdminPanel(
+            title: 'الحجوزات',
+            child: Text(
+              'لا توجد حجوزات مطابقة حتى الآن. أي طلب عميل يمكن اعتباره حجزًا عند تحويل حالته إلى قيد المتابعة أو مؤكد.',
+              style: appText(color: AppColors.muted, height: 1.7),
+            ),
+          )
+        else
+          for (final booking in bookings)
+            AdminPanel(
+              title: 'حجز: ${booking.serviceTitle}',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      SignalPill(label: booking.status, strong: true),
+                      SignalPill(label: booking.createdAtLabel),
+                      SignalPill(label: booking.phone),
+                      SignalPill(label: booking.email),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    booking.name,
+                    style: displayText(fontSize: 24, color: AppColors.ink),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    booking.details.isEmpty
+                        ? 'لا توجد تفاصيل إضافية.'
+                        : booking.details,
+                    style: appText(color: AppColors.muted, height: 1.7),
+                  ),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      for (final status in const [
+                        'طلب جديد',
+                        'قيد المتابعة',
+                        'تم التواصل',
+                        'مؤكد',
+                        'مغلق',
+                      ])
+                        ChoiceChip(
+                          selected: booking.status == status,
+                          label: Text(status),
+                          onSelected: (_) => ref
+                              .read(cmsProvider.notifier)
+                              .updateBookingStatus(booking.id, status),
+                          selectedColor: AppColors.accent,
+                          backgroundColor: veil(AppColors.surfaceStrong, .72),
+                          labelStyle: appText(
+                            fontSize: 12,
+                            color: booking.status == status
+                                ? AppColors.onAccent
+                                : AppColors.ink,
+                            weight: FontWeight.w900,
+                          ),
+                          side: BorderSide(color: veil(AppColors.ink, .12)),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+      ],
+    );
+  }
+}
+
+class AdminMessagesEditor extends ConsumerStatefulWidget {
+  const AdminMessagesEditor({required this.messages, super.key});
+
+  final List<ContactMessage> messages;
+
+  @override
+  ConsumerState<AdminMessagesEditor> createState() =>
+      _AdminMessagesEditorState();
+}
+
+class _AdminMessagesEditorState extends ConsumerState<AdminMessagesEditor> {
+  String filter = 'الكل';
+  String query = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final messages = widget.messages.where((message) {
+      final matchesStatus = filter == 'الكل' || message.status == filter;
+      final haystack =
+          '${message.name} ${message.phone} ${message.email} ${message.subject} ${message.body}';
+      return matchesStatus && haystack.contains(query.trim());
+    }).toList();
+    return Column(
+      children: [
+        AdminPanel(
+          title: 'فلترة الرسائل',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final status in const [
+                    'الكل',
+                    'جديدة',
+                    'قيد الرد',
+                    'تم الرد',
+                    'مؤرشفة',
+                  ])
+                    ChoiceChip(
+                      selected: filter == status,
+                      label: Text(status),
+                      onSelected: (_) => setState(() => filter = status),
+                      selectedColor: AppColors.accent,
+                      backgroundColor: veil(AppColors.surfaceStrong, .72),
+                      labelStyle: appText(
+                        fontSize: 12,
+                        color: filter == status
+                            ? AppColors.onAccent
+                            : AppColors.ink,
+                        weight: FontWeight.w900,
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              RequestInput(
+                label: 'بحث بالاسم أو البريد أو الموضوع',
+                controller: TextEditingController(text: query)
+                  ..selection = TextSelection.collapsed(offset: query.length),
+                onChanged: (value) => setState(() => query = value),
+              ),
+            ],
+          ),
+        ),
+        if (messages.isEmpty)
+          AdminPanel(
+            title: 'الرسائل',
+            child: Text(
+              'لا توجد رسائل مطابقة. رسائل صفحة تواصل ستظهر هنا مباشرة بعد الإرسال.',
+              style: appText(color: AppColors.muted, height: 1.7),
+            ),
+          )
+        else
+          for (final message in messages)
+            AdminPanel(
+              title: '${message.status}: ${message.subject}',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      SignalPill(label: message.createdAtLabel, strong: true),
+                      SignalPill(label: message.phone),
+                      SignalPill(label: message.email),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    message.name,
+                    style: displayText(fontSize: 24, color: AppColors.ink),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    message.body.isEmpty ? 'لا يوجد نص رسالة.' : message.body,
+                    style: appText(color: AppColors.muted, height: 1.7),
+                  ),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      for (final status in const [
+                        'جديدة',
+                        'قيد الرد',
+                        'تم الرد',
+                        'مؤرشفة',
+                      ])
+                        ChoiceChip(
+                          selected: message.status == status,
+                          label: Text(status),
+                          onSelected: (_) => ref
+                              .read(cmsProvider.notifier)
+                              .updateContactMessageStatus(message.id, status),
+                          selectedColor: AppColors.accent,
+                          backgroundColor: veil(AppColors.surfaceStrong, .72),
+                          labelStyle: appText(
+                            fontSize: 12,
+                            color: message.status == status
+                                ? AppColors.onAccent
+                                : AppColors.ink,
+                            weight: FontWeight.w900,
+                          ),
+                          side: BorderSide(color: veil(AppColors.ink, .12)),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+      ],
+    );
+  }
+}
+
+class AdminPermissionsEditor extends ConsumerWidget {
+  const AdminPermissionsEditor({required this.roles, super.key});
+
+  final List<AdminRole> roles;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final controller = ref.read(cmsProvider.notifier);
+    return Column(
+      children: [
+        AdminPanel(
+          title: 'الصلاحيات',
+          child: Text(
+            'هذه واجهة صلاحيات داخل CMS فقط. الربط الحقيقي مع Supabase Auth/RBAC يحتاج مرحلة backend لاحقة بدون وضع service_role داخل Flutter Web.',
+            style: appText(color: AppColors.muted, height: 1.7),
+          ),
+        ),
+        for (final role in roles)
+          AdminPanel(
+            title: 'دور: ${role.name}',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CmsTextField(
+                  label: 'اسم الدور ${role.id}',
+                  initialValue: role.name,
+                  onSave: (value) =>
+                      controller.updateAdminRole(role.id, name: value),
+                ),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    for (final permission in AdminRole.allPermissions)
+                      FilterChip(
+                        selected: role.permissions.contains(permission),
+                        label: Text(permission),
+                        onSelected: (_) => controller.toggleAdminRolePermission(
+                          role.id,
+                          permission,
+                        ),
+                        selectedColor: AppColors.accent,
+                        backgroundColor: veil(AppColors.surfaceStrong, .72),
+                        checkmarkColor: AppColors.onAccent,
+                        labelStyle: appText(
+                          fontSize: 12,
+                          color: role.permissions.contains(permission)
+                              ? AppColors.onAccent
+                              : AppColors.ink,
+                          weight: FontWeight.w900,
+                        ),
+                        side: BorderSide(color: veil(AppColors.ink, .12)),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: OutlinedButton.icon(
+                    onPressed: roles.length <= 1
+                        ? null
+                        : () => controller.deleteAdminRole(role.id),
+                    icon: const Icon(Icons.delete_outline_rounded),
+                    label: const Text('حذف الدور'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton.icon(
+            onPressed: controller.addAdminRole,
+            icon: const Icon(Icons.add_rounded),
+            label: const Text('إضافة دور'),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.gold,
+              foregroundColor: AppColors.onAccent,
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+              textStyle: appText(fontSize: 14, weight: FontWeight.w900),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -4518,10 +5244,9 @@ class OperationsMatrix extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rows = [
-      ('الحجوزات', 'قيد التصميم', AppColors.accent),
-      ('المدفوعات', 'Stripe لاحقًا', AppColors.gold),
-      ('الرسائل', 'Supabase لاحقًا', AppColors.green),
-      ('الصلاحيات', 'RBAC لاحقًا', AppColors.danger),
+      ('الحجوزات', 'من طلبات العملاء', AppColors.accent),
+      ('الرسائل', 'تصل إلى الأدمن', AppColors.green),
+      ('الصلاحيات', 'أدوار CMS', AppColors.danger),
     ];
     return Padding(
       padding: const EdgeInsets.only(top: 28),
@@ -4850,19 +5575,130 @@ class ContactMethods extends StatelessWidget {
   }
 }
 
-class ContactFormPreview extends StatelessWidget {
+class ContactFormPreview extends ConsumerStatefulWidget {
   const ContactFormPreview({required this.labels, super.key});
 
   final List<String> labels;
 
   @override
+  ConsumerState<ContactFormPreview> createState() => _ContactFormPreviewState();
+}
+
+class _ContactFormPreviewState extends ConsumerState<ContactFormPreview> {
+  late final TextEditingController nameController;
+  late final TextEditingController phoneController;
+  late final TextEditingController emailController;
+  late final TextEditingController subjectController;
+  late final TextEditingController bodyController;
+
+  @override
+  void initState() {
+    super.initState();
+    nameController = TextEditingController();
+    phoneController = TextEditingController();
+    emailController = TextEditingController();
+    subjectController = TextEditingController();
+    bodyController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    nameController.dispose();
+    phoneController.dispose();
+    emailController.dispose();
+    subjectController.dispose();
+    bodyController.dispose();
+    super.dispose();
+  }
+
+  String labelAt(int index, String fallback) {
+    return widget.labels.length > index ? widget.labels[index] : fallback;
+  }
+
+  Future<void> submit() async {
+    await ref
+        .read(cmsProvider.notifier)
+        .submitContactMessage(
+          ContactMessage(
+            name: nameController.text.trim(),
+            phone: phoneController.text.trim(),
+            email: emailController.text.trim(),
+            subject: subjectController.text.trim().isEmpty
+                ? 'رسالة من صفحة تواصل'
+                : subjectController.text.trim(),
+            body: bodyController.text.trim(),
+            createdAtLabel: 'الآن',
+          ),
+        );
+    if (!mounted) return;
+    nameController.clear();
+    phoneController.clear();
+    emailController.clear();
+    subjectController.clear();
+    bodyController.clear();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'تم إرسال الرسالة إلى لوحة الأدمن',
+          style: appText(color: AppColors.ink, weight: FontWeight.w800),
+        ),
+        backgroundColor: AppColors.surfaceStrong,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        for (var i = 0; i < labels.length; i++)
-          FauxInput(label: labels[i], tall: i == labels.length - 1),
+        RequestInput(
+          key: const ValueKey('contact-name'),
+          label: labelAt(0, 'الاسم الكامل'),
+          controller: nameController,
+        ),
+        RequestInput(
+          key: const ValueKey('contact-phone'),
+          label: labelAt(1, 'رقم الجوال'),
+          controller: phoneController,
+          ltr: true,
+        ),
+        RequestInput(
+          key: const ValueKey('contact-email'),
+          label: labelAt(2, 'البريد الإلكتروني'),
+          controller: emailController,
+          ltr: true,
+        ),
+        RequestInput(
+          key: const ValueKey('contact-subject'),
+          label: 'موضوع الرسالة',
+          controller: subjectController,
+        ),
+        RequestInput(
+          key: const ValueKey('contact-body'),
+          label: 'نص الرسالة',
+          controller: bodyController,
+          tall: true,
+        ),
         const SizedBox(height: 14),
-        const PrimaryAction(label: 'إرسال الطلب لاحقًا'),
+        Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton.icon(
+            key: const ValueKey('submit-contact-message'),
+            onPressed: submit,
+            icon: const Icon(Icons.arrow_back_rounded),
+            label: const Text('إرسال الرسالة'),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.accent,
+              foregroundColor: AppColors.onAccent,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+              textStyle: appText(fontSize: 15, weight: FontWeight.w900),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+          ),
+        ),
       ],
     );
   }
