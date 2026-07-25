@@ -14,10 +14,10 @@ class ServiceVideoEmbed extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       alignment: Alignment.center,
-      color: const Color(0xff071018),
+      color: const Color(0xff120d04),
       child: const Icon(
         Icons.play_circle_fill_rounded,
-        color: Color(0xff57b8ff),
+        color: Color(0xfff5b82e),
         size: 72,
       ),
     );

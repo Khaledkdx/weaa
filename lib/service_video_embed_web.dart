@@ -36,7 +36,7 @@ class _ServiceVideoEmbedState extends State<ServiceVideoEmbed> {
       ..style.width = '100%'
       ..style.height = '100%'
       ..style.borderRadius = '24px'
-      ..style.backgroundColor = '#071018';
+      ..style.backgroundColor = '#120d04';
     ui_web.platformViewRegistry.registerViewFactory(viewType, (_) => iframe);
   }
 
