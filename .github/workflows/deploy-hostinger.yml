@@ -1,0 +1,70 @@
+name: Deploy to Hostinger
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hostinger-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Build Flutter Web and upload to Hostinger
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build for Hostinger root domain
+        run: >
+          flutter build web
+          --base-href /
+          --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}"
+          --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}"
+
+      - name: Install FTP client
+        run: sudo apt-get update && sudo apt-get install -y lftp
+
+      - name: Upload build to Hostinger
+        env:
+          HOSTINGER_FTP_SERVER: ${{ secrets.HOSTINGER_FTP_SERVER }}
+          HOSTINGER_FTP_USERNAME: ${{ secrets.HOSTINGER_FTP_USERNAME }}
+          HOSTINGER_FTP_PASSWORD: ${{ secrets.HOSTINGER_FTP_PASSWORD }}
+          HOSTINGER_FTP_DIR: ${{ secrets.HOSTINGER_FTP_DIR }}
+        run: |
+          set -euo pipefail
+
+          : "${HOSTINGER_FTP_SERVER:?Missing HOSTINGER_FTP_SERVER secret}"
+          : "${HOSTINGER_FTP_USERNAME:?Missing HOSTINGER_FTP_USERNAME secret}"
+          : "${HOSTINGER_FTP_PASSWORD:?Missing HOSTINGER_FTP_PASSWORD secret}"
+
+          server="$HOSTINGER_FTP_SERVER"
+          if [[ "$server" != *"://"* ]]; then
+            server="ftp://$server"
+          fi
+
+          remote_dir="${HOSTINGER_FTP_DIR:-/public_html/}"
+
+          lftp -u "$HOSTINGER_FTP_USERNAME","$HOSTINGER_FTP_PASSWORD" "$server" <<EOF
+          set net:max-retries 3
+          set net:timeout 30
+          mkdir -p "$remote_dir"
+          mirror --reverse --verbose --only-newer build/web "$remote_dir"
+          bye
+          EOF

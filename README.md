@@ -72,6 +72,25 @@ flutter build web --base-href /weaa/ \
 Then copy `build/web/` to the repository root, keep `.nojekyll`, copy
 `index.html` to `404.html`, commit, and push to `main`.
 
+## Hostinger auto deploy
+
+The workflow in `.github/workflows/deploy-hostinger.yml` builds the Flutter Web
+site for the root domain and uploads `build/web/` to Hostinger on every push to
+`main`.
+
+Add these GitHub Actions secrets in the repository settings:
+
+```text
+SUPABASE_URL
+SUPABASE_ANON_KEY
+HOSTINGER_FTP_SERVER
+HOSTINGER_FTP_USERNAME
+HOSTINGER_FTP_PASSWORD
+HOSTINGER_FTP_DIR
+```
+
+Use `/public_html/` for `HOSTINGER_FTP_DIR` when deploying to the main domain.
+
 ## Admin
 
 Open `/admin`, sign in with the Supabase Auth admin user, then edit:
