@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase/supabase.dart';
 
+import 'checkout_redirect.dart';
 import 'service_video_embed.dart';
 
 Future<void> main() async {
@@ -127,6 +128,10 @@ final _routerProvider = Provider.family<GoRouter, String>((
       ),
       GoRoute(path: '/about', builder: (_, state) => const AboutPage()),
       GoRoute(path: '/contact', builder: (_, state) => const ContactPage()),
+      GoRoute(
+        path: '/payment-success',
+        builder: (_, state) => const PaymentSuccessPage(),
+      ),
       GoRoute(path: '/admin', builder: (_, state) => const AdminPage()),
     ],
     errorBuilder: (_, state) => const HomePage(),
@@ -694,6 +699,9 @@ class CmsController extends Notifier<CmsContent> {
     String? slug,
     String? description,
     String? videoUrl,
+    bool? paymentEnabled,
+    int? paymentPriceSar,
+    String? paymentDescription,
   }) {
     final items = [..._itemsFor(collection)];
     if (index < 0 || index >= items.length) return Future.value();
@@ -710,6 +718,9 @@ class CmsController extends Notifier<CmsContent> {
       slug: slug,
       description: description,
       videoUrl: videoUrl,
+      paymentEnabled: paymentEnabled,
+      paymentPriceSar: paymentPriceSar,
+      paymentDescription: paymentDescription,
     );
     return _commit(_contentWith(collection, items));
   }
@@ -1564,6 +1575,9 @@ class CmsItem {
     this.videoUrl,
     this.benefits = const [],
     this.reviews = const [],
+    this.paymentEnabled = false,
+    this.paymentPriceSar = 0,
+    this.paymentDescription = '',
   });
 
   final String titleAr;
@@ -1574,6 +1588,9 @@ class CmsItem {
   final String? videoUrl;
   final List<String> benefits;
   final List<CmsReview> reviews;
+  final bool paymentEnabled;
+  final int paymentPriceSar;
+  final String paymentDescription;
 
   CmsItem copyWith({
     String? titleAr,
@@ -1583,6 +1600,9 @@ class CmsItem {
     String? videoUrl,
     List<String>? benefits,
     List<CmsReview>? reviews,
+    bool? paymentEnabled,
+    int? paymentPriceSar,
+    String? paymentDescription,
   }) {
     return CmsItem(
       titleAr ?? this.titleAr,
@@ -1593,6 +1613,9 @@ class CmsItem {
       videoUrl: videoUrl ?? this.videoUrl,
       benefits: benefits ?? this.benefits,
       reviews: reviews ?? this.reviews,
+      paymentEnabled: paymentEnabled ?? this.paymentEnabled,
+      paymentPriceSar: paymentPriceSar ?? this.paymentPriceSar,
+      paymentDescription: paymentDescription ?? this.paymentDescription,
     );
   }
 
@@ -1606,6 +1629,9 @@ class CmsItem {
       'videoUrl': videoUrl,
       'benefits': benefits,
       'reviews': [for (final review in reviews) review.toJson()],
+      'paymentEnabled': paymentEnabled,
+      'paymentPriceSar': paymentPriceSar,
+      'paymentDescription': paymentDescription,
     };
   }
 
@@ -1626,6 +1652,18 @@ class CmsItem {
                 CmsReview.fromJson(Map<String, dynamic>.from(item as Map)),
             ]
           : fallback?.reviews ?? const [],
+      paymentEnabled: json['paymentEnabled'] is bool
+          ? json['paymentEnabled'] as bool
+          : fallback?.paymentEnabled ?? false,
+      paymentPriceSar: json['paymentPriceSar'] is int
+          ? json['paymentPriceSar'] as int
+          : int.tryParse(json['paymentPriceSar']?.toString() ?? '') ??
+                fallback?.paymentPriceSar ??
+                0,
+      paymentDescription:
+          json['paymentDescription']?.toString() ??
+          fallback?.paymentDescription ??
+          '',
     );
   }
 }
@@ -2080,6 +2118,16 @@ class ServiceDetailPage extends StatelessWidget {
             ),
           ),
           VideoPanel(service: service),
+          if (service.paymentEnabled && service.paymentPriceSar > 0) ...[
+            SectionHeader(
+              page: const PageContent(
+                'الدفع الإلكتروني',
+                'ادفع تكلفة الخدمة بأمان',
+                'الدفع يتم عبر Stripe Checkout بعد اعتماد السعر من لوحة الأدمن.',
+              ),
+            ),
+            ServicePaymentPanel(service: service),
+          ],
           SectionHeader(
             page: const PageContent(
               'طلب الخدمة',
@@ -2170,6 +2218,61 @@ class ContactPage extends ConsumerWidget {
           PageHero(page: cms.pages['contact']!),
           ContactPanel(company: cms.company, labels: cms.formLabels),
           TrustPanel(company: cms.company),
+        ],
+      ),
+    );
+  }
+}
+
+class PaymentSuccessPage extends ConsumerWidget {
+  const PaymentSuccessPage({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cms = ref.watch(cmsProvider);
+    return AppShell(
+      activePath: '/frameworks',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(28),
+            decoration: panelDecoration(
+              borderColor: veil(AppColors.green, .28),
+              radius: 30,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                IconBox(icon: Icons.verified_rounded, alt: true),
+                const SizedBox(height: 22),
+                Text('تم استلام الدفع', style: displayText(fontSize: 46)),
+                const SizedBox(height: 12),
+                Text(
+                  'شكرًا لك. إذا اكتمل الدفع من Stripe فسيتم التواصل معك من فريق وعاء لاستكمال تفاصيل الخدمة.',
+                  style: appText(color: AppColors.muted, height: 1.7),
+                ),
+                const SizedBox(height: 22),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    SecondaryAction(
+                      label: cms.company.phone,
+                      icon: Icons.call_rounded,
+                      ltr: true,
+                    ),
+                    SecondaryAction(
+                      label: cms.company.email,
+                      icon: Icons.mail_rounded,
+                      ltr: true,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          FinalCta(company: cms.company),
         ],
       ),
     );
@@ -3181,6 +3284,149 @@ class _ServiceRequestFormState extends ConsumerState<ServiceRequestForm> {
   }
 }
 
+class ServicePaymentPanel extends ConsumerStatefulWidget {
+  const ServicePaymentPanel({required this.service, super.key});
+
+  final CmsItem service;
+
+  @override
+  ConsumerState<ServicePaymentPanel> createState() =>
+      _ServicePaymentPanelState();
+}
+
+class _ServicePaymentPanelState extends ConsumerState<ServicePaymentPanel> {
+  bool isLoading = false;
+
+  Future<void> pay() async {
+    final client = ref.read(supabaseClientProvider);
+    if (client == null) {
+      showAdminSnack(context, 'الدفع يحتاج ربط Supabase أولًا.', error: true);
+      return;
+    }
+    setState(() => isLoading = true);
+    try {
+      final current = Uri.base;
+      final response = await client.functions.invoke(
+        'create-service-checkout',
+        body: {
+          'serviceSlug': widget.service.slug,
+          'successUrl': current.replace(path: '/payment-success').toString(),
+          'cancelUrl': current.toString(),
+        },
+      );
+      final data = response.data;
+      final checkoutUrl = data is Map ? data['url']?.toString() : null;
+      if (checkoutUrl == null || checkoutUrl.isEmpty) {
+        throw StateError('Stripe checkout URL missing');
+      }
+      redirectToCheckout(checkoutUrl);
+    } catch (_) {
+      if (!mounted) return;
+      showAdminSnack(
+        context,
+        'تعذر فتح صفحة الدفع. تأكد من إعداد Stripe في Supabase.',
+        error: true,
+      );
+    } finally {
+      if (mounted) setState(() => isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final service = widget.service;
+    final description = service.paymentDescription.isEmpty
+        ? 'ادفع تكلفة الخدمة إلكترونيًا عبر Stripe Checkout. السعر يتم ضبطه من لوحة الأدمن.'
+        : service.paymentDescription;
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: panelDecoration(
+        borderColor: veil(AppColors.green, .24),
+        radius: 28,
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 720;
+          final price = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SignalPill(label: 'Stripe Checkout', strong: true),
+              const SizedBox(height: 16),
+              Text(
+                '${service.paymentPriceSar} SAR',
+                textDirection: TextDirection.ltr,
+                style: displayText(fontSize: compact ? 42 : 54),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                service.titleAr,
+                style: appText(color: AppColors.muted, weight: FontWeight.w800),
+              ),
+            ],
+          );
+          final action = Column(
+            crossAxisAlignment: compact
+                ? CrossAxisAlignment.stretch
+                : CrossAxisAlignment.start,
+            children: [
+              Text(
+                'الدفع الآمن للخدمة',
+                style: displayText(fontSize: compact ? 28 : 34),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                description,
+                style: appText(color: AppColors.muted, height: 1.7),
+              ),
+              const SizedBox(height: 18),
+              FilledButton.icon(
+                key: const ValueKey('pay-service-now'),
+                onPressed: isLoading ? null : pay,
+                icon: isLoading
+                    ? SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.onAccent,
+                        ),
+                      )
+                    : const Icon(Icons.lock_rounded),
+                label: Text(isLoading ? 'جاري فتح الدفع...' : 'ادفع الآن'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.green,
+                  foregroundColor: AppColors.onAccent,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 18,
+                  ),
+                  textStyle: appText(fontSize: 15, weight: FontWeight.w900),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+            ],
+          );
+          if (compact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [price, const SizedBox(height: 22), action],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: action),
+              const SizedBox(width: 24),
+              Expanded(child: price),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
 class RequestInput extends StatelessWidget {
   const RequestInput({
     required this.label,
@@ -3494,6 +3740,7 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
     ('معلومات عامة', Icons.route_rounded),
     ('المبادرات', Icons.diversity_3_rounded),
     ('الفيديوهات', Icons.play_circle_rounded),
+    ('المدفوعات', Icons.payments_rounded),
     ('الريڤيوز', Icons.reviews_rounded),
     ('طلبات العملاء', Icons.inbox_rounded),
     ('الحجوزات', Icons.event_available_rounded),
@@ -3581,12 +3828,13 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
         items: cms.initiatives,
       ),
       5 => AdminVideosEditor(items: cms.serviceModels),
-      6 => AdminReviewsEditor(items: cms.serviceModels),
-      7 => AdminRequestsEditor(requests: cms.serviceRequests),
-      8 => AdminBookingsEditor(requests: cms.serviceRequests),
-      9 => AdminMessagesEditor(messages: cms.contactMessages),
-      10 => AdminPermissionsEditor(roles: cms.adminRoles),
-      11 => AdminCompanyEditor(company: cms.company),
+      6 => AdminPaymentsEditor(items: cms.serviceModels),
+      7 => AdminReviewsEditor(items: cms.serviceModels),
+      8 => AdminRequestsEditor(requests: cms.serviceRequests),
+      9 => AdminBookingsEditor(requests: cms.serviceRequests),
+      10 => AdminMessagesEditor(messages: cms.contactMessages),
+      11 => AdminPermissionsEditor(roles: cms.adminRoles),
+      12 => AdminCompanyEditor(company: cms.company),
       _ => AdminFormEditor(labels: cms.formLabels),
     };
   }
@@ -4058,6 +4306,109 @@ class AdminVideosEditor extends ConsumerWidget {
                   service: items[i],
                   embedUrl: youtubeEmbedUrlFrom(items[i].videoUrl),
                   sourceUrl: items[i].videoUrl,
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class AdminPaymentsEditor extends ConsumerWidget {
+  const AdminPaymentsEditor({required this.items, super.key});
+
+  final List<CmsItem> items;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final controller = ref.read(cmsProvider.notifier);
+    final enabledCount = items.where((item) => item.paymentEnabled).length;
+    final totalValue = items.fold<int>(
+      0,
+      (sum, item) => sum + (item.paymentEnabled ? item.paymentPriceSar : 0),
+    );
+    return Column(
+      children: [
+        AdminStatsStrip(
+          items: [
+            (
+              'خدمات قابلة للدفع',
+              '$enabledCount',
+              Icons.payments_rounded,
+              AppColors.accent,
+            ),
+            (
+              'إجمالي الأسعار',
+              '$totalValue SAR',
+              Icons.receipt_long_rounded,
+              AppColors.gold,
+            ),
+            ('طريقة الدفع', 'Stripe', Icons.lock_rounded, AppColors.green),
+          ],
+        ),
+        AdminPanel(
+          title: 'إعداد Stripe',
+          child: Text(
+            'فعّل الدفع للخدمات المطلوبة وحدد السعر. الدفع الحقيقي يتم عبر Supabase Edge Function باسم create-service-checkout، ويحتاج STRIPE_SECRET_KEY و SITE_URL داخل Supabase Functions Secrets.',
+            style: appText(color: AppColors.muted, height: 1.7),
+          ),
+        ),
+        for (var i = 0; i < items.length; i++)
+          AdminPanel(
+            title: 'مدفوعات: ${items[i].titleAr}',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Material(
+                  color: Colors.transparent,
+                  child: SwitchListTile.adaptive(
+                    key: ValueKey('payment-enabled-${items[i].slug}'),
+                    value: items[i].paymentEnabled,
+                    onChanged: (value) => controller.updateItem(
+                      collection: CmsCollection.serviceModels,
+                      index: i,
+                      paymentEnabled: value,
+                    ),
+                    title: Text(
+                      'تفعيل الدفع لهذه الخدمة',
+                      style: appText(
+                        color: AppColors.ink,
+                        weight: FontWeight.w900,
+                      ),
+                    ),
+                    subtitle: Text(
+                      items[i].paymentEnabled
+                          ? 'زر الدفع سيظهر في صفحة الخدمة.'
+                          : 'زر الدفع مخفي عن العميل.',
+                      style: appText(color: AppColors.muted, height: 1.5),
+                    ),
+                    activeThumbColor: AppColors.accent,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                CmsTextField(
+                  label: 'السعر بالريال SAR - ${items[i].titleAr}',
+                  initialValue: items[i].paymentPriceSar.toString(),
+                  ltr: true,
+                  onSave: (value) => controller.updateItem(
+                    collection: CmsCollection.serviceModels,
+                    index: i,
+                    paymentPriceSar: int.tryParse(value.trim()) ?? 0,
+                  ),
+                ),
+                CmsTextField(
+                  label: 'وصف الدفع - ${items[i].titleAr}',
+                  initialValue: items[i].paymentDescription.isEmpty
+                      ? 'ادفع تكلفة الخدمة إلكترونيًا عبر Stripe Checkout.'
+                      : items[i].paymentDescription,
+                  tall: true,
+                  onSave: (value) => controller.updateItem(
+                    collection: CmsCollection.serviceModels,
+                    index: i,
+                    paymentDescription: value,
+                  ),
                 ),
               ],
             ),

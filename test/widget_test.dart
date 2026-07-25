@@ -166,6 +166,7 @@ void main() {
     expect(find.text('الخدمات'), findsWidgets);
     expect(find.text('معلومات عامة'), findsWidgets);
     expect(find.text('الفيديوهات'), findsOneWidget);
+    expect(find.text('المدفوعات'), findsOneWidget);
     expect(find.text('الريڤيوز'), findsOneWidget);
     expect(find.text('طلبات العملاء'), findsOneWidget);
     expect(find.text('الحجوزات'), findsOneWidget);
@@ -377,6 +378,22 @@ void main() {
         5,
       );
 
+      await controller.updateItem(
+        collection: CmsCollection.serviceModels,
+        index: container.read(cmsProvider).serviceModels.length - 1,
+        paymentEnabled: true,
+        paymentPriceSar: 750,
+        paymentDescription: 'دفع اختبار',
+      );
+      expect(
+        container.read(cmsProvider).serviceModels.last.paymentEnabled,
+        true,
+      );
+      expect(
+        container.read(cmsProvider).serviceModels.last.paymentPriceSar,
+        750,
+      );
+
       await controller.addFormLabel();
       await controller.updateFormLabel(
         container.read(cmsProvider).formLabels.length - 1,
@@ -540,6 +557,76 @@ void main() {
         .firstWhere((item) => item.id == 'requests-agent');
     expect(role.permissions, contains('الصفحات'));
     expect(find.text('تم تحديث صلاحيات متابع طلبات'), findsOneWidget);
+  });
+
+  testWidgets('admin payments tab edits service payment settings', (
+    tester,
+  ) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const WeaaApp(initialLocation: '/admin'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('المدفوعات'));
+    await tester.tap(find.text('المدفوعات'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('payment-enabled-iron-dome')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(
+        const ValueKey('cms-field-السعر بالريال SAR - القبة الحديدية'),
+      ),
+      '1200',
+    );
+    await tester.pumpAndSettle();
+    final savePrice = find.byKey(
+      const ValueKey('cms-save-السعر بالريال SAR - القبة الحديدية'),
+    );
+    await tester.ensureVisible(savePrice);
+    await tester.tap(savePrice);
+    await tester.pumpAndSettle();
+
+    final service = container
+        .read(cmsProvider)
+        .serviceModels
+        .firstWhere((item) => item.slug == 'iron-dome');
+    expect(service.paymentEnabled, true);
+    expect(service.paymentPriceSar, 1200);
+  });
+
+  testWidgets('paid service renders payment panel on public service page', (
+    tester,
+  ) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    await container
+        .read(cmsProvider.notifier)
+        .updateItem(
+          collection: CmsCollection.serviceModels,
+          index: 0,
+          paymentEnabled: true,
+          paymentPriceSar: 1500,
+          paymentDescription: 'ادفع رسوم الخدمة الآن.',
+        );
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const WeaaApp(initialLocation: '/services/iron-dome'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('الدفع الإلكتروني'), findsOneWidget);
+    expect(find.text('1500 SAR'), findsOneWidget);
+    expect(find.text('ادفع الآن'), findsOneWidget);
   });
 
   testWidgets('admin CMS rejects duplicate service slugs', (tester) async {
