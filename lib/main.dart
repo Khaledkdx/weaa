@@ -97,6 +97,11 @@ String normalizeSlug(String value) {
   return slug;
 }
 
+class FixedAdminCredentials {
+  static const email = 'adminn@weaa.com';
+  static const password = 'Mohamad123.@';
+}
+
 final adminAuthProvider = NotifierProvider<AdminAuthController, AdminAuthState>(
   AdminAuthController.new,
 );
@@ -536,33 +541,57 @@ class AdminAuthController extends Notifier<AdminAuthState> {
   }
 
   Future<void> signIn(String email, String password) async {
+    final normalizedEmail = email.trim().toLowerCase();
+    final isFixedAdmin =
+        normalizedEmail == FixedAdminCredentials.email &&
+        password == FixedAdminCredentials.password;
+    if (!isFixedAdmin) {
+      state = AdminAuthState(
+        isLoading: false,
+        isAuthenticated: false,
+        isConfigured: _client != null,
+        email: email,
+        error: 'بيانات الأدمن غير صحيحة.',
+      );
+      return;
+    }
+
     final client = _client;
-    if (client == null) return;
+    if (client == null) {
+      state = const AdminAuthState(
+        isLoading: false,
+        isAuthenticated: true,
+        isConfigured: false,
+        email: FixedAdminCredentials.email,
+      );
+      return;
+    }
     state = AdminAuthState(
       isLoading: true,
       isAuthenticated: false,
       isConfigured: true,
-      email: email,
+      email: FixedAdminCredentials.email,
     );
     try {
       final response = await client.auth.signInWithPassword(
-        email: email,
-        password: password,
+        email: FixedAdminCredentials.email,
+        password: FixedAdminCredentials.password,
       );
       state = AdminAuthState(
         isLoading: false,
         isAuthenticated: response.user != null,
         isConfigured: true,
-        email: response.user?.email ?? email,
+        email: response.user?.email ?? FixedAdminCredentials.email,
       );
       unawaited(ref.read(cmsProvider.notifier).refresh());
     } catch (error) {
       state = AdminAuthState(
         isLoading: false,
-        isAuthenticated: false,
+        isAuthenticated: true,
         isConfigured: true,
-        email: email,
-        error: 'تعذر تسجيل الدخول. تأكد من البريد وكلمة المرور.',
+        email: FixedAdminCredentials.email,
+        error:
+            'تم فتح اللوحة بكلمة ثابتة، لكن تعذر إنشاء جلسة Supabase للحفظ.',
       );
     }
   }
@@ -3648,7 +3677,7 @@ class _AdminLoginPanelState extends ConsumerState<AdminLoginPanel> {
   @override
   void initState() {
     super.initState();
-    emailController = TextEditingController();
+    emailController = TextEditingController(text: FixedAdminCredentials.email);
     passwordController = TextEditingController();
   }
 
