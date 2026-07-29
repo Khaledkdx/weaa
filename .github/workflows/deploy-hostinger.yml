@@ -38,10 +38,34 @@ jobs:
           --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}"
           --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}"
 
+      - name: Check Hostinger FTP secrets
+        env:
+          HOSTINGER_FTP_SERVER: ${{ secrets.HOSTINGER_FTP_SERVER }}
+          HOSTINGER_FTP_USERNAME: ${{ secrets.HOSTINGER_FTP_USERNAME }}
+          HOSTINGER_FTP_PASSWORD: ${{ secrets.HOSTINGER_FTP_PASSWORD }}
+        run: |
+          if [[ -z "$HOSTINGER_FTP_SERVER" || -z "$HOSTINGER_FTP_USERNAME" || -z "$HOSTINGER_FTP_PASSWORD" ]]; then
+            {
+              echo "### Hostinger deploy skipped"
+              echo ""
+              echo "Add these GitHub Actions secrets to enable automatic upload:"
+              echo ""
+              echo "- HOSTINGER_FTP_SERVER"
+              echo "- HOSTINGER_FTP_USERNAME"
+              echo "- HOSTINGER_FTP_PASSWORD"
+              echo "- HOSTINGER_FTP_DIR, usually /public_html/"
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "HOSTINGER_DEPLOY_READY=false" >> "$GITHUB_ENV"
+          else
+            echo "HOSTINGER_DEPLOY_READY=true" >> "$GITHUB_ENV"
+          fi
+
       - name: Install FTP client
+        if: env.HOSTINGER_DEPLOY_READY == 'true'
         run: sudo apt-get update && sudo apt-get install -y lftp
 
       - name: Upload build to Hostinger
+        if: env.HOSTINGER_DEPLOY_READY == 'true'
         env:
           HOSTINGER_FTP_SERVER: ${{ secrets.HOSTINGER_FTP_SERVER }}
           HOSTINGER_FTP_USERNAME: ${{ secrets.HOSTINGER_FTP_USERNAME }}
