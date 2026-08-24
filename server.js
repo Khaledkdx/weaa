@@ -26,7 +26,11 @@ const mimeTypes = {
 };
 
 function safePath(urlPath) {
-  const decodedPath = decodeURIComponent(urlPath.split('?')[0]);
+  const rawPath = urlPath.split('?')[0];
+  const compatiblePath = rawPath.startsWith('/weaa/')
+    ? rawPath.replace(/^\/weaa/, '')
+    : rawPath;
+  const decodedPath = decodeURIComponent(compatiblePath);
   const normalizedPath = path.normalize(decodedPath).replace(/^(\.\.[/\\])+/, '');
   return path.join(rootDir, normalizedPath);
 }
@@ -40,6 +44,15 @@ function serveFile(response, filePath) {
         ? 'no-cache'
         : 'public, max-age=31536000, immutable',
   });
+  if (extension === '.html') {
+    const html = fs
+      .readFileSync(filePath, 'utf8')
+      .replace('<base href="/weaa/">', '<base href="/">')
+      .replace('<base href="$FLUTTER_BASE_HREF">', '<base href="/">');
+    response.end(html);
+    return;
+  }
+
   fs.createReadStream(filePath).pipe(response);
 }
 
