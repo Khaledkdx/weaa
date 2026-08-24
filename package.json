@@ -1,0 +1,12 @@
+{
+  "name": "weaa",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "build": "echo \"Flutter web build should be uploaded from build/web\""
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
