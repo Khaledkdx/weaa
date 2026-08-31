@@ -232,13 +232,13 @@ class AppPalette {
   );
 
   static const light = AppPalette(
-    background: Color(0xfffffbf0),
-    surface: Color(0xfffff6df),
-    surfaceStrong: Color(0xfff1dfad),
-    ink: Color(0xff1a1206),
-    muted: Color(0xff7b6740),
-    accent: Color(0xffd99a17),
-    gold: Color(0xffb97906),
+    background: Color(0xfffff4dc),
+    surface: Color(0xfffff9ec),
+    surfaceStrong: Color(0xffefe0b9),
+    ink: Color(0xff1f1608),
+    muted: Color(0xff5f5037),
+    accent: Color(0xffd99510),
+    gold: Color(0xff9f6800),
     green: Color(0xff167a55),
     danger: Color(0xffb93131),
     onAccent: Color(0xffffffff),
@@ -590,8 +590,7 @@ class AdminAuthController extends Notifier<AdminAuthState> {
         isAuthenticated: true,
         isConfigured: true,
         email: FixedAdminCredentials.email,
-        error:
-            'تم فتح اللوحة بكلمة ثابتة، لكن تعذر إنشاء جلسة Supabase للحفظ.',
+        error: 'تم فتح اللوحة بكلمة ثابتة، لكن تعذر إنشاء جلسة Supabase للحفظ.',
       );
     }
   }
@@ -1139,7 +1138,7 @@ class CmsContent {
         nameAr: 'شركة وعاء للخدمات اللوجستية والإدارية',
         nameEn: 'WEAA Company for Logistics and Administrative Services',
         taglineAr: 'الطبقة الأولى المتكاملة في عالم اللوجستيات',
-        taglineEn: 'The Integrated First Layer in the World of Logistics',
+        taglineEn: 'الطبقة الأولى المتكاملة في عالم اللوجستيات',
         phone: '+966567018977',
         email: 'info@weaa-sa.com',
         website: 'https://weaa-sa.com',
@@ -1155,7 +1154,7 @@ class CmsContent {
         'home': PageContent(
           'الواجهة المعتمدة',
           'منصة لوجستية وإدارية قابلة للقياس',
-          'كل محتوى هذه الصفحة أصبح قابلًا للإدارة من لوحة الأدمن.',
+          'نرتب التشغيل والخدمات الإدارية داخل منظومة واضحة تبدأ من الطلب وتنتهي بمتابعة قابلة للقياس.',
         ),
         'services': PageContent(
           'معلومات عامة',
@@ -1191,19 +1190,19 @@ class CmsContent {
       generalInfo: [
         CmsItem(
           'التخزين',
-          'Warehousing',
+          'التخزين',
           'إدارة السعة والمخزون ونقاط الجاهزية داخل شبكة تشغيل واحدة.',
           Icons.warehouse_rounded,
         ),
         CmsItem(
           'التوصيل للمستهلك B2C',
-          'B2C Delivery',
+          'التوصيل للمستهلك',
           'تسليم مباشر يضبط تجربة العميل النهائي ويجعل آخر ميل قابلًا للقياس.',
           Icons.delivery_dining_rounded,
         ),
         CmsItem(
           'الشحن بين المدن B2B',
-          'B2B Intercity Shipping',
+          'الشحن بين المدن',
           'مسارات بين المدن للشركات مع وضوح في التكلفة والزمن والمسؤولية.',
           Icons.local_shipping_rounded,
         ),
@@ -2429,8 +2428,8 @@ class TopNavigation extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  company.taglineEn,
-                  textDirection: TextDirection.ltr,
+                  company.taglineAr,
+                  textDirection: TextDirection.rtl,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: appText(
@@ -2626,22 +2625,25 @@ class HeroCopy extends StatelessWidget {
         Wrap(
           spacing: 10,
           runSpacing: 10,
-          children: [
-            SignalPill(label: page.kicker, strong: true),
-            const SignalPill(label: 'CMS Ready'),
-          ],
+          children: [SignalPill(label: page.kicker, strong: true)],
         ),
         SizedBox(height: compact ? 26 : 36),
         Text(
           cms.company.nameAr,
-          style: displayText(fontSize: compact ? 40 : 72, height: 1.05),
+          style: displayText(
+            fontSize: compact ? 40 : 72,
+            height: 1.05,
+            color: AppColors.isLight ? const Color(0xff1f1608) : AppColors.ink,
+          ),
         ),
         const SizedBox(height: 16),
         Text(
           page.body,
           style: appText(
             fontSize: compact ? 17 : 21,
-            color: AppColors.muted,
+            color: AppColors.isLight
+                ? const Color(0xff5a4b31)
+                : AppColors.muted,
             height: 1.75,
             weight: FontWeight.w600,
           ),
@@ -2651,7 +2653,7 @@ class HeroCopy extends StatelessWidget {
           spacing: 12,
           runSpacing: 12,
           children: [
-            const PrimaryAction(label: 'ابدأ شراكة منظمة'),
+            const PrimaryAction(label: 'سجل الآن', path: '/contact'),
             SecondaryAction(
               label: cms.company.phone,
               icon: Icons.call_rounded,
@@ -2659,8 +2661,6 @@ class HeroCopy extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 34),
-        const MetricRow(),
       ],
     );
   }
@@ -2838,8 +2838,8 @@ class FeatureCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  item.titleEn,
-                  textDirection: TextDirection.ltr,
+                  item.slug == null ? 'معلومة عامة' : 'فتح الخدمة',
+                  textDirection: TextDirection.rtl,
                   style: appText(
                     fontSize: 12,
                     color: AppColors.accent,
@@ -2907,11 +2907,7 @@ class ServiceDetailHero extends StatelessWidget {
           runSpacing: 12,
           children: [
             RatingBadge(reviews: service.reviews),
-            SecondaryAction(
-              label: service.titleEn,
-              icon: service.icon,
-              ltr: true,
-            ),
+            SecondaryAction(label: 'نموذج خدمة', icon: service.icon),
           ],
         ),
       ],
@@ -5853,8 +5849,8 @@ class DashboardSparkRow extends StatelessWidget {
                   ? constraints.maxWidth
                   : (constraints.maxWidth - 12) / 2,
               child: const SparkCard(
-                title: 'الطلبات',
-                value: '1,284',
+                title: 'رحلة العميل',
+                value: 'طلب واضح',
                 icon: Icons.shopping_bag_rounded,
               ),
             ),
@@ -5863,8 +5859,8 @@ class DashboardSparkRow extends StatelessWidget {
                   ? constraints.maxWidth
                   : (constraints.maxWidth - 12) / 2,
               child: const SparkCard(
-                title: 'الفواتير',
-                value: 'SAR 4.8M',
+                title: 'متابعة تشغيلية',
+                value: 'حالة مباشرة',
                 icon: Icons.receipt_long_rounded,
               ),
             ),
@@ -5931,7 +5927,7 @@ class SparkCard extends StatelessWidget {
           Icon(icon, color: AppColors.gold, size: 24),
           Text(
             value,
-            textDirection: TextDirection.ltr,
+            textDirection: TextDirection.rtl,
             style: displayText(fontSize: 28, color: AppColors.accent),
           ),
           Text(
@@ -6510,7 +6506,7 @@ class MetricRow extends StatelessWidget {
     final metrics = [
       ('05', 'قطاعات عامة'),
       ('03', 'خدمات'),
-      ('CMS', 'قابل للتعديل'),
+      ('لوحة', 'إدارة المحتوى'),
     ];
     return Wrap(
       spacing: 12,
@@ -6589,10 +6585,10 @@ class PreviewRail extends ConsumerWidget {
                       ),
                     ),
                     Text(
-                      item.titleEn,
+                      item.slug == null ? 'قطاع تشغيلي' : 'خدمة قابلة للطلب',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      textDirection: TextDirection.ltr,
+                      textDirection: TextDirection.rtl,
                       style: appText(
                         fontSize: 10,
                         color: AppColors.muted,
@@ -6677,14 +6673,15 @@ class SignalPill extends StatelessWidget {
 }
 
 class PrimaryAction extends StatelessWidget {
-  const PrimaryAction({required this.label, super.key});
+  const PrimaryAction({required this.label, this.path, super.key});
 
   final String label;
+  final String? path;
 
   @override
   Widget build(BuildContext context) {
     return FilledButton.icon(
-      onPressed: () {},
+      onPressed: path == null ? () {} : () => context.go(path!),
       icon: const Icon(Icons.arrow_back_rounded),
       label: Text(label),
       style: FilledButton.styleFrom(
