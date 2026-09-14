@@ -580,14 +580,12 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('payment-enabled-iron-dome')));
     await tester.pumpAndSettle();
     await tester.enterText(
-      find.byKey(
-        const ValueKey('cms-field-السعر بالريال SAR - القبة الحديدية'),
-      ),
+      find.byKey(const ValueKey('cms-field-السعر بالريال - القبة الحديدية')),
       '1200',
     );
     await tester.pumpAndSettle();
     final savePrice = find.byKey(
-      const ValueKey('cms-save-السعر بالريال SAR - القبة الحديدية'),
+      const ValueKey('cms-save-السعر بالريال - القبة الحديدية'),
     );
     await tester.ensureVisible(savePrice);
     await tester.tap(savePrice);
@@ -625,7 +623,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('الدفع الإلكتروني'), findsOneWidget);
-    expect(find.text('1500 SAR'), findsOneWidget);
+    expect(find.text('1500 ريال'), findsOneWidget);
     expect(find.text('ادفع الآن'), findsOneWidget);
   });
 

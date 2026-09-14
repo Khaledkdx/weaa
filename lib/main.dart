@@ -222,8 +222,8 @@ class AppPalette {
     surface: Color(0xff14110b),
     surfaceStrong: Color(0xff211a0d),
     ink: Color(0xfffff7df),
-    muted: Color(0xffc8b98e),
-    accent: Color(0xfff5b82e),
+    muted: Color(0xffd8c896),
+    accent: Color(0xffffbf2f),
     gold: Color(0xffffd66b),
     green: Color(0xff26d59a),
     danger: Color(0xffff6b6b),
@@ -232,16 +232,16 @@ class AppPalette {
   );
 
   static const light = AppPalette(
-    background: Color(0xfffff4dc),
-    surface: Color(0xfffff9ec),
-    surfaceStrong: Color(0xffefe0b9),
+    background: Color(0xfffff7e8),
+    surface: Color(0xfffffcf4),
+    surfaceStrong: Color(0xffefe0ba),
     ink: Color(0xff1f1608),
-    muted: Color(0xff5f5037),
-    accent: Color(0xffd99510),
-    gold: Color(0xff9f6800),
+    muted: Color(0xff4d402a),
+    accent: Color(0xffd49408),
+    gold: Color(0xff8b5900),
     green: Color(0xff167a55),
     danger: Color(0xffb93131),
-    onAccent: Color(0xffffffff),
+    onAccent: Color(0xff1f1608),
     isLight: true,
   );
 }
@@ -1195,26 +1195,26 @@ class CmsContent {
           Icons.warehouse_rounded,
         ),
         CmsItem(
-          'التوصيل للمستهلك B2C',
+          'التوصيل للمستهلك',
           'التوصيل للمستهلك',
           'تسليم مباشر يضبط تجربة العميل النهائي ويجعل آخر ميل قابلًا للقياس.',
           Icons.delivery_dining_rounded,
         ),
         CmsItem(
-          'الشحن بين المدن B2B',
+          'الشحن بين المدن',
           'الشحن بين المدن',
           'مسارات بين المدن للشركات مع وضوح في التكلفة والزمن والمسؤولية.',
           Icons.local_shipping_rounded,
         ),
         CmsItem(
           'الشحن الدولي',
-          'International Shipping',
+          'الشحن الدولي',
           'مد جسور التوريد عالميًا بنموذج قراءة أدق للمخاطر والوقت.',
           Icons.flight_takeoff_rounded,
         ),
         CmsItem(
           'الخدمات الإدارية والاستشارية',
-          'Administrative & Consultancy',
+          'الخدمات الإدارية والاستشارية',
           'بنية إدارية واستشارية تحول الفكرة إلى مشروع قابل للتشغيل.',
           Icons.business_center_rounded,
         ),
@@ -1305,19 +1305,19 @@ class CmsContent {
       initiatives: [
         CmsItem(
           'عدّي على يدي',
-          'Humanized Delivery',
+          'عدّي على يدي',
           'أنسنة عمليات التوصيل وتحويل الخدمة اليومية إلى علاقة أكثر احترامًا.',
           Icons.volunteer_activism_rounded,
         ),
         CmsItem(
           'إنت باشا',
-          'Work Relationship Clarity',
+          'إنت باشا',
           'ضبط علاقة العامل وصاحب العمل بلغة واضحة وعادلة.',
           Icons.badge_rounded,
         ),
         CmsItem(
           'عينك وعونك',
-          'GCC Investment Bridge',
+          'عينك وعونك',
           'جذب الاستثمارات الخليجية عبر نموذج سعودي قابل للفهم والثقة.',
           Icons.public_rounded,
         ),
@@ -2151,7 +2151,7 @@ class ServiceDetailPage extends StatelessWidget {
               page: const PageContent(
                 'الدفع الإلكتروني',
                 'ادفع تكلفة الخدمة بأمان',
-                'الدفع يتم عبر Stripe Checkout بعد اعتماد السعر من لوحة الأدمن.',
+                'الدفع يتم عبر بوابة الدفع بعد اعتماد السعر من لوحة الأدمن.',
               ),
             ),
             ServicePaymentPanel(service: service),
@@ -2289,11 +2289,13 @@ class PaymentSuccessPage extends ConsumerWidget {
                       label: cms.company.phone,
                       icon: Icons.call_rounded,
                       ltr: true,
+                      externalUrl: 'tel:${cms.company.phone}',
                     ),
                     SecondaryAction(
                       label: cms.company.email,
                       icon: Icons.mail_rounded,
                       ltr: true,
+                      externalUrl: 'mailto:${cms.company.email}',
                     ),
                   ],
                 ),
@@ -2655,9 +2657,9 @@ class HeroCopy extends StatelessWidget {
           children: [
             const PrimaryAction(label: 'سجل الآن', path: '/contact'),
             SecondaryAction(
-              label: cms.company.phone,
+              label: 'تواصل معنا',
               icon: Icons.call_rounded,
-              ltr: true,
+              path: '/contact',
             ),
           ],
         ),
@@ -2907,7 +2909,7 @@ class ServiceDetailHero extends StatelessWidget {
           runSpacing: 12,
           children: [
             RatingBadge(reviews: service.reviews),
-            SecondaryAction(label: 'نموذج خدمة', icon: service.icon),
+            SignalPill(label: 'نموذج خدمة', icon: service.icon),
           ],
         ),
       ],
@@ -3162,6 +3164,10 @@ class _VideoCopy extends StatelessWidget {
               : videoUrl,
           icon: Icons.open_in_new_rounded,
           ltr: videoUrl != null && videoUrl.isNotEmpty,
+          path: videoUrl == null || videoUrl.isEmpty ? '/admin' : null,
+          externalUrl: videoUrl != null && videoUrl.isNotEmpty
+              ? videoUrl
+              : null,
         ),
       ],
     );
@@ -3361,7 +3367,7 @@ class _ServicePaymentPanelState extends ConsumerState<ServicePaymentPanel> {
   Widget build(BuildContext context) {
     final service = widget.service;
     final description = service.paymentDescription.isEmpty
-        ? 'ادفع تكلفة الخدمة إلكترونيًا عبر Stripe Checkout. السعر يتم ضبطه من لوحة الأدمن.'
+        ? 'ادفع تكلفة الخدمة إلكترونيًا عبر بوابة الدفع. السعر يتم ضبطه من لوحة الأدمن.'
         : service.paymentDescription;
     return Container(
       padding: const EdgeInsets.all(22),
@@ -3375,10 +3381,10 @@ class _ServicePaymentPanelState extends ConsumerState<ServicePaymentPanel> {
           final price = Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SignalPill(label: 'Stripe Checkout', strong: true),
+              SignalPill(label: 'الدفع الآمن', strong: true),
               const SizedBox(height: 16),
               Text(
-                '${service.paymentPriceSar} SAR',
+                '${service.paymentPriceSar} ريال',
                 textDirection: TextDirection.ltr,
                 style: displayText(fontSize: compact ? 42 : 54),
               ),
@@ -3413,14 +3419,18 @@ class _ServicePaymentPanelState extends ConsumerState<ServicePaymentPanel> {
                         height: 18,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: AppColors.onAccent,
+                          color: AppColors.isLight
+                              ? Colors.white
+                              : AppColors.onAccent,
                         ),
                       )
                     : const Icon(Icons.lock_rounded),
                 label: Text(isLoading ? 'جاري فتح الدفع...' : 'ادفع الآن'),
                 style: FilledButton.styleFrom(
                   backgroundColor: AppColors.green,
-                  foregroundColor: AppColors.onAccent,
+                  foregroundColor: AppColors.isLight
+                      ? Colors.white
+                      : AppColors.onAccent,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 24,
                     vertical: 18,
@@ -4365,7 +4375,7 @@ class AdminPaymentsEditor extends ConsumerWidget {
             ),
             (
               'إجمالي الأسعار',
-              '$totalValue SAR',
+              '$totalValue ريال',
               Icons.receipt_long_rounded,
               AppColors.gold,
             ),
@@ -4414,7 +4424,7 @@ class AdminPaymentsEditor extends ConsumerWidget {
                 ),
                 const SizedBox(height: 10),
                 CmsTextField(
-                  label: 'السعر بالريال SAR - ${items[i].titleAr}',
+                  label: 'السعر بالريال - ${items[i].titleAr}',
                   initialValue: items[i].paymentPriceSar.toString(),
                   ltr: true,
                   onSave: (value) => controller.updateItem(
@@ -4426,7 +4436,7 @@ class AdminPaymentsEditor extends ConsumerWidget {
                 CmsTextField(
                   label: 'وصف الدفع - ${items[i].titleAr}',
                   initialValue: items[i].paymentDescription.isEmpty
-                      ? 'ادفع تكلفة الخدمة إلكترونيًا عبر Stripe Checkout.'
+                      ? 'ادفع تكلفة الخدمة إلكترونيًا عبر بوابة الدفع.'
                       : items[i].paymentDescription,
                   tall: true,
                   onSave: (value) => controller.updateItem(
@@ -6455,14 +6465,14 @@ class FinalCta extends StatelessWidget {
                 children: [
                   CtaCopy(company: company),
                   const SizedBox(height: 22),
-                  const PrimaryAction(label: 'ابدأ الآن'),
+                  const PrimaryAction(label: 'ابدأ الآن', path: '/contact'),
                 ],
               )
             : Row(
                 children: [
                   Expanded(child: CtaCopy(company: company)),
                   const SizedBox(width: 24),
-                  const PrimaryAction(label: 'ابدأ الآن'),
+                  const PrimaryAction(label: 'ابدأ الآن', path: '/contact'),
                 ],
               ),
       ),
@@ -6644,10 +6654,16 @@ class PanelHeader extends ConsumerWidget {
 }
 
 class SignalPill extends StatelessWidget {
-  const SignalPill({required this.label, this.strong = false, super.key});
+  const SignalPill({
+    required this.label,
+    this.strong = false,
+    this.icon,
+    super.key,
+  });
 
   final String label;
   final bool strong;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
@@ -6660,12 +6676,48 @@ class SignalPill extends StatelessWidget {
         ),
         borderRadius: BorderRadius.circular(999),
       ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(
+              icon,
+              size: 16,
+              color: strong ? AppColors.onAccent : AppColors.ink,
+            ),
+            const SizedBox(width: 7),
+          ],
+          Text(
+            label,
+            style: appText(
+              fontSize: 12,
+              color: strong ? AppColors.onAccent : AppColors.ink,
+              weight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class FooterLine extends StatelessWidget {
+  const FooterLine({required this.company, super.key});
+
+  final CompanyContent company;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 44, 16, 28),
       child: Text(
-        label,
+        '${company.nameAr} • ${company.email}',
+        textDirection: TextDirection.rtl,
+        textAlign: TextAlign.center,
         style: appText(
           fontSize: 12,
-          color: strong ? AppColors.onAccent : AppColors.ink,
-          weight: FontWeight.w900,
+          color: veil(AppColors.muted, .78),
+          weight: FontWeight.w700,
         ),
       ),
     );
@@ -6681,7 +6733,7 @@ class PrimaryAction extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FilledButton.icon(
-      onPressed: path == null ? () {} : () => context.go(path!),
+      onPressed: () => context.go(path ?? '/contact'),
       icon: const Icon(Icons.arrow_back_rounded),
       label: Text(label),
       style: FilledButton.styleFrom(
@@ -6700,17 +6752,31 @@ class SecondaryAction extends StatelessWidget {
     required this.label,
     required this.icon,
     this.ltr = false,
+    this.path,
+    this.externalUrl,
     super.key,
   });
 
   final String label;
   final IconData icon;
   final bool ltr;
+  final String? path;
+  final String? externalUrl;
 
   @override
   Widget build(BuildContext context) {
+    final targetPath = path;
+    final targetUrl = externalUrl;
     return OutlinedButton.icon(
-      onPressed: () {},
+      onPressed: targetPath == null && targetUrl == null
+          ? null
+          : () {
+              if (targetPath != null) {
+                context.go(targetPath);
+                return;
+              }
+              redirectToCheckout(targetUrl!);
+            },
       icon: Icon(icon, size: 18),
       label: Text(
         label,
@@ -6826,17 +6892,21 @@ class AppAtmosphere extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      CustomPaint(painter: AtmospherePainter());
+      CustomPaint(painter: AtmospherePainter(AppColors._palette));
 }
 
 class AtmospherePainter extends CustomPainter {
+  const AtmospherePainter(this.palette);
+
+  final AppPalette palette;
+
   @override
   void paint(Canvas canvas, Size size) {
     canvas.drawRect(Offset.zero & size, Paint()..color = AppColors.background);
     final line = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1
-      ..color = veil(AppColors.ink, .055);
+      ..color = veil(AppColors.ink, AppColors.isLight ? .065 : .055);
     for (var x = 0.0; x < size.width; x += 42) {
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), line);
     }
@@ -6846,17 +6916,18 @@ class AtmospherePainter extends CustomPainter {
     canvas.drawCircle(
       Offset(size.width * .18, size.height * .22),
       260,
-      Paint()..color = veil(AppColors.accent, .09),
+      Paint()..color = veil(AppColors.accent, AppColors.isLight ? .055 : .09),
     );
     canvas.drawCircle(
       Offset(size.width * .88, size.height * .7),
       340,
-      Paint()..color = veil(AppColors.gold, .06),
+      Paint()..color = veil(AppColors.gold, AppColors.isLight ? .045 : .06),
     );
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant AtmospherePainter oldDelegate) =>
+      oldDelegate.palette != palette;
 }
 
 class LineChartPainter extends CustomPainter {
@@ -6928,8 +6999,10 @@ class VideoGridPainter extends CustomPainter {
 
 BoxDecoration panelDecoration({Color? borderColor, double radius = 22}) {
   return BoxDecoration(
-    color: veil(AppColors.surface, .68),
-    border: Border.all(color: borderColor ?? veil(AppColors.ink, .12)),
+    color: veil(AppColors.surface, AppColors.isLight ? .94 : .72),
+    border: Border.all(
+      color: borderColor ?? veil(AppColors.ink, AppColors.isLight ? .18 : .12),
+    ),
     borderRadius: BorderRadius.circular(radius),
   );
 }
