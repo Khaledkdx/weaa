@@ -438,7 +438,13 @@ class SupabaseCmsRepository implements CmsRepository {
           );
     final requests = await loadServiceRequests();
     final messages = await loadContactMessages();
-    final joinRequests = await loadJoinRequests();
+    List<JoinRequest> joinRequests;
+    try {
+      joinRequests = await loadJoinRequests();
+    } on PostgrestException catch (error) {
+      if (error.code != 'PGRST205' && error.code != '42P01') rethrow;
+      joinRequests = const [];
+    }
     return content.copyWith(
       serviceRequests: requests,
       contactMessages: messages,
