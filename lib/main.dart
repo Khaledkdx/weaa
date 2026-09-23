@@ -3893,66 +3893,82 @@ class _DynamicServiceRequestFormState extends ConsumerState<DynamicServiceReques
   }
 }
 
-class JoinFormCard extends StatelessWidget {
+class JoinFormCard extends StatefulWidget {
   const JoinFormCard({required this.form, super.key});
 
   final CmsFormDefinition form;
 
   @override
+  State<JoinFormCard> createState() => _JoinFormCardState();
+}
+
+class _JoinFormCardState extends State<JoinFormCard> {
+  bool hovered = false;
+
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () => context.go('/join-us/${form.slug}'),
-      borderRadius: BorderRadius.circular(28),
-      child: Container(
-        constraints: const BoxConstraints(minHeight: 260),
-        padding: const EdgeInsets.all(24),
-        decoration: panelDecoration(
-          borderColor: veil(AppColors.accent, .24),
-          radius: 28,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                IconBox(icon: Icons.description_rounded, alt: true),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                  decoration: BoxDecoration(
-                    color: veil(AppColors.accent, .12),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: veil(AppColors.accent, .24)),
+    final form = widget.form;
+    return MouseRegion(
+      onEnter: (_) => setState(() => hovered = true),
+      onExit: (_) => setState(() => hovered = false),
+      child: InkWell(
+        key: ValueKey('join-form-card-${form.slug}'),
+        onTap: () => context.go('/join-us/${form.slug}'),
+        borderRadius: BorderRadius.circular(28),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          constraints: BoxConstraints(minHeight: hovered ? 350 : 220),
+          padding: const EdgeInsets.all(24),
+          decoration: panelDecoration(
+            borderColor: veil(AppColors.accent, hovered ? .48 : .24),
+            radius: 28,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  IconBox(icon: Icons.description_rounded, alt: true),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: veil(AppColors.accent, .12),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: veil(AppColors.accent, .24)),
+                    ),
+                    child: Text(hovered ? 'اضغط للفتح' : 'مرر للمزيد', style: appText(fontSize: 12, weight: FontWeight.w800, color: AppColors.accent)),
                   ),
-                  child: Text('نموذج متاح', style: appText(fontSize: 12, weight: FontWeight.w800, color: AppColors.accent)),
+                ],
+              ),
+              const SizedBox(height: 32),
+              Text(form.title, style: displayText(fontSize: 27)),
+              const SizedBox(height: 8),
+              Text(form.audience, style: appText(color: AppColors.accent, weight: FontWeight.w800)),
+              if (hovered) ...[
+                const SizedBox(height: 12),
+                Text(form.description, maxLines: 3, overflow: TextOverflow.ellipsis, style: appText(color: AppColors.muted, height: 1.65)),
+                const SizedBox(height: 18),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('${form.fields.length} حقول', style: appText(color: AppColors.muted, fontSize: 13, weight: FontWeight.w700)),
+                    FilledButton.icon(
+                      key: const ValueKey('open-join-form'),
+                      onPressed: () => context.go('/join-us/${form.slug}'),
+                      icon: const Icon(Icons.arrow_back_rounded),
+                      label: const Text('فتح النموذج'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.accent,
+                        foregroundColor: AppColors.onAccent,
+                      ),
+                    ),
+                  ],
                 ),
               ],
-            ),
-            const SizedBox(height: 32),
-            Text(form.title, style: displayText(fontSize: 27)),
-            const SizedBox(height: 8),
-            Text(form.audience, style: appText(color: AppColors.accent, weight: FontWeight.w800)),
-            const SizedBox(height: 8),
-            Text(form.description, maxLines: 3, overflow: TextOverflow.ellipsis, style: appText(color: AppColors.muted, height: 1.65)),
-            const SizedBox(height: 18),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('${form.fields.length} حقول', style: appText(color: AppColors.muted, fontSize: 13, weight: FontWeight.w700)),
-                FilledButton.icon(
-                  key: const ValueKey('open-join-form'),
-                  onPressed: () => context.go('/join-us/${form.slug}'),
-                  icon: const Icon(Icons.arrow_back_rounded),
-                  label: const Text('فتح النموذج'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.accent,
-                    foregroundColor: AppColors.onAccent,
-                  ),
-                ),
-              ],
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

@@ -78,7 +78,7 @@ void main() {
     expect(find.text('انضم إلينا'), findsWidgets);
     expect(find.text('انضم كجهة تشغيلية'), findsOneWidget);
     expect(find.text('انضم كمستثمر أو شريك نمو'), findsOneWidget);
-    expect(find.byKey(const ValueKey('open-join-form')), findsNWidgets(2));
+    expect(find.byKey(const ValueKey('join-form-card-join-operators')), findsOneWidget);
   });
 
   testWidgets('service form uses the default CMS form definition', (
