@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
@@ -133,6 +134,7 @@ final _routerProvider = Provider.family<GoRouter, String>((
       ),
       GoRoute(path: '/about', builder: (_, state) => const AboutPage()),
       GoRoute(path: '/contact', builder: (_, state) => const ContactPage()),
+      GoRoute(path: '/join-us', builder: (_, state) => const JoinUsPage()),
       GoRoute(
         path: '/payment-success',
         builder: (_, state) => const PaymentSuccessPage(),
@@ -314,6 +316,9 @@ abstract class CmsRepository {
   Future<ContactMessage> createContactMessage(ContactMessage message);
   Future<List<ContactMessage>> loadContactMessages();
   Future<void> updateContactMessageStatus(String messageId, String status);
+  Future<JoinRequest> createJoinRequest(JoinRequest request, {PlatformFile? attachment});
+  Future<List<JoinRequest>> loadJoinRequests();
+  Future<void> updateJoinRequestStatus(String requestId, String status);
 }
 
 class InMemoryCmsRepository implements CmsRepository {
@@ -386,6 +391,26 @@ class InMemoryCmsRepository implements CmsRepository {
       ],
     );
   }
+
+  @override
+  Future<JoinRequest> createJoinRequest(JoinRequest request, {PlatformFile? attachment}) async {
+    final stored = request.id.isEmpty ? request.withGeneratedId() : request;
+    _content = _content.copyWith(joinRequests: [stored, ..._content.joinRequests]);
+    return stored;
+  }
+
+  @override
+  Future<List<JoinRequest>> loadJoinRequests() async => _content.joinRequests;
+
+  @override
+  Future<void> updateJoinRequestStatus(String requestId, String status) async {
+    _content = _content.copyWith(
+      joinRequests: [
+        for (final request in _content.joinRequests)
+          request.id == requestId ? request.copyWith(status: status) : request,
+      ],
+    );
+  }
 }
 
 class SupabaseCmsRepository implements CmsRepository {
@@ -407,9 +432,11 @@ class SupabaseCmsRepository implements CmsRepository {
           );
     final requests = await loadServiceRequests();
     final messages = await loadContactMessages();
+    final joinRequests = await loadJoinRequests();
     return content.copyWith(
       serviceRequests: requests,
       contactMessages: messages,
+      joinRequests: joinRequests,
     );
   }
 
@@ -492,6 +519,37 @@ class SupabaseCmsRepository implements CmsRepository {
         .from('service_requests')
         .update({'status': status})
         .eq('id', messageId);
+  }
+
+  @override
+  Future<JoinRequest> createJoinRequest(JoinRequest request, {PlatformFile? attachment}) async {
+    String? attachmentPath;
+    if (attachment?.bytes != null) {
+      final safeName = (attachment!.name.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_'));
+      attachmentPath = '${DateTime.now().millisecondsSinceEpoch}_$safeName';
+      await client.storage.from('join-attachments').uploadBinary(
+        attachmentPath,
+        attachment.bytes!,
+        fileOptions: const FileOptions(upsert: false),
+      );
+    }
+    final response = await client
+        .from('join_requests')
+        .insert(request.copyWith(attachmentPath: attachmentPath).toJson(includeId: false))
+        .select()
+        .single();
+    return JoinRequest.fromJson(Map<String, dynamic>.from(response));
+  }
+
+  @override
+  Future<List<JoinRequest>> loadJoinRequests() async {
+    final response = await client.from('join_requests').select().order('created_at', ascending: false);
+    return [for (final item in response) JoinRequest.fromJson(Map<String, dynamic>.from(item as Map))];
+  }
+
+  @override
+  Future<void> updateJoinRequestStatus(String requestId, String status) async {
+    await client.from('join_requests').update({'status': status}).eq('id', requestId);
   }
 }
 
@@ -939,6 +997,117 @@ class CmsController extends Notifier<CmsContent> {
     }
   }
 
+  Future<void> submitJoinRequest(JoinRequest request, {PlatformFile? attachment}) async {
+    ref.read(cmsSyncProvider.notifier).saving();
+    try {
+      final stored = await ref.read(cmsRepositoryProvider).createJoinRequest(request, attachment: attachment);
+      state = state.copyWith(joinRequests: [stored, ...state.joinRequests]);
+      ref.read(cmsSyncProvider.notifier).saved();
+    } catch (error) {
+      ref.read(cmsSyncProvider.notifier).failed(error);
+      rethrow;
+    }
+  }
+
+  Future<void> updateJoinRequestStatus(String requestId, String status) async {
+    state = state.copyWith(
+      joinRequests: [
+        for (final request in state.joinRequests)
+          request.id == requestId ? request.copyWith(status: status) : request,
+      ],
+    );
+    ref.read(cmsSyncProvider.notifier).saving();
+    try {
+      await ref.read(cmsRepositoryProvider).updateJoinRequestStatus(requestId, status);
+      ref.read(cmsSyncProvider.notifier).saved();
+    } catch (error) {
+      ref.read(cmsSyncProvider.notifier).failed(error);
+      rethrow;
+    }
+  }
+
+  Future<void> updateDefaultServiceForm(CmsFormDefinition form) =>
+      _commit(state.copyWith(defaultServiceForm: form));
+
+  Future<void> updateServiceFormOverride(String serviceSlug, CmsFormDefinition form) {
+    final overrides = {...state.serviceFormOverrides, serviceSlug: form.copyWith(slug: serviceSlug)};
+    return _commit(state.copyWith(serviceFormOverrides: overrides));
+  }
+
+  Future<void> resetServiceFormOverride(String serviceSlug) {
+    final overrides = {...state.serviceFormOverrides}..remove(serviceSlug);
+    return _commit(state.copyWith(serviceFormOverrides: overrides));
+  }
+
+  Future<void> updateJoinForm(CmsFormDefinition form) {
+    final forms = [for (final item in state.joinForms) item.slug == form.slug ? form : item];
+    return _commit(state.copyWith(joinForms: forms));
+  }
+
+  Future<void> addJoinForm() {
+    final base = 'join-form-${state.joinForms.length + 1}';
+    final slug = _uniqueKey(base, {for (final form in state.joinForms) form.slug});
+    final form = CmsFormDefinition(
+      slug: slug,
+      title: 'نموذج انضمام جديد',
+      description: 'أضف وصفًا يوضح الفئة المستهدفة من هذا النموذج.',
+      audience: 'فئة جديدة',
+      kind: 'join',
+      enabled: true,
+      fields: state.defaultServiceForm.fields,
+    );
+    return _commit(state.copyWith(joinForms: [...state.joinForms, form]));
+  }
+
+  Future<void> deleteJoinForm(String slug) {
+    if (state.joinForms.length <= 1) return Future.value();
+    return _commit(state.copyWith(joinForms: [for (final form in state.joinForms) if (form.slug != slug) form]));
+  }
+
+  Future<void> updateFormDefinitionField({
+    required String formSlug,
+    required CmsFormField field,
+    required bool isDefaultServiceForm,
+    String? serviceSlug,
+  }) async {
+    final form = isDefaultServiceForm
+        ? state.defaultServiceForm
+        : serviceSlug == null
+            ? state.joinForms.firstWhere((item) => item.slug == formSlug)
+            : state.formForService(CmsItem('', '', '', Icons.circle, slug: serviceSlug));
+    final fields = [for (final item in form.fields) item.key == field.key ? field : item];
+    final next = form.copyWith(fields: fields);
+    if (isDefaultServiceForm) return updateDefaultServiceForm(next);
+    if (serviceSlug != null) return updateServiceFormOverride(serviceSlug, next);
+    return updateJoinForm(next);
+  }
+
+  Future<void> addFormField({required String formSlug, required bool isDefaultServiceForm, String? serviceSlug}) async {
+    final form = isDefaultServiceForm
+        ? state.defaultServiceForm
+        : serviceSlug == null
+            ? state.joinForms.firstWhere((item) => item.slug == formSlug)
+            : state.formForService(CmsItem('', '', '', Icons.circle, slug: serviceSlug));
+    final key = _uniqueKey('field', {for (final field in form.fields) field.key});
+    final next = form.copyWith(fields: [...form.fields, CmsFormField(key: key, label: 'حقل جديد', type: CmsFormFieldType.text)]);
+    if (isDefaultServiceForm) return updateDefaultServiceForm(next);
+    if (serviceSlug != null) return updateServiceFormOverride(serviceSlug, next);
+    return updateJoinForm(next);
+  }
+
+  Future<void> deleteFormField({required String formSlug, required String fieldKey, required bool isDefaultServiceForm, String? serviceSlug}) async {
+    final form = isDefaultServiceForm
+        ? state.defaultServiceForm
+        : serviceSlug == null
+            ? state.joinForms.firstWhere((item) => item.slug == formSlug)
+            : state.formForService(CmsItem('', '', '', Icons.circle, slug: serviceSlug));
+    if (form.fields.length <= 1) return;
+    final next = form.copyWith(fields: [for (final field in form.fields) if (field.key != fieldKey) field]);
+    if (isDefaultServiceForm) return updateDefaultServiceForm(next);
+    if (serviceSlug != null) return updateServiceFormOverride(serviceSlug, next);
+    return updateJoinForm(next);
+  }
+
   Future<void> updateContactMessageStatus(
     String messageId,
     String status,
@@ -1107,6 +1276,233 @@ class CmsController extends Notifier<CmsContent> {
 
 enum CmsCollection { generalInfo, serviceModels, initiatives }
 
+enum CmsFormFieldType { text, number, phone, email, date, select, multiline, file }
+
+extension CmsFormFieldTypeLabel on CmsFormFieldType {
+  String get label => switch (this) {
+    CmsFormFieldType.text => 'نص',
+    CmsFormFieldType.number => 'رقم',
+    CmsFormFieldType.phone => 'هاتف',
+    CmsFormFieldType.email => 'بريد إلكتروني',
+    CmsFormFieldType.date => 'تاريخ',
+    CmsFormFieldType.select => 'اختيار',
+    CmsFormFieldType.multiline => 'تفاصيل',
+    CmsFormFieldType.file => 'ملف',
+  };
+
+  String get value => name;
+}
+
+CmsFormFieldType formFieldTypeFrom(String? value) => CmsFormFieldType.values.firstWhere(
+  (item) => item.name == value,
+  orElse: () => CmsFormFieldType.text,
+);
+
+class CmsFormField {
+  const CmsFormField({
+    required this.key,
+    required this.label,
+    required this.type,
+    this.required = false,
+    this.options = const [],
+  });
+
+  final String key;
+  final String label;
+  final CmsFormFieldType type;
+  final bool required;
+  final List<String> options;
+
+  CmsFormField copyWith({
+    String? key,
+    String? label,
+    CmsFormFieldType? type,
+    bool? required,
+    List<String>? options,
+  }) => CmsFormField(
+    key: key ?? this.key,
+    label: label ?? this.label,
+    type: type ?? this.type,
+    required: required ?? this.required,
+    options: options ?? this.options,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'key': key,
+    'label': label,
+    'type': type.name,
+    'required': required,
+    'options': options,
+  };
+
+  static CmsFormField fromJson(Map<String, dynamic> json) => CmsFormField(
+    key: json['key']?.toString() ?? 'field',
+    label: json['label']?.toString() ?? 'حقل جديد',
+    type: formFieldTypeFrom(json['type']?.toString()),
+    required: json['required'] == true,
+    options: json['options'] is List
+        ? [for (final item in json['options'] as List) item.toString()]
+        : const [],
+  );
+}
+
+class CmsFormDefinition {
+  const CmsFormDefinition({
+    required this.slug,
+    required this.title,
+    required this.description,
+    required this.audience,
+    required this.kind,
+    required this.enabled,
+    required this.fields,
+  });
+
+  final String slug;
+  final String title;
+  final String description;
+  final String audience;
+  final String kind;
+  final bool enabled;
+  final List<CmsFormField> fields;
+
+  CmsFormDefinition copyWith({
+    String? slug,
+    String? title,
+    String? description,
+    String? audience,
+    String? kind,
+    bool? enabled,
+    List<CmsFormField>? fields,
+  }) => CmsFormDefinition(
+    slug: slug ?? this.slug,
+    title: title ?? this.title,
+    description: description ?? this.description,
+    audience: audience ?? this.audience,
+    kind: kind ?? this.kind,
+    enabled: enabled ?? this.enabled,
+    fields: fields ?? this.fields,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'slug': slug,
+    'title': title,
+    'description': description,
+    'audience': audience,
+    'kind': kind,
+    'enabled': enabled,
+    'fields': [for (final field in fields) field.toJson()],
+  };
+
+  static CmsFormDefinition fromJson(Map<String, dynamic> json, CmsFormDefinition fallback) => CmsFormDefinition(
+    slug: json['slug']?.toString() ?? fallback.slug,
+    title: json['title']?.toString() ?? fallback.title,
+    description: json['description']?.toString() ?? fallback.description,
+    audience: json['audience']?.toString() ?? fallback.audience,
+    kind: json['kind']?.toString() ?? fallback.kind,
+    enabled: json['enabled'] is bool ? json['enabled'] as bool : fallback.enabled,
+    fields: json['fields'] is List
+        ? [for (final field in json['fields'] as List) CmsFormField.fromJson(Map<String, dynamic>.from(field as Map))]
+        : fallback.fields,
+  );
+}
+
+class JoinRequest {
+  const JoinRequest({
+    this.id = '',
+    required this.formSlug,
+    required this.formTitle,
+    required this.name,
+    required this.phone,
+    required this.email,
+    required this.values,
+    required this.createdAtLabel,
+    this.attachmentPath,
+    this.status = 'طلب جديد',
+  });
+
+  final String id;
+  final String formSlug;
+  final String formTitle;
+  final String name;
+  final String phone;
+  final String email;
+  final Map<String, String> values;
+  final String createdAtLabel;
+  final String? attachmentPath;
+  final String status;
+
+  JoinRequest withGeneratedId() => copyWith(
+    id: id.isEmpty ? DateTime.now().microsecondsSinceEpoch.toString() : id,
+  );
+
+  JoinRequest copyWith({
+    String? id,
+    String? formSlug,
+    String? formTitle,
+    String? name,
+    String? phone,
+    String? email,
+    Map<String, String>? values,
+    String? createdAtLabel,
+    String? attachmentPath,
+    String? status,
+  }) => JoinRequest(
+    id: id ?? this.id,
+    formSlug: formSlug ?? this.formSlug,
+    formTitle: formTitle ?? this.formTitle,
+    name: name ?? this.name,
+    phone: phone ?? this.phone,
+    email: email ?? this.email,
+    values: values ?? this.values,
+    createdAtLabel: createdAtLabel ?? this.createdAtLabel,
+    attachmentPath: attachmentPath ?? this.attachmentPath,
+    status: status ?? this.status,
+  );
+
+  Map<String, dynamic> toJson({bool includeId = true}) {
+    if (includeId && id.isNotEmpty) {
+      return {
+        'id': id,
+        'form_slug': formSlug,
+        'form_title': formTitle,
+        'name': name,
+        'phone': phone,
+        'email': email,
+        'fields': values,
+        'attachment_path': attachmentPath,
+        'created_at_label': createdAtLabel,
+        'status': status,
+      };
+    }
+    return {
+      'form_slug': formSlug,
+      'form_title': formTitle,
+      'name': name,
+      'phone': phone,
+      'email': email,
+      'fields': values,
+      'attachment_path': attachmentPath,
+      'created_at_label': createdAtLabel,
+      'status': status,
+    };
+  }
+
+  static JoinRequest fromJson(Map<String, dynamic> json) => JoinRequest(
+    id: json['id']?.toString() ?? '',
+    formSlug: json['form_slug']?.toString() ?? '',
+    formTitle: json['form_title']?.toString() ?? '',
+    name: json['name']?.toString() ?? '',
+    phone: json['phone']?.toString() ?? '',
+    email: json['email']?.toString() ?? '',
+    values: json['fields'] is Map
+        ? {for (final entry in (json['fields'] as Map).entries) entry.key.toString(): entry.value.toString()}
+        : const {},
+    attachmentPath: json['attachment_path']?.toString(),
+    createdAtLabel: json['created_at_label']?.toString() ?? 'الآن',
+    status: json['status']?.toString() ?? 'طلب جديد',
+  );
+}
+
 class CmsContent {
   const CmsContent({
     required this.company,
@@ -1119,6 +1515,10 @@ class CmsContent {
     required this.serviceRequests,
     required this.contactMessages,
     required this.adminRoles,
+    required this.defaultServiceForm,
+    required this.serviceFormOverrides,
+    required this.joinForms,
+    required this.joinRequests,
   });
 
   final CompanyContent company;
@@ -1131,6 +1531,14 @@ class CmsContent {
   final List<ServiceRequest> serviceRequests;
   final List<ContactMessage> contactMessages;
   final List<AdminRole> adminRoles;
+  final CmsFormDefinition defaultServiceForm;
+  final Map<String, CmsFormDefinition> serviceFormOverrides;
+  final List<CmsFormDefinition> joinForms;
+  final List<JoinRequest> joinRequests;
+
+  CmsFormDefinition formForService(CmsItem service) {
+    return serviceFormOverrides[service.slug] ?? defaultServiceForm;
+  }
 
   static CmsContent seed() {
     return const CmsContent(
@@ -1362,6 +1770,54 @@ class CmsContent {
           permissions: ['الرسائل', 'الحجوزات'],
         ),
       ],
+      defaultServiceForm: CmsFormDefinition(
+        slug: 'default-service-form',
+        title: 'طلب خدمة',
+        description: 'أرسل بياناتك وسيصل الطلب إلى فريق وعاء للمتابعة.',
+        audience: 'عملاء الخدمات',
+        kind: 'service',
+        enabled: true,
+        fields: [
+          CmsFormField(key: 'name', label: 'الاسم الكامل', type: CmsFormFieldType.text, required: true),
+          CmsFormField(key: 'phone', label: 'رقم الجوال', type: CmsFormFieldType.phone, required: true),
+          CmsFormField(key: 'email', label: 'البريد الإلكتروني', type: CmsFormFieldType.email),
+          CmsFormField(key: 'details', label: 'تفاصيل الطلب', type: CmsFormFieldType.multiline, required: true),
+        ],
+      ),
+      serviceFormOverrides: const {},
+      joinForms: [
+        CmsFormDefinition(
+          slug: 'join-operators',
+          title: 'انضم كجهة تشغيلية',
+          description: 'لشركات التشغيل والمستودعات ومقدمي الخدمات اللوجستية.',
+          audience: 'شركاء التشغيل',
+          kind: 'join',
+          enabled: true,
+          fields: [
+            CmsFormField(key: 'name', label: 'اسم المنشأة', type: CmsFormFieldType.text, required: true),
+            CmsFormField(key: 'phone', label: 'رقم التواصل', type: CmsFormFieldType.phone, required: true),
+            CmsFormField(key: 'email', label: 'البريد الإلكتروني', type: CmsFormFieldType.email, required: true),
+            CmsFormField(key: 'details', label: 'الخدمات والخبرة', type: CmsFormFieldType.multiline, required: true),
+            CmsFormField(key: 'profile', label: 'ملف تعريفي', type: CmsFormFieldType.file),
+          ],
+        ),
+        CmsFormDefinition(
+          slug: 'join-investors',
+          title: 'انضم كمستثمر أو شريك نمو',
+          description: 'للمستثمرين والجهات التي تبحث عن فرص لوجستية قابلة للتوسع.',
+          audience: 'مستثمرون وشركاء نمو',
+          kind: 'join',
+          enabled: true,
+          fields: [
+            CmsFormField(key: 'name', label: 'الاسم أو اسم الجهة', type: CmsFormFieldType.text, required: true),
+            CmsFormField(key: 'phone', label: 'رقم التواصل', type: CmsFormFieldType.phone, required: true),
+            CmsFormField(key: 'email', label: 'البريد الإلكتروني', type: CmsFormFieldType.email, required: true),
+            CmsFormField(key: 'interest', label: 'مجال الاهتمام', type: CmsFormFieldType.select, required: true, options: ['استثمار', 'شراكة تشغيلية', 'توسع إقليمي']),
+            CmsFormField(key: 'details', label: 'نبذة عن الاهتمام', type: CmsFormFieldType.multiline, required: true),
+          ],
+        ),
+      ],
+      joinRequests: const [],
     );
   }
 
@@ -1376,6 +1832,10 @@ class CmsContent {
     List<ServiceRequest>? serviceRequests,
     List<ContactMessage>? contactMessages,
     List<AdminRole>? adminRoles,
+    CmsFormDefinition? defaultServiceForm,
+    Map<String, CmsFormDefinition>? serviceFormOverrides,
+    List<CmsFormDefinition>? joinForms,
+    List<JoinRequest>? joinRequests,
   }) {
     return CmsContent(
       company: company ?? this.company,
@@ -1388,6 +1848,10 @@ class CmsContent {
       serviceRequests: serviceRequests ?? this.serviceRequests,
       contactMessages: contactMessages ?? this.contactMessages,
       adminRoles: adminRoles ?? this.adminRoles,
+      defaultServiceForm: defaultServiceForm ?? this.defaultServiceForm,
+      serviceFormOverrides: serviceFormOverrides ?? this.serviceFormOverrides,
+      joinForms: joinForms ?? this.joinForms,
+      joinRequests: joinRequests ?? this.joinRequests,
     );
   }
 
@@ -1409,6 +1873,9 @@ class CmsContent {
           for (final message in contactMessages) message.toJson(),
         ],
       'adminRoles': [for (final role in adminRoles) role.toJson()],
+      'defaultServiceForm': defaultServiceForm.toJson(),
+      'serviceFormOverrides': serviceFormOverrides.map((key, value) => MapEntry(key, value.toJson())),
+      'joinForms': [for (final form in joinForms) form.toJson()],
     };
   }
 
@@ -1455,6 +1922,28 @@ class CmsContent {
                 AdminRole.fromJson(Map<String, dynamic>.from(item as Map)),
             ]
           : seed.adminRoles,
+      defaultServiceForm: json['defaultServiceForm'] is Map
+          ? CmsFormDefinition.fromJson(Map<String, dynamic>.from(json['defaultServiceForm'] as Map), seed.defaultServiceForm)
+          : seed.defaultServiceForm,
+      serviceFormOverrides: json['serviceFormOverrides'] is Map
+          ? {
+              for (final entry in (json['serviceFormOverrides'] as Map).entries)
+                entry.key.toString(): CmsFormDefinition.fromJson(
+                  Map<String, dynamic>.from(entry.value as Map),
+                  seed.defaultServiceForm.copyWith(slug: entry.key.toString()),
+                ),
+            }
+          : const {},
+      joinForms: json['joinForms'] is List
+          ? [
+              for (final item in json['joinForms'] as List)
+                CmsFormDefinition.fromJson(
+                  Map<String, dynamic>.from(item as Map),
+                  seed.joinForms.isNotEmpty ? seed.joinForms.first : seed.defaultServiceForm,
+                ),
+            ]
+          : seed.joinForms,
+      joinRequests: const [],
     );
   }
 
@@ -2003,6 +2492,7 @@ const navItems = [
   NavItem('الخدمات', '/frameworks', Icons.account_tree_rounded),
   NavItem('المبادرات', '/initiatives', Icons.diversity_3_rounded),
   NavItem('من نحن', '/about', Icons.apartment_rounded),
+  NavItem('انضم إلينا', '/join-us', Icons.handshake_rounded),
   NavItem('تواصل', '/contact', Icons.mark_email_unread_rounded),
 ];
 
@@ -2163,7 +2653,10 @@ class ServiceDetailPage extends StatelessWidget {
               'أرسل بياناتك وسيصل الطلب إلى فريق وعاء للمتابعة.',
             ),
           ),
-          ServiceRequestForm(service: service, labels: cms.formLabels),
+          DynamicServiceRequestForm(
+            service: service,
+            form: cms.formForService(service),
+          ),
           SectionHeader(
             page: const PageContent(
               'آراء العملاء',
@@ -2246,6 +2739,46 @@ class ContactPage extends ConsumerWidget {
           PageHero(page: cms.pages['contact']!),
           ContactPanel(company: cms.company, labels: cms.formLabels),
           TrustPanel(company: cms.company),
+        ],
+      ),
+    );
+  }
+}
+
+class JoinUsPage extends ConsumerWidget {
+  const JoinUsPage({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cms = ref.watch(cmsProvider);
+    final forms = cms.joinForms.where((form) => form.enabled).toList();
+    return AppShell(
+      activePath: '/join-us',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          PageHero(
+            page: const PageContent(
+              'انضم إلينا',
+              'اختر المسار الأقرب لك',
+              'نماذج مختلفة للشركاء والمشغلين والمستثمرين، وكل نموذج مصمم لبياناته الخاصة.',
+            ),
+          ),
+          if (forms.isEmpty)
+            AdminPanel(
+              title: 'لا توجد نماذج متاحة',
+              child: Text(
+                'سيتم فتح نماذج الانضمام قريبًا.',
+                style: appText(color: AppColors.muted, height: 1.7),
+              ),
+            )
+          else
+            for (final form in forms)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 18),
+                child: JoinFormCard(form: form),
+              ),
+          FinalCta(company: cms.company),
         ],
       ),
     );
@@ -3174,6 +3707,357 @@ class _VideoCopy extends StatelessWidget {
   }
 }
 
+class DynamicServiceRequestForm extends ConsumerStatefulWidget {
+  const DynamicServiceRequestForm({required this.service, required this.form, super.key});
+
+  final CmsItem service;
+  final CmsFormDefinition form;
+
+  @override
+  ConsumerState<DynamicServiceRequestForm> createState() => _DynamicServiceRequestFormState();
+}
+
+class _DynamicServiceRequestFormState extends ConsumerState<DynamicServiceRequestForm> {
+  final Map<String, TextEditingController> controllers = {};
+  final Map<String, String?> selections = {};
+  PlatformFile? attachment;
+  bool isSending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    for (final field in widget.form.fields) {
+      controllers[field.key] = TextEditingController();
+      if (field.type == CmsFormFieldType.select) selections[field.key] = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final controller in controllers.values) controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> chooseFile() async {
+    final result = await FilePicker.platform.pickFiles(withData: true, allowMultiple: false);
+    if (result != null && result.files.isNotEmpty) setState(() => attachment = result.files.first);
+  }
+
+  Future<void> submit() async {
+    final values = <String, String>{};
+    for (final field in widget.form.fields) {
+      final value = field.type == CmsFormFieldType.select
+          ? selections[field.key] ?? ''
+          : controllers[field.key]?.text.trim() ?? '';
+      if (field.required && value.isEmpty && field.type != CmsFormFieldType.file) {
+        showAdminSnack(context, 'أكمل الحقل: ${field.label}', error: true);
+        return;
+      }
+      values[field.key] = value;
+    }
+    final name = values['name'] ?? values.values.firstWhere((value) => value.isNotEmpty, orElse: () => 'عميل جديد');
+    final phone = values['phone'] ?? '';
+    final email = values['email'] ?? '';
+    final details = values['details'] ?? values.entries.map((entry) => '${entry.key}: ${entry.value}').join('\n');
+    setState(() => isSending = true);
+    try {
+      await ref.read(cmsProvider.notifier).submitServiceRequest(
+        ServiceRequest(
+          serviceSlug: widget.service.slug ?? widget.service.titleEn,
+          serviceTitle: widget.service.titleAr,
+          name: name,
+          phone: phone,
+          email: email,
+          details: details,
+          createdAtLabel: 'الآن',
+        ),
+      );
+      if (!mounted) return;
+      for (final controller in controllers.values) controller.clear();
+      setState(() => isSending = false);
+      showAdminSnack(context, 'تم إرسال الطلب إلى لوحة الأدمن');
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => isSending = false);
+      showAdminSnack(context, 'تعذر إرسال الطلب، حاول مرة أخرى', error: true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Text('نوع الخدمة: ${widget.service.titleAr}', style: appText(color: AppColors.muted, weight: FontWeight.w800)),
+        ),
+        FormPanel(
+          title: widget.form.title,
+          description: widget.form.description,
+          fields: widget.form.fields,
+          controllers: controllers,
+          selections: selections,
+          attachment: attachment,
+          onFile: chooseFile,
+          onSelect: (key, value) => setState(() => selections[key] = value),
+          actionLabel: isSending ? 'جاري الإرسال...' : 'إرسال طلب الخدمة',
+          onSubmit: isSending ? null : submit,
+        ),
+      ],
+    );
+  }
+}
+
+class JoinFormCard extends ConsumerStatefulWidget {
+  const JoinFormCard({required this.form, super.key});
+
+  final CmsFormDefinition form;
+
+  @override
+  ConsumerState<JoinFormCard> createState() => _JoinFormCardState();
+}
+
+class _JoinFormCardState extends ConsumerState<JoinFormCard> {
+  final Map<String, TextEditingController> controllers = {};
+  final Map<String, String?> selections = {};
+  PlatformFile? attachment;
+  bool isSending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    for (final field in widget.form.fields) {
+      controllers[field.key] = TextEditingController();
+      if (field.type == CmsFormFieldType.select) selections[field.key] = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final controller in controllers.values) controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> chooseFile() async {
+    final result = await FilePicker.platform.pickFiles(withData: true, allowMultiple: false);
+    if (result != null && result.files.isNotEmpty) setState(() => attachment = result.files.first);
+  }
+
+  Future<void> submit() async {
+    final values = <String, String>{};
+    for (final field in widget.form.fields) {
+      final value = field.type == CmsFormFieldType.select
+          ? selections[field.key] ?? ''
+          : controllers[field.key]?.text.trim() ?? '';
+      if (field.required && value.isEmpty && field.type != CmsFormFieldType.file) {
+        showAdminSnack(context, 'أكمل الحقل: ${field.label}', error: true);
+        return;
+      }
+      values[field.key] = value;
+    }
+    setState(() => isSending = true);
+    try {
+      await ref.read(cmsProvider.notifier).submitJoinRequest(
+        JoinRequest(
+          formSlug: widget.form.slug,
+          formTitle: widget.form.title,
+          name: values['name'] ?? 'طلب انضمام',
+          phone: values['phone'] ?? '',
+          email: values['email'] ?? '',
+          values: values,
+          createdAtLabel: 'الآن',
+        ),
+        attachment: attachment,
+      );
+      if (!mounted) return;
+      for (final controller in controllers.values) controller.clear();
+      setState(() {
+        isSending = false;
+        attachment = null;
+      });
+      showAdminSnack(context, 'تم إرسال طلب الانضمام بنجاح');
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => isSending = false);
+      showAdminSnack(context, 'تعذر إرسال الطلب، حاول مرة أخرى', error: true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FormPanel(
+      title: widget.form.title,
+      description: '${widget.form.audience} • ${widget.form.description}',
+      fields: widget.form.fields,
+      controllers: controllers,
+      selections: selections,
+      attachment: attachment,
+      onFile: chooseFile,
+      onSelect: (key, value) => setState(() => selections[key] = value),
+      actionLabel: isSending ? 'جاري الإرسال...' : 'إرسال طلب الانضمام',
+      onSubmit: isSending ? null : submit,
+    );
+  }
+}
+
+class FormPanel extends StatelessWidget {
+  const FormPanel({
+    required this.title,
+    required this.description,
+    required this.fields,
+    required this.controllers,
+    required this.selections,
+    required this.attachment,
+    required this.onFile,
+    required this.onSelect,
+    required this.actionLabel,
+    required this.onSubmit,
+    super.key,
+  });
+
+  final String title;
+  final String description;
+  final List<CmsFormField> fields;
+  final Map<String, TextEditingController> controllers;
+  final Map<String, String?> selections;
+  final PlatformFile? attachment;
+  final VoidCallback onFile;
+  final void Function(String key, String? value) onSelect;
+  final String actionLabel;
+  final VoidCallback? onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 800;
+    final children = [
+      for (final field in fields)
+        _FormFieldInput(
+          field: field,
+          controller: controllers[field.key]!,
+          selected: selections[field.key],
+          attachment: attachment,
+          onFile: onFile,
+          onSelect: (value) => onSelect(field.key, value),
+        ),
+    ];
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: panelDecoration(borderColor: veil(AppColors.accent, .18), radius: 28),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(title, style: displayText(fontSize: 30)),
+          const SizedBox(height: 8),
+          Text(description, style: appText(color: AppColors.muted, height: 1.7)),
+          const SizedBox(height: 18),
+          compact
+              ? Column(children: children)
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: Column(children: children.where((item) => children.indexOf(item).isEven).toList())),
+                    const SizedBox(width: 14),
+                    Expanded(child: Column(children: children.where((item) => children.indexOf(item).isOdd).toList())),
+                  ],
+                ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.icon(
+              key: ValueKey(actionLabel.contains('الخدمة') ? 'submit-service-request' : 'submit-join-request'),
+              onPressed: onSubmit,
+              icon: const Icon(Icons.send_rounded),
+              label: Text(actionLabel),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.accent,
+                foregroundColor: AppColors.onAccent,
+                padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FormFieldInput extends StatelessWidget {
+  const _FormFieldInput({required this.field, required this.controller, required this.selected, required this.attachment, required this.onFile, required this.onSelect});
+
+  final CmsFormField field;
+  final TextEditingController controller;
+  final String? selected;
+  final PlatformFile? attachment;
+  final VoidCallback onFile;
+  final ValueChanged<String?> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    if (field.type == CmsFormFieldType.file) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: OutlinedButton.icon(
+          onPressed: onFile,
+          icon: const Icon(Icons.attach_file_rounded),
+          label: Text(attachment == null ? field.label : attachment!.name),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.ink,
+            minimumSize: const Size.fromHeight(58),
+            alignment: Alignment.centerRight,
+          ),
+        ),
+      );
+    }
+    if (field.type == CmsFormFieldType.select) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: DropdownButtonFormField<String>(
+          value: selected,
+          items: [for (final option in field.options) DropdownMenuItem(value: option, child: Text(option))],
+          onChanged: onSelect,
+          decoration: InputDecoration(labelText: field.label, filled: true, fillColor: veil(AppColors.background, .42)),
+        ),
+      );
+    }
+    final multiline = field.type == CmsFormFieldType.multiline;
+    final keyboard = switch (field.type) {
+      CmsFormFieldType.number => TextInputType.number,
+      CmsFormFieldType.phone => TextInputType.phone,
+      CmsFormFieldType.email => TextInputType.emailAddress,
+      CmsFormFieldType.date => TextInputType.datetime,
+      _ => TextInputType.text,
+    };
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(field.label, style: appText(color: AppColors.muted, weight: FontWeight.w800)),
+          const SizedBox(height: 6),
+          TextField(
+            key: ValueKey('request-${field.key}'),
+            controller: controller,
+            keyboardType: keyboard,
+            maxLines: multiline ? 4 : 1,
+            textDirection: field.type == CmsFormFieldType.email || field.type == CmsFormFieldType.phone ? TextDirection.ltr : TextDirection.rtl,
+            style: appText(color: AppColors.ink, weight: FontWeight.w800),
+            decoration: InputDecoration(
+              hintText: field.required ? 'مطلوب' : 'اختياري',
+              hintStyle: appText(color: AppColors.muted),
+              filled: true,
+              fillColor: veil(AppColors.background, .42),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: veil(AppColors.ink, .14))),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: AppColors.accent, width: 1.4)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class ServiceRequestForm extends ConsumerStatefulWidget {
   const ServiceRequestForm({
     required this.service,
@@ -3783,6 +4667,9 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
     ('الصلاحيات', Icons.admin_panel_settings_rounded),
     ('بيانات الشركة', Icons.apartment_rounded),
     ('الفورم', Icons.dynamic_form_rounded),
+    ('نماذج الخدمات', Icons.view_list_rounded),
+    ('نماذج انضم إلينا', Icons.handshake_rounded),
+    ('طلبات الانضمام', Icons.assignment_ind_rounded),
   ];
 
   @override
@@ -3870,7 +4757,10 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
       10 => AdminMessagesEditor(messages: cms.contactMessages),
       11 => AdminPermissionsEditor(roles: cms.adminRoles),
       12 => AdminCompanyEditor(company: cms.company),
-      _ => AdminFormEditor(labels: cms.formLabels),
+      13 => AdminFormEditor(labels: cms.formLabels),
+      14 => AdminServiceFormsEditor(cms: cms),
+      15 => AdminJoinFormsEditor(forms: cms.joinForms),
+      _ => AdminJoinRequestsEditor(requests: cms.joinRequests),
     };
   }
 }
@@ -4365,6 +5255,29 @@ class AdminPaymentsEditor extends ConsumerWidget {
     );
     return Column(
       children: [
+        AdminPanel(
+          title: 'تفعيل الدفع حسب الخدمة',
+          child: Column(
+            children: [
+              for (var i = 0; i < items.length; i++)
+                Material(
+                  color: Colors.transparent,
+                  child: SwitchListTile.adaptive(
+                    key: ValueKey('payment-enabled-${items[i].slug}'),
+                    value: items[i].paymentEnabled,
+                    onChanged: (value) => controller.updateItem(
+                      collection: CmsCollection.serviceModels,
+                      index: i,
+                      paymentEnabled: value,
+                    ),
+                    title: Text(items[i].titleAr, style: appText(color: AppColors.ink, weight: FontWeight.w900)),
+                    activeThumbColor: AppColors.accent,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+            ],
+          ),
+        ),
         AdminStatsStrip(
           items: [
             (
@@ -4395,34 +5308,6 @@ class AdminPaymentsEditor extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Material(
-                  color: Colors.transparent,
-                  child: SwitchListTile.adaptive(
-                    key: ValueKey('payment-enabled-${items[i].slug}'),
-                    value: items[i].paymentEnabled,
-                    onChanged: (value) => controller.updateItem(
-                      collection: CmsCollection.serviceModels,
-                      index: i,
-                      paymentEnabled: value,
-                    ),
-                    title: Text(
-                      'تفعيل الدفع لهذه الخدمة',
-                      style: appText(
-                        color: AppColors.ink,
-                        weight: FontWeight.w900,
-                      ),
-                    ),
-                    subtitle: Text(
-                      items[i].paymentEnabled
-                          ? 'زر الدفع سيظهر في صفحة الخدمة.'
-                          : 'زر الدفع مخفي عن العميل.',
-                      style: appText(color: AppColors.muted, height: 1.5),
-                    ),
-                    activeThumbColor: AppColors.accent,
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                ),
-                const SizedBox(height: 10),
                 CmsTextField(
                   label: 'السعر بالريال - ${items[i].titleAr}',
                   initialValue: items[i].paymentPriceSar.toString(),
@@ -5412,6 +6297,320 @@ class AdminCompanyEditor extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class AdminServiceFormsEditor extends ConsumerWidget {
+  const AdminServiceFormsEditor({required this.cms, super.key});
+
+  final CmsContent cms;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final controller = ref.read(cmsProvider.notifier);
+    return Column(
+      children: [
+        _AdminFormDefinitionEditor(
+          title: 'النموذج الافتراضي للخدمات',
+          form: cms.defaultServiceForm,
+          onSave: controller.updateDefaultServiceForm,
+        ),
+        for (final service in cms.serviceModels)
+          Padding(
+            padding: const EdgeInsets.only(top: 16),
+            child: Column(
+              children: [
+                if (!cms.serviceFormOverrides.containsKey(service.slug))
+                  AdminPanel(
+                    title: 'نموذج خدمة: ${service.titleAr}',
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'الخدمة تستخدم النموذج الافتراضي حاليًا. أنشئ تخصيصًا لإضافة حقول أو معلومات مختلفة.',
+                            style: appText(color: AppColors.muted, height: 1.7),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        FilledButton.icon(
+                          onPressed: () => controller.updateServiceFormOverride(
+                            service.slug ?? service.titleEn,
+                            cms.formForService(service),
+                          ),
+                          icon: const Icon(Icons.edit_rounded),
+                          label: const Text('تخصيص'),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  _AdminFormDefinitionEditor(
+                    title: 'تخصيص نموذج: ${service.titleAr}',
+                    form: cms.formForService(service),
+                    onSave: (form) => controller.updateServiceFormOverride(service.slug ?? service.titleEn, form),
+                    onReset: () => controller.resetServiceFormOverride(service.slug ?? service.titleEn),
+                  ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class AdminJoinFormsEditor extends ConsumerWidget {
+  const AdminJoinFormsEditor({required this.forms, super.key});
+
+  final List<CmsFormDefinition> forms;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final controller = ref.read(cmsProvider.notifier);
+    return Column(
+      children: [
+        Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton.icon(
+            onPressed: controller.addJoinForm,
+            icon: const Icon(Icons.add_rounded),
+            label: const Text('إضافة نموذج انضمام'),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.gold, foregroundColor: AppColors.onAccent),
+          ),
+        ),
+        const SizedBox(height: 14),
+        for (final form in forms)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: _AdminFormDefinitionEditor(
+              title: 'نموذج: ${form.audience}',
+              form: form,
+              onSave: controller.updateJoinForm,
+              onDelete: () => controller.deleteJoinForm(form.slug),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _AdminFormDefinitionEditor extends ConsumerWidget {
+  const _AdminFormDefinitionEditor({
+    required this.title,
+    required this.form,
+    required this.onSave,
+    this.onReset,
+    this.onDelete,
+  });
+
+  final String title;
+  final CmsFormDefinition form;
+  final Future<void> Function(CmsFormDefinition form) onSave;
+  final Future<void> Function()? onReset;
+  final Future<void> Function()? onDelete;
+
+  Future<void> saveField(BuildContext context, int index, CmsFormField next) async {
+    if (next.key.trim().isEmpty || form.fields.asMap().entries.any((entry) => entry.key != index && entry.value.key == next.key.trim())) {
+      if (context.mounted) showAdminSnack(context, 'المعرف الداخلي فارغ أو مكرر', error: true);
+      return;
+    }
+    final fields = [...form.fields];
+    fields[index] = next.copyWith(key: next.key.trim());
+    try {
+      await onSave(form.copyWith(fields: fields));
+      if (context.mounted) showAdminSnack(context, 'تم حفظ الحقل');
+    } catch (_) {
+      if (context.mounted) showAdminSnack(context, 'تعذر حفظ الحقل', error: true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final controller = ref.read(cmsProvider.notifier);
+    return AdminPanel(
+      title: title,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          CmsTextField(label: 'عنوان النموذج', initialValue: form.title, onSave: (value) => onSave(form.copyWith(title: value))),
+          CmsTextField(label: 'الفئة المستهدفة', initialValue: form.audience, onSave: (value) => onSave(form.copyWith(audience: value))),
+          CmsTextField(label: 'الوصف', initialValue: form.description, tall: true, onSave: (value) => onSave(form.copyWith(description: value))),
+          SwitchListTile.adaptive(
+            value: form.enabled,
+            onChanged: (value) => onSave(form.copyWith(enabled: value)),
+            title: Text('النموذج ظاهر للزوار', style: appText(color: AppColors.ink, weight: FontWeight.w800)),
+            activeColor: AppColors.accent,
+          ),
+          const SizedBox(height: 8),
+          Text('حقول النموذج', style: displayText(fontSize: 22)),
+          const SizedBox(height: 10),
+          for (var i = 0; i < form.fields.length; i++)
+            Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: veil(AppColors.background, .4),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: veil(AppColors.ink, .1)),
+              ),
+              child: Wrap(
+                spacing: 10,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 180,
+                    child: CmsTextField(
+                      label: 'عنوان الحقل',
+                      initialValue: form.fields[i].label,
+                      onSave: (value) => saveField(context, i, form.fields[i].copyWith(label: value)),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 150,
+                    child: CmsTextField(
+                      label: 'المعرف الداخلي',
+                      initialValue: form.fields[i].key,
+                      ltr: true,
+                      onSave: (value) => saveField(context, i, form.fields[i].copyWith(key: normalizeSlug(value))),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 150,
+                    child: DropdownButtonFormField<CmsFormFieldType>(
+                      value: form.fields[i].type,
+                      items: [for (final type in CmsFormFieldType.values) DropdownMenuItem(value: type, child: Text(type.label))],
+                      onChanged: (value) {
+                        if (value != null) saveField(context, i, form.fields[i].copyWith(type: value));
+                      },
+                      decoration: const InputDecoration(labelText: 'النوع'),
+                    ),
+                  ),
+                  FilterChip(
+                    label: const Text('إلزامي'),
+                    selected: form.fields[i].required,
+                    onSelected: (value) => saveField(context, i, form.fields[i].copyWith(required: value)),
+                    selectedColor: AppColors.accent,
+                    labelStyle: appText(color: form.fields[i].required ? AppColors.onAccent : AppColors.ink, weight: FontWeight.w800),
+                  ),
+                  if (form.fields[i].type == CmsFormFieldType.select)
+                    SizedBox(
+                      width: 220,
+                      child: CmsTextField(
+                        label: 'الخيارات مفصولة بفاصلة',
+                        initialValue: form.fields[i].options.join('، '),
+                        onSave: (value) => saveField(
+                          context,
+                          i,
+                          form.fields[i].copyWith(
+                            options: [
+                              for (final option in value.split(RegExp(r'[,،]')))
+                                if (option.trim().isNotEmpty) option.trim(),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  IconButton(
+                    tooltip: 'حذف الحقل',
+                    onPressed: form.fields.length <= 1
+                        ? null
+                        : () => controller.deleteFormField(formSlug: form.slug, fieldKey: form.fields[i].key, isDefaultServiceForm: form.kind == 'service' && form.slug == 'default-service-form', serviceSlug: form.kind == 'service' && form.slug != 'default-service-form' ? form.slug : null),
+                    icon: const Icon(Icons.delete_outline_rounded),
+                    color: AppColors.danger,
+                  ),
+                ],
+              ),
+            ),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              FilledButton.icon(
+                onPressed: () => controller.addFormField(formSlug: form.slug, isDefaultServiceForm: form.kind == 'service' && form.slug == 'default-service-form', serviceSlug: form.kind == 'service' && form.slug != 'default-service-form' ? form.slug : null),
+                icon: const Icon(Icons.add_rounded),
+                label: const Text('إضافة حقل'),
+              ),
+              if (onReset != null)
+                OutlinedButton.icon(onPressed: onReset, icon: const Icon(Icons.restart_alt_rounded), label: const Text('استخدام الافتراضي')),
+              if (onDelete != null)
+                OutlinedButton.icon(onPressed: onDelete, icon: const Icon(Icons.delete_outline_rounded), label: const Text('حذف النموذج')),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class AdminJoinRequestsEditor extends ConsumerStatefulWidget {
+  const AdminJoinRequestsEditor({required this.requests, super.key});
+
+  final List<JoinRequest> requests;
+
+  @override
+  ConsumerState<AdminJoinRequestsEditor> createState() => _AdminJoinRequestsEditorState();
+}
+
+class _AdminJoinRequestsEditorState extends ConsumerState<AdminJoinRequestsEditor> {
+  String filter = 'الكل';
+  String query = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final requests = widget.requests.where((request) {
+      final matchesStatus = filter == 'الكل' || request.status == filter;
+      final haystack = '${request.name} ${request.phone} ${request.email} ${request.formTitle} ${request.values.values.join(' ')}';
+      return matchesStatus && haystack.contains(query.trim());
+    }).toList();
+    return Column(
+      children: [
+        AdminStatsStrip(items: [
+          ('كل الطلبات', '${widget.requests.length}', Icons.assignment_rounded, AppColors.accent),
+          ('جديدة', '${widget.requests.where((item) => item.status == 'طلب جديد').length}', Icons.fiber_new_rounded, AppColors.gold),
+          ('قيد المتابعة', '${widget.requests.where((item) => item.status == 'قيد المتابعة').length}', Icons.pending_actions_rounded, AppColors.green),
+        ]),
+        _RequestFilters(
+          title: 'فلترة طلبات الانضمام',
+          searchLabel: 'بحث بالاسم أو النموذج أو الجوال',
+          filter: filter,
+          query: query,
+          statuses: bookingStatuses,
+          onFilter: (value) => setState(() => filter = value),
+          onQuery: (value) => setState(() => query = value),
+        ),
+        if (requests.isEmpty)
+          AdminPanel(title: 'طلبات الانضمام', child: Text('لا توجد طلبات انضمام حتى الآن.', style: appText(color: AppColors.muted, height: 1.7)))
+        else
+          for (final request in requests)
+            AdminPanel(
+              title: '${request.status}: ${request.formTitle}',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(spacing: 10, runSpacing: 10, children: [SignalPill(label: request.createdAtLabel, strong: true), SignalPill(label: request.phone), SignalPill(label: request.email)]),
+                  const SizedBox(height: 14),
+                  Text(request.name, style: displayText(fontSize: 24)),
+                  const SizedBox(height: 12),
+                  for (final entry in request.values.entries)
+                    Padding(padding: const EdgeInsets.only(bottom: 6), child: Text('${entry.key}: ${entry.value}', style: appText(color: AppColors.muted, height: 1.6))),
+                  if (request.attachmentPath != null && request.attachmentPath!.isNotEmpty)
+                    SignalPill(label: 'يوجد ملف مرفق', icon: Icons.attach_file_rounded),
+                  const SizedBox(height: 14),
+                  Wrap(spacing: 8, runSpacing: 8, children: [
+                    for (final status in bookingStatuses)
+                      ChoiceChip(
+                        selected: request.status == status,
+                        label: Text(status),
+                        onSelected: (_) => ref.read(cmsProvider.notifier).updateJoinRequestStatus(request.id, status),
+                        selectedColor: AppColors.accent,
+                        labelStyle: appText(color: request.status == status ? AppColors.onAccent : AppColors.ink, weight: FontWeight.w900),
+                      ),
+                  ]),
+                ],
+              ),
+            ),
+      ],
     );
   }
 }

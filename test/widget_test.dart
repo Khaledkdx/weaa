@@ -67,6 +67,56 @@ void main() {
     expect(find.text('القبة الحديدية'), findsNothing);
   });
 
+  testWidgets('join-us route renders multiple configurable audiences', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const ProviderScope(child: WeaaApp(initialLocation: '/join-us')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('انضم إلينا'), findsWidgets);
+    expect(find.text('انضم كجهة تشغيلية'), findsOneWidget);
+    expect(find.text('انضم كمستثمر أو شريك نمو'), findsOneWidget);
+    expect(find.byKey(const ValueKey('submit-join-request')), findsWidgets);
+  });
+
+  testWidgets('service form uses the default CMS form definition', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: WeaaApp(initialLocation: '/services/iron-dome'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('طلب خدمة'), findsOneWidget);
+    expect(find.text('نوع الخدمة: القبة الحديدية'), findsOneWidget);
+    expect(find.byKey(const ValueKey('request-details')), findsOneWidget);
+  });
+
+  testWidgets('admin can add a join form and persist a custom field', (
+    tester,
+  ) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const WeaaApp(initialLocation: '/admin'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final before = container.read(cmsProvider).joinForms.length;
+    await container.read(cmsProvider.notifier).addJoinForm();
+    await tester.pumpAndSettle();
+
+    expect(container.read(cmsProvider).joinForms.length, before + 1);
+    expect(container.read(cmsProvider).joinForms.last.title, 'نموذج انضمام جديد');
+  });
+
   testWidgets('frameworks route renders actual selectable services', (
     tester,
   ) async {

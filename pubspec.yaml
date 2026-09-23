@@ -43,6 +43,7 @@ dependencies:
   flutter_dotenv: ^6.0.1
   supabase: ^2.13.0
   web: ^1.1.1
+  file_picker: ^8.1.7
 
 dev_dependencies:
   flutter_test:
