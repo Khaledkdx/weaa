@@ -136,6 +136,12 @@ final _routerProvider = Provider.family<GoRouter, String>((
       GoRoute(path: '/contact', builder: (_, state) => const ContactPage()),
       GoRoute(path: '/join-us', builder: (_, state) => const JoinUsPage()),
       GoRoute(
+        path: '/join-us/:slug',
+        builder: (_, state) => JoinFormPage(
+          slug: state.pathParameters['slug'] ?? '',
+        ),
+      ),
+      GoRoute(
         path: '/payment-success',
         builder: (_, state) => const PaymentSuccessPage(),
       ),
@@ -2773,12 +2779,90 @@ class JoinUsPage extends ConsumerWidget {
               ),
             )
           else
-            for (final form in forms)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 18),
-                child: JoinFormCard(form: form),
-              ),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final columns = constraints.maxWidth >= 1060
+                    ? 3
+                    : constraints.maxWidth >= 680
+                    ? 2
+                    : 1;
+                const gap = 14.0;
+                final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
+                return Wrap(
+                  spacing: gap,
+                  runSpacing: gap,
+                  children: [
+                    for (final form in forms)
+                      SizedBox(width: width, child: JoinFormCard(form: form)),
+                  ],
+                );
+              },
+            ),
           FinalCta(company: cms.company),
+        ],
+      ),
+    );
+  }
+}
+
+class JoinFormPage extends ConsumerWidget {
+  const JoinFormPage({required this.slug, super.key});
+
+  final String slug;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cms = ref.watch(cmsProvider);
+    CmsFormDefinition? form;
+    for (final candidate in cms.joinForms) {
+      if (candidate.enabled && candidate.slug == slug) {
+        form = candidate;
+        break;
+      }
+    }
+
+    if (form == null) {
+      return AppShell(
+        activePath: '/join-us',
+        child: AdminPanel(
+          title: 'النموذج غير متاح',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('هذا النموذج غير موجود أو تم إيقافه.', style: appText(color: AppColors.muted, height: 1.7)),
+              const SizedBox(height: 18),
+              OutlinedButton.icon(
+                onPressed: () => context.go('/join-us'),
+                icon: const Icon(Icons.arrow_forward_rounded),
+                label: const Text('العودة إلى نماذج الانضمام'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return AppShell(
+      activePath: '/join-us',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          PageHero(
+            page: PageContent(
+              form.title,
+              form.audience,
+              form.description,
+            ),
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () => context.go('/join-us'),
+              icon: const Icon(Icons.arrow_forward_rounded),
+              label: const Text('العودة إلى نماذج الانضمام'),
+            ),
+          ),
+          JoinFormEditor(form: form),
         ],
       ),
     );
@@ -3809,16 +3893,82 @@ class _DynamicServiceRequestFormState extends ConsumerState<DynamicServiceReques
   }
 }
 
-class JoinFormCard extends ConsumerStatefulWidget {
+class JoinFormCard extends StatelessWidget {
   const JoinFormCard({required this.form, super.key});
 
   final CmsFormDefinition form;
 
   @override
-  ConsumerState<JoinFormCard> createState() => _JoinFormCardState();
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => context.go('/join-us/${form.slug}'),
+      borderRadius: BorderRadius.circular(28),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 260),
+        padding: const EdgeInsets.all(24),
+        decoration: panelDecoration(
+          borderColor: veil(AppColors.accent, .24),
+          radius: 28,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                IconBox(icon: Icons.description_rounded, alt: true),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: veil(AppColors.accent, .12),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: veil(AppColors.accent, .24)),
+                  ),
+                  child: Text('نموذج متاح', style: appText(fontSize: 12, weight: FontWeight.w800, color: AppColors.accent)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 32),
+            Text(form.title, style: displayText(fontSize: 27)),
+            const SizedBox(height: 8),
+            Text(form.audience, style: appText(color: AppColors.accent, weight: FontWeight.w800)),
+            const SizedBox(height: 8),
+            Text(form.description, maxLines: 3, overflow: TextOverflow.ellipsis, style: appText(color: AppColors.muted, height: 1.65)),
+            const SizedBox(height: 18),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('${form.fields.length} حقول', style: appText(color: AppColors.muted, fontSize: 13, weight: FontWeight.w700)),
+                FilledButton.icon(
+                  key: const ValueKey('open-join-form'),
+                  onPressed: () => context.go('/join-us/${form.slug}'),
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  label: const Text('فتح النموذج'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.accent,
+                    foregroundColor: AppColors.onAccent,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
-class _JoinFormCardState extends ConsumerState<JoinFormCard> {
+class JoinFormEditor extends ConsumerStatefulWidget {
+  const JoinFormEditor({required this.form, super.key});
+
+  final CmsFormDefinition form;
+
+  @override
+  ConsumerState<JoinFormEditor> createState() => _JoinFormEditorState();
+}
+
+class _JoinFormEditorState extends ConsumerState<JoinFormEditor> {
   final Map<String, TextEditingController> controllers = {};
   final Map<String, String?> selections = {};
   PlatformFile? attachment;
