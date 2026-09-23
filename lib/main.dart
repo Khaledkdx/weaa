@@ -3903,24 +3903,21 @@ class JoinFormCard extends StatefulWidget {
 }
 
 class _JoinFormCardState extends State<JoinFormCard> {
-  bool hovered = false;
+  bool expanded = false;
 
   Widget build(BuildContext context) {
     final form = widget.form;
-    return MouseRegion(
-      onEnter: (_) => setState(() => hovered = true),
-      onExit: (_) => setState(() => hovered = false),
-      child: InkWell(
+    return InkWell(
         key: ValueKey('join-form-card-${form.slug}'),
-        onTap: () => context.go('/join-us/${form.slug}'),
+        onTap: () => setState(() => expanded = !expanded),
         borderRadius: BorderRadius.circular(28),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 220),
           curve: Curves.easeOutCubic,
-          constraints: BoxConstraints(minHeight: hovered ? 350 : 220),
+          constraints: BoxConstraints(minHeight: expanded ? 350 : 220),
           padding: const EdgeInsets.all(24),
           decoration: panelDecoration(
-            borderColor: veil(AppColors.accent, hovered ? .48 : .24),
+            borderColor: veil(AppColors.accent, expanded ? .48 : .24),
             radius: 28,
           ),
           child: Column(
@@ -3938,7 +3935,7 @@ class _JoinFormCardState extends State<JoinFormCard> {
                       borderRadius: BorderRadius.circular(999),
                       border: Border.all(color: veil(AppColors.accent, .24)),
                     ),
-                    child: Text(hovered ? 'اضغط للفتح' : 'مرر للمزيد', style: appText(fontSize: 12, weight: FontWeight.w800, color: AppColors.accent)),
+                    child: Text(expanded ? 'اضغط لفتح النموذج' : 'اضغط للتفاصيل', style: appText(fontSize: 12, weight: FontWeight.w800, color: AppColors.accent)),
                   ),
                 ],
               ),
@@ -3946,7 +3943,7 @@ class _JoinFormCardState extends State<JoinFormCard> {
               Text(form.title, style: displayText(fontSize: 27)),
               const SizedBox(height: 8),
               Text(form.audience, style: appText(color: AppColors.accent, weight: FontWeight.w800)),
-              if (hovered) ...[
+              if (expanded) ...[
                 const SizedBox(height: 12),
                 Text(form.description, maxLines: 3, overflow: TextOverflow.ellipsis, style: appText(color: AppColors.muted, height: 1.65)),
                 const SizedBox(height: 18),
@@ -3970,7 +3967,6 @@ class _JoinFormCardState extends State<JoinFormCard> {
             ],
           ),
         ),
-      ),
     );
   }
 }
