@@ -1793,6 +1793,21 @@ class CmsContent {
       serviceFormOverrides: const {},
       joinForms: [
         CmsFormDefinition(
+          slug: 'join-accountant',
+          title: 'إذا كنت محاسبًا',
+          description: 'قدّم بياناتك وخبرتك وسيرتك الذاتية للانضمام إلى فريق وعاء.',
+          audience: 'المحاسبون',
+          kind: 'join',
+          enabled: true,
+          fields: [
+            CmsFormField(key: 'name', label: 'الاسم الكامل', type: CmsFormFieldType.text, required: true),
+            CmsFormField(key: 'phone', label: 'رقم الجوال', type: CmsFormFieldType.phone, required: true),
+            CmsFormField(key: 'email', label: 'البريد الإلكتروني', type: CmsFormFieldType.email, required: true),
+            CmsFormField(key: 'experience', label: 'الخبرة المحاسبية', type: CmsFormFieldType.multiline, required: true),
+            CmsFormField(key: 'cv', label: 'السيرة الذاتية', type: CmsFormFieldType.file, required: true),
+          ],
+        ),
+        CmsFormDefinition(
           slug: 'join-operators',
           title: 'انضم كجهة تشغيلية',
           description: 'لشركات التشغيل والمستودعات ومقدمي الخدمات اللوجستية.',
@@ -1882,11 +1897,26 @@ class CmsContent {
       'defaultServiceForm': defaultServiceForm.toJson(),
       'serviceFormOverrides': serviceFormOverrides.map((key, value) => MapEntry(key, value.toJson())),
       'joinForms': [for (final form in joinForms) form.toJson()],
+      'accountantFormMigrated': true,
     };
   }
 
   static CmsContent fromJson(Map<String, dynamic> json) {
     final seed = CmsContent.seed();
+    final storedJoinForms = json['joinForms'] is List
+        ? [
+            for (final item in json['joinForms'] as List)
+              CmsFormDefinition.fromJson(
+                Map<String, dynamic>.from(item as Map),
+                seed.joinForms.first,
+              ),
+          ]
+        : seed.joinForms;
+    // The marker keeps an admin-deleted accountant form from reappearing on reload.
+    final joinForms = json['accountantFormMigrated'] == true ||
+            storedJoinForms.any((form) => form.slug == 'join-accountant')
+        ? storedJoinForms
+        : [...storedJoinForms, seed.joinForms.first];
     return CmsContent(
       company: json['company'] is Map
           ? CompanyContent.fromJson(
@@ -1940,15 +1970,7 @@ class CmsContent {
                 ),
             }
           : const {},
-      joinForms: json['joinForms'] is List
-          ? [
-              for (final item in json['joinForms'] as List)
-                CmsFormDefinition.fromJson(
-                  Map<String, dynamic>.from(item as Map),
-                  seed.joinForms.isNotEmpty ? seed.joinForms.first : seed.defaultServiceForm,
-                ),
-            ]
-          : seed.joinForms,
+      joinForms: joinForms,
       joinRequests: const [],
     );
   }
@@ -2767,7 +2789,7 @@ class JoinUsPage extends ConsumerWidget {
             page: const PageContent(
               'انضم إلينا',
               'اختر المسار الأقرب لك',
-              'نماذج مختلفة للشركاء والمشغلين والمستثمرين، وكل نموذج مصمم لبياناته الخاصة.',
+              'فرص العمل والتشغيل والاستثمار ضمن منظومة وعاء.',
             ),
           ),
           if (forms.isEmpty)
@@ -2783,7 +2805,7 @@ class JoinUsPage extends ConsumerWidget {
               builder: (context, constraints) {
                 final columns = constraints.maxWidth >= 1060
                     ? 3
-                    : constraints.maxWidth >= 680
+                    : constraints.maxWidth >= 320
                     ? 2
                     : 1;
                 const gap = 14.0;
@@ -3893,80 +3915,45 @@ class _DynamicServiceRequestFormState extends ConsumerState<DynamicServiceReques
   }
 }
 
-class JoinFormCard extends StatefulWidget {
+class JoinFormCard extends StatelessWidget {
   const JoinFormCard({required this.form, super.key});
 
   final CmsFormDefinition form;
 
   @override
-  State<JoinFormCard> createState() => _JoinFormCardState();
-}
-
-class _JoinFormCardState extends State<JoinFormCard> {
-  bool expanded = false;
-
   Widget build(BuildContext context) {
-    final form = widget.form;
     return InkWell(
-        key: ValueKey('join-form-card-${form.slug}'),
-        onTap: () => setState(() => expanded = !expanded),
-        borderRadius: BorderRadius.circular(28),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
-          constraints: BoxConstraints(minHeight: expanded ? 350 : 220),
-          padding: const EdgeInsets.all(24),
-          decoration: panelDecoration(
-            borderColor: veil(AppColors.accent, expanded ? .48 : .24),
-            radius: 28,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  IconBox(icon: Icons.description_rounded, alt: true),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: veil(AppColors.accent, .12),
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: veil(AppColors.accent, .24)),
-                    ),
-                    child: Text(expanded ? 'اضغط لفتح النموذج' : 'اضغط للتفاصيل', style: appText(fontSize: 12, weight: FontWeight.w800, color: AppColors.accent)),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 32),
-              Text(form.title, style: displayText(fontSize: 27)),
-              const SizedBox(height: 8),
-              Text(form.audience, style: appText(color: AppColors.accent, weight: FontWeight.w800)),
-              if (expanded) ...[
-                const SizedBox(height: 12),
-                Text(form.description, maxLines: 3, overflow: TextOverflow.ellipsis, style: appText(color: AppColors.muted, height: 1.65)),
-                const SizedBox(height: 18),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('${form.fields.length} حقول', style: appText(color: AppColors.muted, fontSize: 13, weight: FontWeight.w700)),
-                    FilledButton.icon(
-                      key: const ValueKey('open-join-form'),
-                      onPressed: () => context.go('/join-us/${form.slug}'),
-                      icon: const Icon(Icons.arrow_back_rounded),
-                      label: const Text('فتح النموذج'),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.accent,
-                        foregroundColor: AppColors.onAccent,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ],
-          ),
+      key: ValueKey('join-form-card-${form.slug}'),
+      onTap: () => context.go('/join-us/${form.slug}'),
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 164),
+        padding: const EdgeInsets.all(20),
+        decoration: panelDecoration(
+          borderColor: veil(AppColors.accent, .24),
+          radius: 8,
         ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.description_outlined, color: AppColors.accent, size: 27),
+            const SizedBox(height: 14),
+            Text(form.title, style: displayText(fontSize: 20)),
+            const SizedBox(height: 14),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                key: ValueKey('open-join-form-${form.slug}'),
+                onPressed: () => context.go('/join-us/${form.slug}'),
+                icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                label: const Text('اضغط هنا'),
+                style: TextButton.styleFrom(foregroundColor: AppColors.accent),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -4009,10 +3996,19 @@ class _JoinFormEditorState extends ConsumerState<JoinFormEditor> {
   Future<void> submit() async {
     final values = <String, String>{};
     for (final field in widget.form.fields) {
+      if (field.type == CmsFormFieldType.file) {
+        if (field.required &&
+            (attachment == null || attachment!.bytes == null || attachment!.bytes!.isEmpty)) {
+          showAdminSnack(context, 'أرفق الملف: ${field.label}', error: true);
+          return;
+        }
+        values[field.key] = attachment?.name ?? '';
+        continue;
+      }
       final value = field.type == CmsFormFieldType.select
           ? selections[field.key] ?? ''
           : controllers[field.key]?.text.trim() ?? '';
-      if (field.required && value.isEmpty && field.type != CmsFormFieldType.file) {
+      if (field.required && value.isEmpty) {
         showAdminSnack(context, 'أكمل الحقل: ${field.label}', error: true);
         return;
       }
@@ -4162,7 +4158,9 @@ class _FormFieldInput extends StatelessWidget {
         child: OutlinedButton.icon(
           onPressed: onFile,
           icon: const Icon(Icons.attach_file_rounded),
-          label: Text(attachment == null ? field.label : attachment!.name),
+          label: Text(attachment == null
+              ? field.required ? '${field.label} *' : field.label
+              : attachment!.name),
           style: OutlinedButton.styleFrom(
             foregroundColor: AppColors.ink,
             minimumSize: const Size.fromHeight(58),
@@ -6718,6 +6716,21 @@ class _AdminJoinRequestsEditorState extends ConsumerState<AdminJoinRequestsEdito
   String filter = 'الكل';
   String query = '';
 
+  Future<void> openAttachment(String path) async {
+    final client = ref.read(supabaseClientProvider);
+    if (client == null) {
+      showAdminSnack(context, 'عرض المرفقات متاح بعد الاتصال بقاعدة البيانات', error: true);
+      return;
+    }
+    try {
+      final url = await client.storage.from('join-attachments').createSignedUrl(path, 60);
+      if (!mounted) return;
+      redirectToCheckout(url);
+    } catch (_) {
+      if (mounted) showAdminSnack(context, 'تعذر فتح الملف المرفق', error: true);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final requests = widget.requests.where((request) {
@@ -6757,7 +6770,11 @@ class _AdminJoinRequestsEditorState extends ConsumerState<AdminJoinRequestsEdito
                   for (final entry in request.values.entries)
                     Padding(padding: const EdgeInsets.only(bottom: 6), child: Text('${entry.key}: ${entry.value}', style: appText(color: AppColors.muted, height: 1.6))),
                   if (request.attachmentPath != null && request.attachmentPath!.isNotEmpty)
-                    SignalPill(label: 'يوجد ملف مرفق', icon: Icons.attach_file_rounded),
+                    OutlinedButton.icon(
+                      onPressed: () => openAttachment(request.attachmentPath!),
+                      icon: const Icon(Icons.attach_file_rounded),
+                      label: Text(request.formSlug == 'join-accountant' ? 'عرض السيرة الذاتية' : 'فتح الملف المرفق'),
+                    ),
                   const SizedBox(height: 14),
                   Wrap(spacing: 8, runSpacing: 8, children: [
                     for (final status in bookingStatuses)

@@ -4,6 +4,26 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:weaa/main.dart';
 
 void main() {
+  test('existing CMS forms gain the accountant form only once', () {
+    final seed = CmsContent.seed();
+    final oldContent = seed.toJson()
+      ..remove('accountantFormMigrated')
+      ..['joinForms'] = [seed.joinForms[1].toJson(), seed.joinForms[2].toJson()];
+
+    final upgraded = CmsContent.fromJson(oldContent);
+    expect(upgraded.joinForms.map((form) => form.slug), containsAll([
+      'join-operators',
+      'join-investors',
+      'join-accountant',
+    ]));
+
+    final deleted = upgraded.copyWith(
+      joinForms: upgraded.joinForms.where((form) => form.slug != 'join-accountant').toList(),
+    );
+    final reloaded = CmsContent.fromJson(deleted.toJson());
+    expect(reloaded.joinForms.any((form) => form.slug == 'join-accountant'), isFalse);
+  });
+
   test('youtubeEmbedUrlFrom supports common YouTube URLs', () {
     expect(
       youtubeEmbedUrlFrom('https://www.youtube.com/watch?v=b1RRMSReNs0'),
@@ -76,9 +96,60 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('انضم إلينا'), findsWidgets);
+    expect(find.text('إذا كنت محاسبًا'), findsOneWidget);
     expect(find.text('انضم كجهة تشغيلية'), findsOneWidget);
     expect(find.text('انضم كمستثمر أو شريك نمو'), findsOneWidget);
     expect(find.byKey(const ValueKey('join-form-card-join-operators')), findsOneWidget);
+    expect(find.byKey(const ValueKey('request-name')), findsNothing);
+    expect(find.text('السيرة الذاتية *'), findsNothing);
+    await tester.ensureVisible(find.byKey(const ValueKey('open-join-form-join-accountant')));
+    await tester.tap(find.byKey(const ValueKey('open-join-form-join-accountant')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('request-experience')), findsOneWidget);
+    expect(find.text('السيرة الذاتية *'), findsOneWidget);
+    expect(find.text('العودة إلى نماذج الانضمام'), findsOneWidget);
+  });
+
+  testWidgets('accountant application requires a CV before submission', (tester) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const WeaaApp(initialLocation: '/join-us/join-accountant'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(const ValueKey('request-name')), 'أحمد محمد');
+    await tester.enterText(find.byKey(const ValueKey('request-phone')), '0501234567');
+    await tester.enterText(find.byKey(const ValueKey('request-email')), 'ahmed@example.com');
+    await tester.enterText(find.byKey(const ValueKey('request-experience')), 'ثلاث سنوات في المحاسبة');
+    await tester.ensureVisible(find.byKey(const ValueKey('submit-join-request')));
+    await tester.tap(find.byKey(const ValueKey('submit-join-request')));
+    await tester.pump();
+
+    expect(find.text('أرفق الملف: السيرة الذاتية'), findsOneWidget);
+    expect(container.read(cmsProvider).joinRequests, isEmpty);
+  });
+
+  testWidgets('small join card opens the accountant form on mobile', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      const ProviderScope(child: WeaaApp(initialLocation: '/join-us')),
+    );
+    await tester.pumpAndSettle();
+    final card = find.byKey(const ValueKey('join-form-card-join-accountant'));
+    await tester.ensureVisible(card);
+    await tester.tap(card);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('request-experience')), findsOneWidget);
+    expect(find.text('العودة إلى نماذج الانضمام'), findsOneWidget);
   });
 
   testWidgets('service form uses the default CMS form definition', (
