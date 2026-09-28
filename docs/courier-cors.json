@@ -1,0 +1,4 @@
+{
+  "allowedOrigins": ["https://weaa-sa.com", "https://www.weaa-sa.com"],
+  "trustCloudflareLoopback": true
+}

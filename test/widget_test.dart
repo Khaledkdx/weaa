@@ -8,20 +8,27 @@ void main() {
     final seed = CmsContent.seed();
     final oldContent = seed.toJson()
       ..remove('accountantFormMigrated')
-      ..['joinForms'] = [seed.joinForms[1].toJson(), seed.joinForms[2].toJson()];
+      ..['joinForms'] = [
+        seed.joinForms[1].toJson(),
+        seed.joinForms[2].toJson(),
+      ];
 
     final upgraded = CmsContent.fromJson(oldContent);
-    expect(upgraded.joinForms.map((form) => form.slug), containsAll([
-      'join-operators',
-      'join-investors',
-      'join-accountant',
-    ]));
+    expect(
+      upgraded.joinForms.map((form) => form.slug),
+      containsAll(['join-operators', 'join-investors', 'join-accountant']),
+    );
 
     final deleted = upgraded.copyWith(
-      joinForms: upgraded.joinForms.where((form) => form.slug != 'join-accountant').toList(),
+      joinForms: upgraded.joinForms
+          .where((form) => form.slug != 'join-accountant')
+          .toList(),
     );
     final reloaded = CmsContent.fromJson(deleted.toJson());
-    expect(reloaded.joinForms.any((form) => form.slug == 'join-accountant'), isFalse);
+    expect(
+      reloaded.joinForms.any((form) => form.slug == 'join-accountant'),
+      isFalse,
+    );
   });
 
   test('youtubeEmbedUrlFrom supports common YouTube URLs', () {
@@ -45,9 +52,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('شركة وعاء للخدمات اللوجستية والإدارية'), findsWidgets);
-    expect(find.text('الواجهة المعتمدة'), findsOneWidget);
-    expect(find.text('معلومات عامة'), findsWidgets);
-    expect(find.text('الخدمات'), findsWidgets);
+    expect(find.text('اللوجستيات تبدأ من وعاء'), findsOneWidget);
+    expect(find.text('خدمات التشغيل والعقود'), findsOneWidget);
     expect(find.text('لوحة الأدمن'), findsNothing);
     expect(find.byType(Image), findsWidgets);
   });
@@ -81,10 +87,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('معلومات عامة'), findsWidgets);
-    expect(find.text('التخزين'), findsOneWidget);
-    expect(find.text('الشحن الدولي'), findsOneWidget);
-    expect(find.text('القبة الحديدية'), findsNothing);
+    expect(find.text('الخدمات'), findsWidgets);
+    expect(find.text('خدمات خفيفة'), findsOneWidget);
+    expect(find.text('خدمات وعقود'), findsOneWidget);
+    expect(find.text('التخزين'), findsNothing);
   });
 
   testWidgets('join-us route renders multiple configurable audiences', (
@@ -99,18 +105,27 @@ void main() {
     expect(find.text('إذا كنت محاسبًا'), findsOneWidget);
     expect(find.text('انضم كجهة تشغيلية'), findsOneWidget);
     expect(find.text('انضم كمستثمر أو شريك نمو'), findsOneWidget);
-    expect(find.byKey(const ValueKey('join-form-card-join-operators')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('join-form-card-join-operators')),
+      findsOneWidget,
+    );
     expect(find.byKey(const ValueKey('request-name')), findsNothing);
     expect(find.text('السيرة الذاتية *'), findsNothing);
-    await tester.ensureVisible(find.byKey(const ValueKey('open-join-form-join-accountant')));
-    await tester.tap(find.byKey(const ValueKey('open-join-form-join-accountant')));
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('open-join-form-join-accountant')),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('open-join-form-join-accountant')),
+    );
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('request-experience')), findsOneWidget);
     expect(find.text('السيرة الذاتية *'), findsOneWidget);
     expect(find.text('العودة إلى نماذج الانضمام'), findsOneWidget);
   });
 
-  testWidgets('accountant application requires a CV before submission', (tester) async {
+  testWidgets('accountant application requires a CV before submission', (
+    tester,
+  ) async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
     await tester.pumpWidget(
@@ -121,11 +136,25 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byKey(const ValueKey('request-name')), 'أحمد محمد');
-    await tester.enterText(find.byKey(const ValueKey('request-phone')), '0501234567');
-    await tester.enterText(find.byKey(const ValueKey('request-email')), 'ahmed@example.com');
-    await tester.enterText(find.byKey(const ValueKey('request-experience')), 'ثلاث سنوات في المحاسبة');
-    await tester.ensureVisible(find.byKey(const ValueKey('submit-join-request')));
+    await tester.enterText(
+      find.byKey(const ValueKey('request-name')),
+      'أحمد محمد',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('request-phone')),
+      '0501234567',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('request-email')),
+      'ahmed@example.com',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('request-experience')),
+      'ثلاث سنوات في المحاسبة',
+    );
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('submit-join-request')),
+    );
     await tester.tap(find.byKey(const ValueKey('submit-join-request')));
     await tester.pump();
 
@@ -133,7 +162,9 @@ void main() {
     expect(container.read(cmsProvider).joinRequests, isEmpty);
   });
 
-  testWidgets('small join card opens the accountant form on mobile', (tester) async {
+  testWidgets('small join card opens the accountant form on mobile', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -185,7 +216,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(container.read(cmsProvider).joinForms.length, before + 1);
-    expect(container.read(cmsProvider).joinForms.last.title, 'نموذج انضمام جديد');
+    expect(
+      container.read(cmsProvider).joinForms.last.title,
+      'نموذج انضمام جديد',
+    );
   });
 
   testWidgets('frameworks route renders actual selectable services', (
@@ -196,11 +230,79 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('الخدمات'), findsWidgets);
+    expect(find.text('خدمات وعقود'), findsWidgets);
     expect(find.text('القبة الحديدية'), findsWidgets);
     expect(find.text('الهرم الماسي'), findsWidgets);
     expect(find.byIcon(Icons.arrow_back_rounded), findsWidgets);
   });
+
+  testWidgets('new service sections and company market routes render', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const ProviderScope(child: WeaaApp(initialLocation: '/services/light')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('خدمات خفيفة'), findsWidgets);
+    expect(find.text('التخزين'), findsOneWidget);
+    expect(find.text('القبة الحديدية'), findsNothing);
+
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: WeaaApp(initialLocation: '/services/contracts'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('خدمات وعقود'), findsWidgets);
+    expect(find.text('القبة الحديدية'), findsWidgets);
+    expect(find.text('التخزين'), findsNothing);
+
+    await tester.pumpWidget(
+      const ProviderScope(child: WeaaApp(initialLocation: '/company-market')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('عالم التقبيل'), findsWidgets);
+    expect(find.text('شركة تشغيل وتوصيل إقليمية'), findsOneWidget);
+  });
+
+  test(
+    'CMS supports service categories, company listings, and social testimonials',
+    () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final controller = container.read(cmsProvider.notifier);
+
+      await controller.updateItem(
+        collection: CmsCollection.generalInfo,
+        index: 0,
+        serviceCategory: 'contracts',
+      );
+      expect(
+        container.read(cmsProvider).generalInfo.first.serviceCategory,
+        'contracts',
+      );
+
+      final beforeCompanies = container
+          .read(cmsProvider)
+          .companyListings
+          .length;
+      await controller.addCompanyListing();
+      expect(
+        container.read(cmsProvider).companyListings.length,
+        beforeCompanies + 1,
+      );
+
+      await controller.addSocialTestimonial();
+      expect(container.read(cmsProvider).socialTestimonials, hasLength(1));
+      await controller.updateSocialTestimonial(0, title: 'رأي محدث');
+      expect(
+        container.read(cmsProvider).socialTestimonials.first.title,
+        'رأي محدث',
+      );
+      await controller.deleteSocialTestimonial(0);
+      expect(container.read(cmsProvider).socialTestimonials, isEmpty);
+    },
+  );
 
   testWidgets(
     'service detail route renders video, form, and reviews for a model',
@@ -234,7 +336,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('القطاعات التي تعمل داخل وعاء'), findsOneWidget);
+    expect(find.text('اختر مسار الخدمة المناسب'), findsOneWidget);
     expect(find.text('تفاصيل الخدمة'), findsNothing);
   });
 
@@ -270,7 +372,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('/01'), findsNothing);
-    expect(find.text('الواجهة المعتمدة'), findsOneWidget);
+    expect(find.text('اللوجستيات تبدأ من وعاء'), findsOneWidget);
   });
 
   testWidgets('admin route renders CMS tabs and editor surfaces', (

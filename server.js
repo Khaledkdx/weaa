@@ -37,19 +37,9 @@ function safePath(urlPath) {
 
 function serveFile(response, filePath) {
   const extension = path.extname(filePath).toLowerCase();
-  const entrypoint = new Set([
-    'index.html',
-    'flutter_bootstrap.js',
-    'flutter.js',
-    'flutter_service_worker.js',
-    'main.dart.js',
-  ]).has(path.basename(filePath));
   response.writeHead(200, {
     'Content-Type': mimeTypes[extension] || 'application/octet-stream',
-    'Cache-Control':
-      entrypoint || extension === '.html'
-        ? 'no-cache'
-        : 'public, max-age=31536000, immutable',
+    'Cache-Control': 'no-cache',
   });
   if (extension === '.html') {
     const html = fs
