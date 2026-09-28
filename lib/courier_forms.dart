@@ -155,6 +155,31 @@ String courierDigits(String value) {
   }).join();
 }
 
+String saudiCourierMobileDigits(String value) {
+  var digits = courierDigits(value).replaceAll(RegExp(r'[^0-9]'), '');
+  if (digits.startsWith('966')) digits = digits.substring(3);
+  if (digits.length == 10 && digits.startsWith('0')) {
+    digits = digits.substring(1);
+  }
+  return digits;
+}
+
+class SaudiMobileInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    var digits = saudiCourierMobileDigits(newValue.text);
+    if (digits.length > 9) digits = digits.substring(0, 9);
+    return TextEditingValue(
+      text: digits,
+      selection: TextSelection.collapsed(offset: digits.length),
+      composing: TextRange.empty,
+    );
+  }
+}
+
 Map<String, String> courierFileSections(bool internal) => {
   if (internal) 'identity_files': 'الهوية / الإقامة',
   if (internal) 'residency_files': 'مستندات الإقامة',
@@ -191,13 +216,11 @@ String? validateCourierValues(bool internal, Map<String, String> values) {
     }
   }
   final phone = values['phone'] ?? '';
-  final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
-  if (!RegExp(r'^\+?[0-9 ()-]+$').hasMatch(phone) ||
-      digits.length < 8 ||
-      digits.length > 15) {
-    return 'أدخل رقم تواصل صحيحًا من 8 إلى 15 رقمًا';
-  }
   if (internal) {
+    final mobileDigits = saudiCourierMobileDigits(phone);
+    if (!RegExp(r'^5[0-9]{8}$').hasMatch(mobileDigits)) {
+      return 'رقم الجوال السعودي يجب أن يتكون من 9 أرقام ويبدأ بالرقم 5';
+    }
     final identity = values['identity_number'] ?? '';
     if (identity.isNotEmpty && !RegExp(r'^\d{10}$').hasMatch(identity)) {
       return 'رقم الهوية يجب أن يتكون من 10 أرقام';
@@ -212,6 +235,12 @@ String? validateCourierValues(bool internal, Map<String, String> values) {
       return 'أدخل تاريخًا ميلاديًا صحيحًا بصيغة سنة-شهر-يوم';
     }
   } else {
+    final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
+    if (!RegExp(r'^\+?[0-9 ()-]+$').hasMatch(phone) ||
+        digits.length < 8 ||
+        digits.length > 15) {
+      return 'أدخل رقم تواصل صحيحًا من 8 إلى 15 رقمًا';
+    }
     final age = int.tryParse(values['age'] ?? '');
     if (age == null || age < 1 || age > 120) {
       return 'أدخل سنًا صحيحًا من 1 إلى 120';
@@ -388,9 +417,11 @@ class _CourierApplicationFormState
   Future<void> submit() async {
     final values = {
       for (final field in fields)
-        field.key: courierDigits(
-          (selections[field.key] ?? controllers[field.key]!.text).trim(),
-        ),
+        field.key: field.key == 'phone' && internal
+            ? '+966${saudiCourierMobileDigits(controllers[field.key]!.text)}'
+            : courierDigits(
+                (selections[field.key] ?? controllers[field.key]!.text).trim(),
+              ),
     };
     final error =
         validateCourierValues(internal, values) ??
@@ -434,6 +465,25 @@ class _CourierApplicationFormState
     }
   }
 
+  Future<void> pickGregorianDate(CmsFormField field) async {
+    final existing = DateTime.tryParse(controllers[field.key]!.text);
+    final picked = await showDatePicker(
+      context: context,
+      locale: const Locale('ar'),
+      initialDate: existing ?? DateTime.now(),
+      firstDate: DateTime(1900),
+      lastDate: DateTime(2200),
+      initialEntryMode: DatePickerEntryMode.calendar,
+      helpText: 'اختر تاريخ انتهاء الهوية',
+    );
+    if (!mounted || picked == null) return;
+    controllers[field.key]!.text =
+        '${picked.year.toString().padLeft(4, '0')}-'
+        '${picked.month.toString().padLeft(2, '0')}-'
+        '${picked.day.toString().padLeft(2, '0')}';
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) => AdminPanel(
     title: widget.form.title,
@@ -462,15 +512,64 @@ class _CourierApplicationFormState
                         : (value) =>
                               setState(() => selections[field.key] = value!),
                   )
+                : field.type == CmsFormFieldType.date
+                ? TextField(
+                    key: ValueKey('courier-${field.key}'),
+                    controller: controllers[field.key],
+                    readOnly: true,
+                    onTap: sending ? null : () => pickGregorianDate(field),
+                    decoration: InputDecoration(
+                      labelText: '${field.label}${field.required ? ' *' : ''}',
+                      hintText: 'اختر التاريخ من التقويم',
+                      suffixIcon: const Icon(Icons.calendar_month_rounded),
+                    ),
+                  )
+                : field.key == 'phone' && internal
+                ? Directionality(
+                    textDirection: TextDirection.ltr,
+                    child: Row(
+                      children: [
+                        Container(
+                          height: 56,
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceStrong,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: veil(AppColors.ink, .14)),
+                          ),
+                          child: Text(
+                            '+966',
+                            style: appText(color: AppColors.ink),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextField(
+                            key: ValueKey('courier-${field.key}'),
+                            controller: controllers[field.key],
+                            enabled: !sending,
+                            keyboardType: TextInputType.phone,
+                            inputFormatters: [SaudiMobileInputFormatter()],
+                            maxLength: 9,
+                            textDirection: TextDirection.ltr,
+                            decoration: InputDecoration(
+                              labelText: '${field.label} *',
+                              hintText: '5XXXXXXXX',
+                              counterText: '',
+                              helperText: '٩ أرقام تبدأ بالرقم ٥',
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
                 : TextField(
                     key: ValueKey('courier-${field.key}'),
                     controller: controllers[field.key],
                     enabled: !sending,
                     decoration: InputDecoration(
                       labelText: '${field.label}${field.required ? ' *' : ''}',
-                      hintText: field.type == CmsFormFieldType.date
-                          ? '2028-12-31'
-                          : null,
                     ),
                     keyboardType: field.type == CmsFormFieldType.number
                         ? TextInputType.number
