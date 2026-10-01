@@ -74,6 +74,7 @@ flutter:
   # To add assets to your application, add an assets section, like this:
   assets:
     - assets/brand/weaa-logo.jpeg
+    - assets/fonts/
     - web/.htaccess
 
   # An image asset can refer to one or more resolution-specific "variants", see

@@ -56,6 +56,37 @@ void main() {
     expect(find.text('خدمات التشغيل والعقود'), findsOneWidget);
     expect(find.text('لوحة الأدمن'), findsNothing);
     expect(find.byType(Image), findsWidgets);
+    expect(find.byType(LogoMark), findsOneWidget);
+  });
+
+  testWidgets('homepage primary actions open their intended pages', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const ProviderScope(child: WeaaApp()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('home-action-register')));
+    await tester.pumpAndSettle();
+    expect(find.text('إذا كنت محاسبًا'), findsOneWidget);
+  });
+
+  test('light palette preserves readable gold text and button labels', () {
+    double contrast(Color a, Color b) {
+      final first = a.computeLuminance();
+      final second = b.computeLuminance();
+      final lighter = first > second ? first : second;
+      final darker = first > second ? second : first;
+      return (lighter + 0.05) / (darker + 0.05);
+    }
+
+    expect(
+      contrast(AppPalette.light.accent, AppPalette.light.background),
+      greaterThanOrEqualTo(4.5),
+    );
+    expect(
+      contrast(AppPalette.light.onAccent, AppPalette.light.accent),
+      greaterThanOrEqualTo(4.5),
+    );
   });
 
   testWidgets('theme toggle switches between dark and light palettes', (

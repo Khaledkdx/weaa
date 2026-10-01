@@ -318,125 +318,741 @@ class HomepageSection extends StatelessWidget {
   const HomepageSection({required this.section, required this.cms, super.key});
   final HomeSection section;
   final CmsContent cms;
+
   @override
   Widget build(BuildContext context) {
     if (section.type == 'bio' && section.description.trim().isEmpty) {
       return const SizedBox.shrink();
     }
-    final cards = section.cards.where((c) => c.enabled).toList();
+    final cards = section.cards
+        .where((card) => card.enabled && homeCardTarget(card, cms) != null)
+        .toList();
     final hero = section.type == 'hero';
     return Padding(
       key: ValueKey('home-section-${section.id}'),
-      padding: EdgeInsets.symmetric(vertical: hero ? 48 : 32),
+      padding: EdgeInsets.only(top: hero ? 26 : 44, bottom: 48),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (hero) ...[
-            const Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: LogoMark(large: true),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              section.title,
-              style: appText(
-                color: AppColors.gold,
-                fontSize: 17,
-                weight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              cms.company.nameAr,
-              style: displayText(
-                fontSize: MediaQuery.sizeOf(context).width < 700 ? 34 : 54,
-                color: AppColors.ink,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              cms.company.taglineAr,
-              style: appText(
-                color: AppColors.accent,
-                fontSize: 18,
-                weight: FontWeight.w800,
-              ),
-            ),
-          ] else
-            Text(
-              section.title,
-              style: displayText(fontSize: 30, color: AppColors.ink),
-            ),
-          if (section.description.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 12, bottom: 24),
-              child: Text(
-                section.description,
-                style: appText(
-                  color: AppColors.muted,
-                  fontSize: hero ? 19 : 16,
-                  height: 1.8,
-                ),
-              ),
-            ),
-          if (homeWebUrl(section.imageUrl))
-            Padding(
-              padding: const EdgeInsets.only(bottom: 20),
-              child: HomeRemoteImage(url: section.imageUrl),
-            ),
-          if (hero || section.type == 'market')
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                for (final card in cards) HomeCardAction(card: card, cms: cms),
-              ],
-            ),
-          if (section.type == 'cards')
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final columns = constraints.maxWidth >= 1000
-                    ? 4
-                    : constraints.maxWidth >= 620
-                    ? 3
-                    : constraints.maxWidth >= 420
-                    ? 2
-                    : 1;
-                final width =
-                    (constraints.maxWidth - 14 * (columns - 1)) / columns;
-                return Wrap(
-                  spacing: 14,
-                  runSpacing: 14,
-                  children: [
-                    for (final card in cards)
-                      SizedBox(
-                        width: width,
-                        child: HomepageCardTile(card: card, cms: cms),
-                      ),
-                  ],
-                );
-              },
-            ),
-          if (section.type == 'market' &&
-              cms.companyListings.any((item) => item.enabled))
-            Padding(
-              padding: const EdgeInsets.only(top: 24),
-              child: CompanyListingsGrid(
-                items: cms.companyListings
-                    .where((item) => item.enabled)
-                    .take(3)
-                    .toList(),
-              ),
-            ),
-          if (section.type == 'contact') ...[
-            ContactMethods(company: cms.company),
-            const SizedBox(height: 24),
-            TrustPanel(company: cms.company),
+          if (hero)
+            HomeHero(section: section, cards: cards, cms: cms)
+          else if (section.type == 'bio')
+            HomeFounderSection(section: section)
+          else ...[
+            if (section.id != 'contact')
+              HomeSectionHeading(section: section, count: cards.length),
+            if (section.id == 'individual')
+              HomeIndividualServices(cards: cards, cms: cms)
+            else if (section.id == 'operations')
+              HomeOperationsList(cards: cards, cms: cms)
+            else if (section.id == 'transport')
+              HomeTransportList(cards: cards, cms: cms)
+            else if (section.id == 'join')
+              HomeJoinChoices(cards: cards, cms: cms)
+            else if (section.type == 'cards')
+              HomeCardGrid(cards: cards, cms: cms)
+            else if (section.type == 'market')
+              HomeMarketSection(cards: cards, cms: cms)
+            else if (section.type == 'contact') ...[
+              HomeContactHeader(section: section),
+              const SizedBox(height: 28),
+              ContactMethods(company: cms.company),
+              const SizedBox(height: 28),
+              TrustPanel(company: cms.company),
+            ],
           ],
         ],
       ),
     );
   }
+}
+
+class HomeHero extends StatelessWidget {
+  const HomeHero({
+    required this.section,
+    required this.cards,
+    required this.cms,
+    super.key,
+  });
+
+  final HomeSection section;
+  final List<HomeCard> cards;
+  final CmsContent cms;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 760;
+        final content = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(width: 24, height: 2, color: AppColors.accent),
+                const SizedBox(width: 10),
+                Text(
+                  'خدمات للأفراد والأعمال',
+                  style: appText(
+                    color: AppColors.accent,
+                    weight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Text(
+              section.title,
+              textAlign: TextAlign.right,
+              style: displayText(
+                fontSize: compact ? 38 : 58,
+                height: 1.2,
+                color: AppColors.ink,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              cms.company.nameAr,
+              style: appText(
+                fontSize: compact ? 18 : 21,
+                color: AppColors.ink,
+                weight: FontWeight.w900,
+              ),
+            ),
+            if (cms.company.taglineAr.trim().isNotEmpty) ...[
+              const SizedBox(height: 5),
+              Text(
+                cms.company.taglineAr,
+                style: appText(
+                  color: AppColors.muted,
+                  fontSize: compact ? 15 : 17,
+                  weight: FontWeight.w700,
+                  height: 1.7,
+                ),
+              ),
+            ],
+            if (section.description.trim().isNotEmpty) ...[
+              const SizedBox(height: 16),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 560),
+                child: Text(
+                  section.description,
+                  style: appText(
+                    color: AppColors.muted,
+                    fontSize: compact ? 16 : 18,
+                    height: 1.8,
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 26),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                for (final card in cards)
+                  HomeCardAction(
+                    card: card,
+                    cms: cms,
+                    primary: card.id == 'register',
+                  ),
+              ],
+            ),
+          ],
+        );
+
+        final visual = homeWebUrl(section.imageUrl)
+            ? HomeRemoteImage(url: section.imageUrl)
+            : const HomeRouteNetwork();
+        return Padding(
+          padding: EdgeInsets.symmetric(vertical: compact ? 30 : 54),
+          child: compact
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [content, const SizedBox(height: 32), visual],
+                )
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(flex: 11, child: visual),
+                    const SizedBox(width: 64),
+                    Expanded(flex: 13, child: content),
+                  ],
+                ),
+        );
+      },
+    );
+  }
+}
+
+class HomeRouteNetwork extends StatelessWidget {
+  const HomeRouteNetwork({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 760;
+    return Container(
+      constraints: BoxConstraints(minHeight: compact ? 250 : 440),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: veil(AppColors.accent, .28)),
+      ),
+      child: Stack(
+        children: [
+          Positioned.fill(child: CustomPaint(painter: HomeRoutePainter())),
+          PositionedDirectional(
+            top: 18,
+            start: 18,
+            child: _routeLabel('منظومة واحدة', Icons.hub_outlined),
+          ),
+          PositionedDirectional(
+            top: compact ? 78 : 92,
+            end: 18,
+            child: _routeLabel('تخزين', Icons.warehouse_outlined),
+          ),
+          PositionedDirectional(
+            top: compact ? 142 : 198,
+            start: compact ? 28 : 46,
+            child: _routeLabel('تشغيل', Icons.settings_suggest_outlined),
+          ),
+          PositionedDirectional(
+            bottom: compact ? 52 : 76,
+            end: compact ? 34 : 54,
+            child: _routeLabel('نقل', Icons.local_shipping_outlined),
+          ),
+          PositionedDirectional(
+            bottom: 18,
+            start: 18,
+            child: _routeLabel('توصيل', Icons.near_me_outlined),
+          ),
+          Align(
+            alignment: Alignment.center,
+            child: Container(
+              width: compact ? 68 : 88,
+              height: compact ? 68 : 88,
+              decoration: BoxDecoration(
+                color: AppColors.accent,
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: [
+                  BoxShadow(
+                    color: veil(AppColors.accent, .18),
+                    blurRadius: 28,
+                    spreadRadius: 3,
+                  ),
+                ],
+              ),
+              child: Icon(
+                Icons.account_tree_rounded,
+                color: AppColors.onAccent,
+                size: compact ? 30 : 38,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _routeLabel(String label, IconData icon) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    decoration: BoxDecoration(
+      color: AppColors.background,
+      border: Border.all(color: veil(AppColors.ink, .18)),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: AppColors.accent, size: 18),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: appText(color: AppColors.ink, weight: FontWeight.w800),
+        ),
+      ],
+    ),
+  );
+}
+
+class HomeRoutePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final pathPaint = Paint()
+      ..color = veil(AppColors.accent, .28)
+      ..strokeWidth = 1.4
+      ..style = PaintingStyle.stroke;
+    final center = Offset(size.width * .5, size.height * .5);
+    for (final point in [
+      Offset(size.width * .72, size.height * .23),
+      Offset(size.width * .26, size.height * .38),
+      Offset(size.width * .72, size.height * .72),
+      Offset(size.width * .24, size.height * .79),
+    ]) {
+      final path = Path()
+        ..moveTo(center.dx, center.dy)
+        ..quadraticBezierTo(
+          (center.dx + point.dx) / 2,
+          point.dy,
+          point.dx,
+          point.dy,
+        );
+      canvas.drawPath(path, pathPaint);
+      canvas.drawCircle(
+        point,
+        3.5,
+        Paint()
+          ..color = AppColors.accent
+          ..style = PaintingStyle.fill,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant HomeRoutePainter oldDelegate) => true;
+}
+
+class HomeFounderSection extends StatelessWidget {
+  const HomeFounderSection({required this.section, super.key});
+  final HomeSection section;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final image = homeWebUrl(section.imageUrl);
+      final compact = constraints.maxWidth < 700;
+      final text = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'من وعاء',
+            style: appText(color: AppColors.accent, weight: FontWeight.w900),
+          ),
+          const SizedBox(height: 10),
+          Text(section.title, style: displayText(fontSize: 30)),
+          const SizedBox(height: 12),
+          Text(
+            section.description,
+            style: appText(color: AppColors.muted, fontSize: 17, height: 1.8),
+          ),
+        ],
+      );
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 28),
+        decoration: BoxDecoration(
+          border: Border.symmetric(
+            horizontal: BorderSide(color: veil(AppColors.accent, .2)),
+          ),
+        ),
+        child: compact
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  text,
+                  if (image) ...[
+                    const SizedBox(height: 20),
+                    HomeRemoteImage(url: section.imageUrl),
+                  ],
+                ],
+              )
+            : Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(child: text),
+                  if (image) ...[
+                    const SizedBox(width: 28),
+                    SizedBox(
+                      width: 300,
+                      child: HomeRemoteImage(url: section.imageUrl),
+                    ),
+                  ],
+                ],
+              ),
+      );
+    },
+  );
+}
+
+class HomeSectionHeading extends StatelessWidget {
+  const HomeSectionHeading({
+    required this.section,
+    required this.count,
+    super.key,
+  });
+  final HomeSection section;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 700;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 22),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Container(
+            width: 4,
+            height: compact ? 42 : 52,
+            color: AppColors.accent,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _sectionKicker(section.id),
+                  style: appText(
+                    color: AppColors.accent,
+                    weight: FontWeight.w900,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  section.title,
+                  style: displayText(fontSize: compact ? 26 : 34, height: 1.25),
+                ),
+                if (section.description.trim().isNotEmpty) ...[
+                  const SizedBox(height: 5),
+                  Text(
+                    section.description,
+                    style: appText(
+                      color: AppColors.muted,
+                      fontSize: 15,
+                      height: 1.6,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (count > 0 && !compact)
+            Text(
+              count.toString().padLeft(2, '0'),
+              textDirection: TextDirection.ltr,
+              style: displayText(
+                fontSize: 18,
+                color: AppColors.muted,
+                weight: FontWeight.w700,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  String _sectionKicker(String id) => switch (id) {
+    'individual' => 'حلول للأفراد',
+    'operations' => 'شراكات الأعمال',
+    'transport' => 'حركة البضائع',
+    'market' => 'استثمار ونمو',
+    'join' => 'مسارات مهنية',
+    _ => 'خدمات وعاء',
+  };
+}
+
+class HomeCardGrid extends StatelessWidget {
+  const HomeCardGrid({required this.cards, required this.cms, super.key});
+  final List<HomeCard> cards;
+  final CmsContent cms;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final columns = constraints.maxWidth >= 940
+          ? 3
+          : constraints.maxWidth >= 560
+          ? 2
+          : 1;
+      final width = (constraints.maxWidth - (columns - 1) * 16) / columns;
+      return Wrap(
+        spacing: 16,
+        runSpacing: 16,
+        children: [
+          for (final card in cards)
+            SizedBox(
+              width: width,
+              child: HomepageCardTile(card: card, cms: cms),
+            ),
+        ],
+      );
+    },
+  );
+}
+
+class HomeIndividualServices extends StatelessWidget {
+  const HomeIndividualServices({
+    required this.cards,
+    required this.cms,
+    super.key,
+  });
+  final List<HomeCard> cards;
+  final CmsContent cms;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final columns = constraints.maxWidth >= 720 ? 2 : 1;
+      final width = (constraints.maxWidth - (columns - 1) * 16) / columns;
+      return Wrap(
+        spacing: 16,
+        runSpacing: 16,
+        children: [
+          for (final card in cards)
+            SizedBox(
+              width: width,
+              child: HomepageCardTile(card: card, cms: cms),
+            ),
+        ],
+      );
+    },
+  );
+}
+
+class HomeOperationsList extends StatelessWidget {
+  const HomeOperationsList({required this.cards, required this.cms, super.key});
+  final List<HomeCard> cards;
+  final CmsContent cms;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    children: [
+      for (var i = 0; i < cards.length; i++)
+        HomeEditorialLink(
+          card: cards[i],
+          cms: cms,
+          index: i,
+          showDivider: i < cards.length - 1,
+        ),
+    ],
+  );
+}
+
+class HomeEditorialLink extends StatelessWidget {
+  const HomeEditorialLink({
+    required this.card,
+    required this.cms,
+    required this.index,
+    required this.showDivider,
+    super.key,
+  });
+  final HomeCard card;
+  final CmsContent cms;
+  final int index;
+  final bool showDivider;
+
+  @override
+  Widget build(BuildContext context) {
+    final target = homeCardTarget(card, cms);
+    final body = Padding(
+      padding: const EdgeInsets.symmetric(vertical: 18),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 42,
+            child: Text(
+              (index + 1).toString().padLeft(2, '0'),
+              textDirection: TextDirection.ltr,
+              style: appText(color: AppColors.accent, weight: FontWeight.w900),
+            ),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  card.title,
+                  style: appText(
+                    fontSize: 19,
+                    color: AppColors.ink,
+                    weight: FontWeight.w900,
+                  ),
+                ),
+                if (card.description.trim().isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    card.description,
+                    style: appText(color: AppColors.muted),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Icon(Icons.arrow_back_rounded, color: AppColors.accent),
+        ],
+      ),
+    );
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: ValueKey('home-action-${card.id}'),
+        onTap: target == null
+            ? null
+            : () => target.startsWith('/')
+                  ? context.go(target)
+                  : redirectToCheckout(target),
+        child: Column(
+          children: [
+            body,
+            if (showDivider)
+              Divider(height: 1, color: veil(AppColors.ink, .15)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class HomeTransportList extends StatelessWidget {
+  const HomeTransportList({required this.cards, required this.cms, super.key});
+  final List<HomeCard> cards;
+  final CmsContent cms;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final columns = constraints.maxWidth >= 900 ? 3 : 2;
+      final width = constraints.maxWidth / columns;
+      return Wrap(
+        children: [
+          for (var i = 0; i < cards.length; i++)
+            SizedBox(
+              width: width,
+              child: HomeTransportOption(card: cards[i], cms: cms),
+            ),
+        ],
+      );
+    },
+  );
+}
+
+class HomeTransportOption extends StatelessWidget {
+  const HomeTransportOption({required this.card, required this.cms, super.key});
+  final HomeCard card;
+  final CmsContent cms;
+
+  @override
+  Widget build(BuildContext context) {
+    final target = homeCardTarget(card, cms);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: ValueKey('home-action-${card.id}'),
+        onTap: target == null
+            ? null
+            : () => target.startsWith('/')
+                  ? context.go(target)
+                  : redirectToCheckout(target),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 92),
+          padding: const EdgeInsetsDirectional.fromSTEB(8, 16, 14, 16),
+          decoration: BoxDecoration(
+            border: BorderDirectional(
+              start: BorderSide(color: veil(AppColors.accent, .28)),
+              bottom: BorderSide(color: veil(AppColors.ink, .14)),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.local_shipping_outlined,
+                color: AppColors.accent,
+                size: 22,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  card.title,
+                  style: appText(color: AppColors.ink, weight: FontWeight.w800),
+                ),
+              ),
+              Icon(Icons.arrow_back_rounded, color: AppColors.muted, size: 18),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class HomeJoinChoices extends StatelessWidget {
+  const HomeJoinChoices({required this.cards, required this.cms, super.key});
+  final List<HomeCard> cards;
+  final CmsContent cms;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final columns = constraints.maxWidth >= 900
+          ? 3
+          : constraints.maxWidth >= 560
+          ? 2
+          : 1;
+      final width = (constraints.maxWidth - 14 * (columns - 1)) / columns;
+      return Wrap(
+        spacing: 14,
+        runSpacing: 14,
+        children: [
+          for (final card in cards)
+            SizedBox(
+              width: width,
+              child: HomepageCardTile(card: card, cms: cms),
+            ),
+        ],
+      );
+    },
+  );
+}
+
+class HomeMarketSection extends StatelessWidget {
+  const HomeMarketSection({required this.cards, required this.cms, super.key});
+  final List<HomeCard> cards;
+  final CmsContent cms;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        children: [
+          for (final card in cards) HomeCardAction(card: card, cms: cms),
+        ],
+      ),
+      if (cms.companyListings.any((item) => item.enabled)) ...[
+        const SizedBox(height: 24),
+        CompanyListingsGrid(
+          items: cms.companyListings
+              .where((item) => item.enabled)
+              .take(3)
+              .toList(),
+        ),
+      ],
+    ],
+  );
+}
+
+class HomeContactHeader extends StatelessWidget {
+  const HomeContactHeader({required this.section, super.key});
+  final HomeSection section;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(section.title, style: displayText(fontSize: 32)),
+      if (section.description.trim().isNotEmpty) ...[
+        const SizedBox(height: 8),
+        Text(
+          section.description,
+          style: appText(color: AppColors.muted, fontSize: 16),
+        ),
+      ],
+    ],
+  );
 }
 
 class HomeRemoteImage extends StatelessWidget {
@@ -465,30 +1081,63 @@ class HomeRemoteImage extends StatelessWidget {
 }
 
 class HomeCardAction extends StatelessWidget {
-  const HomeCardAction({required this.card, required this.cms, super.key});
+  const HomeCardAction({
+    required this.card,
+    required this.cms,
+    this.primary = false,
+    super.key,
+  });
   final HomeCard card;
   final CmsContent cms;
+  final bool primary;
   @override
   Widget build(BuildContext context) {
     final target = homeCardTarget(card, cms);
     if (target == null) return const SizedBox.shrink();
-    return FilledButton.icon(
-      onPressed: () => target.startsWith('/')
-          ? context.go(target)
-          : redirectToCheckout(target),
-      icon: Icon(
-        card.destinationType == 'download'
-            ? Icons.download_rounded
-            : Icons.arrow_back_rounded,
-        size: 18,
-      ),
-      label: Text(card.buttonLabel.isEmpty ? 'استكشف' : card.buttonLabel),
-      style: FilledButton.styleFrom(
-        backgroundColor: AppColors.accent,
-        foregroundColor: AppColors.onAccent,
+    final icon = Icon(
+      card.destinationType == 'download'
+          ? Icons.download_rounded
+          : Icons.arrow_back_rounded,
+      size: 18,
+    );
+    final label = Text(card.buttonLabel.isEmpty ? 'استكشف' : card.buttonLabel);
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(8),
+    );
+    void onPressed() {
+      if (target.startsWith('/')) {
+        context.go(target);
+      } else {
+        redirectToCheckout(target);
+      }
+    }
+
+    if (primary) {
+      return FilledButton.icon(
+        key: ValueKey('home-action-${card.id}'),
+        onPressed: onPressed,
+        icon: icon,
+        label: label,
+        style: FilledButton.styleFrom(
+          backgroundColor: AppColors.accent,
+          foregroundColor: AppColors.onAccent,
+          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
+          textStyle: appText(weight: FontWeight.w900),
+          shape: shape,
+        ),
+      );
+    }
+    return OutlinedButton.icon(
+      key: ValueKey('home-action-${card.id}'),
+      onPressed: onPressed,
+      icon: icon,
+      label: label,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppColors.ink,
+        side: BorderSide(color: veil(AppColors.ink, .35)),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
         textStyle: appText(weight: FontWeight.w800),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        shape: shape,
       ),
     );
   }

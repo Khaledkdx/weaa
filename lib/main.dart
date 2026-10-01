@@ -22,6 +22,7 @@ part 'homepage_sections.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  GoogleFonts.config.allowRuntimeFetching = false;
   try {
     await dotenv.load();
   } catch (_) {
@@ -184,6 +185,23 @@ class WeaaApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(appThemeProvider);
     AppColors.use(themeMode);
+    final colorScheme = ColorScheme.fromSeed(
+      seedColor: AppColors.accent,
+      brightness: themeMode == WeaaThemeMode.dark
+          ? Brightness.dark
+          : Brightness.light,
+    ).copyWith(
+      primary: AppColors.accent,
+      onPrimary: AppColors.onAccent,
+      secondary: AppColors.gold,
+      onSecondary: AppColors.isLight ? Colors.white : AppColors.onAccent,
+      surface: AppColors.surface,
+      onSurface: AppColors.ink,
+      onSurfaceVariant: AppColors.muted,
+      outline: veil(AppColors.ink, AppColors.isLight ? .34 : .28),
+      error: AppColors.danger,
+      onError: Colors.white,
+    );
     return MaterialApp.router(
       title: 'WEAA Logistics',
       debugShowCheckedModeBanner: false,
@@ -193,11 +211,31 @@ class WeaaApp extends ConsumerWidget {
       theme: ThemeData(
         useMaterial3: true,
         visualDensity: VisualDensity.standard,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: AppColors.accent,
-          brightness: themeMode == WeaaThemeMode.dark
-              ? Brightness.dark
-              : Brightness.light,
+        colorScheme: colorScheme,
+        scaffoldBackgroundColor: AppColors.background,
+        textSelectionTheme: TextSelectionThemeData(
+          cursorColor: AppColors.accent,
+          selectionColor: veil(AppColors.accent, AppColors.isLight ? .22 : .3),
+          selectionHandleColor: AppColors.accent,
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: AppColors.surface,
+          labelStyle: appText(color: AppColors.muted, weight: FontWeight.w700),
+          hintStyle: appText(color: AppColors.muted),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide(color: veil(AppColors.ink, .24)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide(color: veil(AppColors.ink, .24)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide(color: AppColors.accent, width: 1.5),
+          ),
+          errorStyle: appText(color: AppColors.danger, weight: FontWeight.w800),
         ),
       ),
       routerConfig: ref.watch(_routerProvider(initialLocation)),
@@ -267,16 +305,16 @@ class AppPalette {
   );
 
   static const light = AppPalette(
-    background: Color(0xfffff7e8),
-    surface: Color(0xfffffcf4),
-    surfaceStrong: Color(0xffefe0ba),
+    background: Color(0xfffff9ee),
+    surface: Color(0xfffffdf8),
+    surfaceStrong: Color(0xfff1e4c8),
     ink: Color(0xff1f1608),
-    muted: Color(0xff4d402a),
-    accent: Color(0xffd49408),
-    gold: Color(0xff8b5900),
-    green: Color(0xff167a55),
-    danger: Color(0xffb93131),
-    onAccent: Color(0xff1f1608),
+    muted: Color(0xff51442f),
+    accent: Color(0xff805300),
+    gold: Color(0xff704800),
+    green: Color(0xff126047),
+    danger: Color(0xffa32929),
+    onAccent: Color(0xfffffbf2),
     isLight: true,
   );
 }
@@ -4089,7 +4127,7 @@ class AppShell extends ConsumerWidget {
         backgroundColor: AppColors.background,
         body: Stack(
           children: [
-            const Positioned.fill(child: AppAtmosphere()),
+            Positioned.fill(child: AppAtmosphere()),
             SafeArea(
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
@@ -9663,43 +9701,7 @@ class AppAtmosphere extends StatelessWidget {
   const AppAtmosphere({super.key});
 
   @override
-  Widget build(BuildContext context) =>
-      CustomPaint(painter: AtmospherePainter(AppColors._palette));
-}
-
-class AtmospherePainter extends CustomPainter {
-  const AtmospherePainter(this.palette);
-
-  final AppPalette palette;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.drawRect(Offset.zero & size, Paint()..color = AppColors.background);
-    final line = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1
-      ..color = veil(AppColors.ink, AppColors.isLight ? .065 : .055);
-    for (var x = 0.0; x < size.width; x += 42) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), line);
-    }
-    for (var y = 0.0; y < size.height; y += 42) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), line);
-    }
-    canvas.drawCircle(
-      Offset(size.width * .18, size.height * .22),
-      260,
-      Paint()..color = veil(AppColors.accent, AppColors.isLight ? .055 : .09),
-    );
-    canvas.drawCircle(
-      Offset(size.width * .88, size.height * .7),
-      340,
-      Paint()..color = veil(AppColors.gold, AppColors.isLight ? .045 : .06),
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant AtmospherePainter oldDelegate) =>
-      oldDelegate.palette != palette;
+  Widget build(BuildContext context) => ColoredBox(color: AppColors.background);
 }
 
 class LineChartPainter extends CustomPainter {
