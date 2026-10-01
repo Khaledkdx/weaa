@@ -9,7 +9,6 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase/supabase.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
@@ -22,7 +21,6 @@ part 'homepage_sections.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  GoogleFonts.config.allowRuntimeFetching = false;
   try {
     await dotenv.load();
   } catch (_) {
@@ -185,23 +183,24 @@ class WeaaApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(appThemeProvider);
     AppColors.use(themeMode);
-    final colorScheme = ColorScheme.fromSeed(
-      seedColor: AppColors.accent,
-      brightness: themeMode == WeaaThemeMode.dark
-          ? Brightness.dark
-          : Brightness.light,
-    ).copyWith(
-      primary: AppColors.accent,
-      onPrimary: AppColors.onAccent,
-      secondary: AppColors.gold,
-      onSecondary: AppColors.isLight ? Colors.white : AppColors.onAccent,
-      surface: AppColors.surface,
-      onSurface: AppColors.ink,
-      onSurfaceVariant: AppColors.muted,
-      outline: veil(AppColors.ink, AppColors.isLight ? .34 : .28),
-      error: AppColors.danger,
-      onError: Colors.white,
-    );
+    final colorScheme =
+        ColorScheme.fromSeed(
+          seedColor: AppColors.accent,
+          brightness: themeMode == WeaaThemeMode.dark
+              ? Brightness.dark
+              : Brightness.light,
+        ).copyWith(
+          primary: AppColors.accent,
+          onPrimary: AppColors.onAccent,
+          secondary: AppColors.gold,
+          onSecondary: AppColors.isLight ? Colors.white : AppColors.onAccent,
+          surface: AppColors.surface,
+          onSurface: AppColors.ink,
+          onSurfaceVariant: AppColors.muted,
+          outline: veil(AppColors.ink, AppColors.isLight ? .34 : .28),
+          error: AppColors.danger,
+          onError: Colors.white,
+        );
     return MaterialApp.router(
       title: 'WEAA Logistics',
       debugShowCheckedModeBanner: false,
@@ -9641,17 +9640,25 @@ class LogoMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final width = large ? 112.0 : 86.0;
-    final height = large ? 74.0 : 56.0;
+    final compact = MediaQuery.sizeOf(context).width < 920;
+    final width = large
+        ? 154.0
+        : compact
+        ? 118.0
+        : 132.0;
+    final height = large
+        ? 118.0
+        : compact
+        ? 90.0
+        : 101.0;
     return Container(
       width: width,
       height: height,
       alignment: Alignment.center,
-      padding: EdgeInsets.all(large ? 7 : 5),
       decoration: BoxDecoration(
         color: Colors.black,
         border: Border.all(color: veil(AppColors.gold, .32)),
-        borderRadius: BorderRadius.circular(large ? 18 : 15),
+        borderRadius: BorderRadius.circular(large ? 18 : 16),
         boxShadow: [
           BoxShadow(
             color: veil(AppColors.gold, .22),
@@ -9661,13 +9668,14 @@ class LogoMark extends StatelessWidget {
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(large ? 13 : 11),
+        borderRadius: BorderRadius.circular(large ? 17 : 15),
         child: Image.asset(
-          'assets/brand/weaa-logo.jpeg',
+          'assets/brand/weaa-logo-ornate.jpeg',
           width: double.infinity,
           height: double.infinity,
           fit: BoxFit.contain,
           filterQuality: FilterQuality.high,
+          semanticLabel: 'شعار شركة وعاء اللوجستية',
         ),
       ),
     );
@@ -9787,8 +9795,8 @@ TextStyle appText({
   FontWeight weight = FontWeight.w600,
   double height = 1.35,
 }) {
-  return GoogleFonts.getFont(
-    'Tajawal',
+  return TextStyle(
+    fontFamily: 'Tajawal',
     fontSize: fontSize,
     color: color ?? AppColors.ink,
     fontWeight: weight,
@@ -9802,8 +9810,8 @@ TextStyle displayText({
   FontWeight weight = FontWeight.w900,
   double height = 1.1,
 }) {
-  return GoogleFonts.getFont(
-    'Cairo',
+  return TextStyle(
+    fontFamily: 'Cairo',
     fontSize: fontSize,
     color: color ?? AppColors.ink,
     fontWeight: weight,

@@ -73,9 +73,40 @@ flutter:
 
   # To add assets to your application, add an assets section, like this:
   assets:
-    - assets/brand/weaa-logo.jpeg
-    - assets/fonts/
+    - assets/brand/weaa-logo-ornate.jpeg
     - web/.htaccess
+
+  fonts:
+    - family: Tajawal
+      fonts:
+        - asset: assets/fonts/Tajawal-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Tajawal-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Tajawal-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Tajawal-ExtraBold.ttf
+          weight: 800
+        - asset: assets/fonts/Tajawal-Black.ttf
+          weight: 900
+    - family: Cairo
+      fonts:
+        - asset: assets/fonts/Cairo-ExtraLight.ttf
+          weight: 200
+        - asset: assets/fonts/Cairo-Light.ttf
+          weight: 300
+        - asset: assets/fonts/Cairo-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Cairo-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Cairo-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Cairo-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Cairo-ExtraBold.ttf
+          weight: 800
+        - asset: assets/fonts/Cairo-Black.ttf
+          weight: 900
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
