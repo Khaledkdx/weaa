@@ -15,7 +15,7 @@ const section = (id: string, title: string, type: string, cards: HomeCard[] = []
 
 export const courierForms: FormDefinition[] = [
   { id: 'form:courier-internal', slug: 'courier-internal', title: 'مناديب داخل المملكة', description: 'انضم إلى فريق المناديب داخل المملكة.', audience: 'مناديب داخل المملكة', kind: 'join', enabled: true, submissionType: 'courier-internal', fields: [
-    field('name', 'الاسم'), field('phone', 'رقم التواصل', 'phone'), field('nationality', 'الجنسية'), field('identity_number', 'رقم الهوية / الإقامة', 'text', false), field('identity_expires_on', 'انتهاء الهوية', 'date'), field('city', 'المدينة'), field('profession', 'المهنة في الإقامة'), field('license_type', 'نوع الرخصة', 'select'), field('can_relocate', 'قابلية الانتقال', 'select'),
+    field('name', 'الاسم'), field('phone', 'رقم التواصل', 'phone'), field('nationality', 'الجنسية'), field('identity_number', 'رقم الهوية / الإقامة', 'text', false), field('sponsorship_transfer_count', 'عدد مرات نقل الكفالة', 'number', false), field('identity_expires_on', 'انتهاء الهوية', 'date'), field('city', 'المدن'), field('profession', 'المهنة في الإقامة'), field('license_type', 'نوع الرخصة', 'select'), field('can_relocate', 'قابلية الانتقال لمدينة أخرى', 'select'), field('owns_car', 'هل تملك سيارة؟', 'select', false), field('car_model', 'نوع وموديل السيارة'), field('car_year', 'سنة الصنع'),
   ]},
   { id: 'form:courier-external', slug: 'courier-external', title: 'مناديب خارج المملكة', description: 'انضم إلى فريق المناديب من خارج المملكة.', audience: 'مناديب خارج المملكة', kind: 'join', enabled: true, submissionType: 'courier-external', fields: [
     field('name', 'الاسم'), field('phone', 'رقم الجوال مع رمز البلد', 'phone'), field('marital_status', 'الحالة الاجتماعية', 'select'), field('education', 'التعليم'), field('has_license', 'هل لديك رخصة؟', 'select'), field('country', 'البلد'), field('age', 'السن بالسنوات', 'number'),
@@ -65,5 +65,5 @@ export const seed: CmsContent = {
     section('join', 'انضم إلينا', 'cards', [{ ...card('inside', 'مناديب داخل المملكة', 'form:courier-internal'), destinationType: 'form' }, { ...card('outside', 'مناديب خارج المملكة', 'form:courier-external'), destinationType: 'form' }, card('jobs', 'طالب وظيفة', '/join-us')], 'اختر المسار الأقرب إليك وسجل بياناتك.'),
     section('contact', 'لنبقَ على تواصل', 'contact'),
   ],
-  accountantFormMigrated: true, courierFormsMigrated: true,
+  accountantFormMigrated: true, courierFormsMigrated: true, courierCarFieldsMigrated: true, courierInternalDetailsMigrated: true,
 };

@@ -1,4 +1,4 @@
-export type PageContent = { kicker: string; title: string; body: string };
+export type PageContent = { kicker: string; title: string; body: string; imageUrl?: string };
 export type Company = {
   nameAr: string; nameEn: string; taglineAr: string; taglineEn: string;
   phone: string; email: string; website: string; headquarters: string;
@@ -7,7 +7,7 @@ export type Company = {
 export type Review = { customer: string; body: string; dateLabel: string; rating: number };
 export type CmsItem = {
   id: string; titleAr: string; titleEn: string; description: string;
-  iconCodePoint?: number; slug?: string; videoUrl?: string;
+  iconCodePoint?: number; slug?: string; videoUrl?: string; imageUrl?: string; detailImageUrl?: string;
   benefits: string[]; reviews: Review[]; serviceCategory: string;
   paymentEnabled: boolean; paymentPriceSar: number; paymentDescription: string;
 };
@@ -15,12 +15,12 @@ export type FormFieldType = 'text' | 'number' | 'phone' | 'email' | 'date' | 'se
 export type FormField = { key: string; label: string; type: FormFieldType; required: boolean; options: string[] };
 export type FormDefinition = {
   id: string; slug: string; title: string; description: string; audience: string;
-  kind: string; enabled: boolean; fields: FormField[]; submissionType: string;
+  kind: string; enabled: boolean; fields: FormField[]; submissionType: string; imageUrl?: string;
 };
 export type HomeCard = { id: string; title: string; description: string; imageUrl: string; buttonLabel: string; destinationType: string; target: string; enabled: boolean };
 export type HomeSection = { id: string; title: string; description: string; type: string; imageUrl: string; enabled: boolean; cards: HomeCard[] };
-export type CompanyListing = { slug: string; name: string; sector: string; city: string; status: string; summary: string; contactUrl: string; metadata: Record<string, string>; enabled: boolean };
-export type SocialTestimonial = { id: string; customer: string; platform: string; title: string; videoUrl: string; enabled: boolean };
+export type CompanyListing = { slug: string; name: string; sector: string; city: string; status: string; summary: string; contactUrl: string; metadata: Record<string, string>; enabled: boolean; imageUrl?: string; detailImageUrl?: string };
+export type SocialTestimonial = { id: string; customer: string; platform: string; title: string; videoUrl: string; enabled: boolean; imageUrl?: string };
 export type AdminRole = { id: string; name: string; permissions: string[] };
 export type CmsContent = {
   company: Company; pages: Record<string, PageContent>;
@@ -29,7 +29,7 @@ export type CmsContent = {
   defaultServiceForm: FormDefinition; serviceFormOverrides: Record<string, FormDefinition>;
   joinForms: FormDefinition[]; companyListings: CompanyListing[];
   socialTestimonials: SocialTestimonial[]; homepageSections: HomeSection[];
-  accountantFormMigrated?: boolean; courierFormsMigrated?: boolean;
+  accountantFormMigrated?: boolean; courierFormsMigrated?: boolean; courierCarFieldsMigrated?: boolean; courierInternalDetailsMigrated?: boolean;
   [key: string]: unknown;
 };
 export type ServiceRequest = {

@@ -6,6 +6,7 @@ import { ThemeProvider } from './theme';
 import { App } from './pages';
 import './styles.css';
 import './editorial.css';
+import './interior.css';
 
 const basename = import.meta.env.BASE_URL.replace(/\/$/, '') || '/';
 ReactDOM.createRoot(document.getElementById('root')!).render(

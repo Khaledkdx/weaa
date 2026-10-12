@@ -1,17 +1,19 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { createJoinRequest, createServiceRequest } from './data';
+import { prepareInternalCarSubmission } from './courierCar';
+import { courierCities, prepareInternalCourierFields, validIdentityExpiry } from './courierInternal';
 import { courierForms } from './seed';
 import type { CmsItem, FormDefinition, FormField } from './types';
 
 const courierOptions: Record<string, Record<string, string>> = {
   license_type: { private: 'خصوصي', public: 'عمومي', light: 'نقل خفيف', heavy: 'نقل ثقيل', motorcycle: 'دراجة نارية', equipment: 'معدات / أشغال عامة', none: 'لا توجد رخصة', other: 'أخرى' },
   marital_status: { single: 'أعزب', married: 'متزوج', divorced: 'مطلق', widowed: 'أرمل' },
-  can_relocate: { '1': 'نعم', '0': 'لا' }, has_license: { '1': 'نعم', '0': 'لا' },
+  can_relocate: { '1': 'نعم', '0': 'لا' }, has_license: { '1': 'نعم', '0': 'لا' }, owns_car: { '1': 'نعم', '0': 'لا' },
 };
 const courierSections = (internal: boolean) => ({
   ...(internal ? { identity_files: 'الهوية / الإقامة', residency_files: 'مستندات الإقامة' } : { passport_files: 'جواز السفر' }),
-  license_files: 'الرخصة', ...(internal ? { registration_files: 'استمارة المركبة' } : {}), photo_files: 'الصورة الشخصية', additional_files: 'مستندات إضافية',
+  license_files: 'الرخصة', photo_files: 'الصورة الشخصية', additional_files: 'مستندات إضافية',
 });
 export const normalizeDigits = (value: string) => value.replace(/[٠-٩۰-۹]/g, digit => {
   const arabic = '٠١٢٣٤٥٦٧٨٩'; const persian = '۰۱۲۳۴۵۶۷۸۹';
@@ -28,10 +30,30 @@ function FormControl({ field, value, onChange, file, onFile }: { field: FormFiel
   const options = courierOptions[field.key] || Object.fromEntries(field.options.map(option => [option, option]));
   return <label className={`form-control ${['multiline', 'textarea', 'details'].includes(type) ? 'form-wide' : ''}`}><span>{field.label}{field.required && <b aria-label="مطلوب"> *</b>}</span>
     {type === 'file' ? <><input type="file" required={field.required && !file} accept=".pdf,.jpg,.jpeg,.png" onChange={event => onFile?.(event.currentTarget.files?.[0])} />{file && <button className="inline-remove" type="button" onClick={() => onFile?.(undefined)}>إزالة {file.name}</button>}</> :
-      type === 'select' ? <select required={field.required} value={value} onChange={event => onChange(event.target.value)}><option value="">اختر</option>{Object.entries(options).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select> :
+      type === 'select' ? <select required={field.required} value={value} onChange={event => onChange(event.target.value)}><option value="">{field.key === 'owns_car' ? 'غير محدد' : 'اختر'}</option>{Object.entries(options).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select> :
         ['multiline', 'textarea', 'details'].includes(type) ? <textarea required={field.required} value={value} onChange={event => onChange(event.target.value)} rows={4} /> :
-          <input required={field.required} type={type === 'phone' ? 'tel' : type} inputMode={type === 'phone' ? 'tel' : type === 'number' ? 'numeric' : undefined} value={value} onChange={event => onChange(event.target.value)} />}
+          <input required={field.required} type={field.key === 'sponsorship_transfer_count' ? 'text' : type === 'phone' ? 'tel' : type} inputMode={type === 'phone' ? 'tel' : type === 'number' || field.key === 'car_year' ? 'numeric' : undefined} minLength={field.key === 'car_model' ? 2 : undefined} maxLength={field.key === 'car_model' ? 160 : field.key === 'car_year' ? 4 : undefined} pattern={field.key === 'car_year' ? '[0-9٠-٩۰-۹]{4}' : undefined} value={value} onChange={event => onChange(event.target.value)} />}
   </label>;
+}
+function CourierCityPicker({ label, selected, onChange }: { label: string; selected: string[]; onChange: (next: string[]) => void }) {
+  const [query, setQuery] = useState('');
+  const currentLength = selected.join('، ').length;
+  const filtered = courierCities.filter(city => city.includes(query.trim()));
+  return <div className="courier-city-picker courier-field">
+    <span className="city-picker-label">{label} <b aria-label="مطلوب">*</b></span>
+    <details className="city-picker-menu"><summary>{selected.length ? `المدن المختارة (${selected.length})` : 'اختر المدن'}</summary>
+      <div className="city-picker-content">
+        <label className="form-control"><span>ابحث عن مدينة</span><input type="search" value={query} onChange={event => setQuery(event.target.value)} /></label>
+        <div className="city-picker-results" role="group" aria-label="المدن المتاحة">{filtered.map(city => {
+          const checked = selected.includes(city);
+          const wouldExceed = !checked && (selected.length >= 20 || [...selected, city].join('، ').length > 100);
+          return <label className="city-picker-option" key={city}><input type="checkbox" checked={checked} disabled={wouldExceed} onChange={() => onChange(checked ? selected.filter(item => item !== city) : [...selected, city])} /><span>{city}</span></label>;
+        })}{!filtered.length && <p className="field-hint">لا توجد مدينة مطابقة.</p>}</div>
+      </div>
+    </details>
+    {!!selected.length && <div className="city-picker-selected">{selected.map(city => <button type="button" key={city} onClick={() => onChange(selected.filter(item => item !== city))} aria-label={`إزالة ${city}`}>{city} ×</button>)}</div>}
+    <span className="field-hint">{currentLength} من 100 حرف · حتى 20 مدينة</span>
+  </div>;
 }
 function SubmitState({ pending, error, success, code }: { pending: boolean; error: string; success: string; code?: string }) {
   return <div className="submit-state" aria-live="polite">{pending && <span>جاري الإرسال...</span>}{error && <p className="error" role="alert">{error}</p>}{success && <p className="success" role="status">{success}{code && <><br />كود الطلب: {code}</>}</p>}</div>;
@@ -96,19 +118,26 @@ export function CourierForm({ form }: { form: FormDefinition }) {
   const internal = form.submissionType === 'courier-internal'; const canonical = courierForms[internal ? 0 : 1];
   const fields = useMemo(() => canonical.fields.map(field => ({ ...field, label: form.fields.find(item => item.key === field.key)?.label || field.label })), [form, canonical]);
   const [values, setValues] = useState<Record<string, string>>({}); const [files, setFiles] = useState<Record<string, File[]>>({});
+  const [selectedCities, setSelectedCities] = useState<string[]>([]);
   const [pending, setPending] = useState(false); const [error, setError] = useState(''); const [success, setSuccess] = useState(''); const [code, setCode] = useState('');
   const sections = courierSections(internal);
-  const allFiles = Object.values(files).flat();
   const submit = async (event: FormEvent) => {
     event.preventDefault(); if (pending) return; setError(''); setSuccess(''); setCode('');
-    const normalized = Object.fromEntries(Object.entries(values).map(([key, value]) => [key, normalizeDigits(value.trim())]));
+    let normalized = Object.fromEntries(Object.entries(values).map(([key, value]) => [key, normalizeDigits(value.trim())]));
+    let submissionFiles = files;
     if (internal) {
+      try {
+        normalized = prepareInternalCourierFields(normalized, selectedCities);
+        const prepared = prepareInternalCarSubmission(normalized, files);
+        normalized = prepared.values;
+        submissionFiles = prepared.files;
+      } catch (cause) { setError(cause instanceof Error ? cause.message : 'تحقق من بيانات السيارة.'); return; }
       const phone = saudiMobile(normalized.phone || '');
       if (!/^5[0-9]{8}$/.test(phone)) { setError('رقم الجوال السعودي: 9 أرقام تبدأ بـ 5 بعد +966.'); return; }
       normalized.phone = `+966${phone}`;
       if (normalized.identity_number && !/^\d{10}$/.test(normalized.identity_number)) { setError('رقم الهوية يجب أن يكون 10 أرقام.'); return; }
       const date = normalized.identity_expires_on || '';
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date))) { setError('اختر تاريخ انتهاء الهوية.'); return; }
+      if (!validIdentityExpiry(date)) { setError('اختر تاريخ انتهاء هوية ميلاديًا صحيحًا بين 1900 و2200.'); return; }
     } else {
       const digits = (normalized.phone || '').replace(/\D/g, '');
       if (digits.length < 8 || digits.length > 15) { setError('أدخل رقم تواصل صحيحًا من 8 إلى 15 رقمًا.'); return; }
@@ -117,19 +146,26 @@ export function CourierForm({ form }: { form: FormDefinition }) {
     }
     setPending(true);
     try {
-      await validateFiles(allFiles);
+      await validateFiles(Object.values(submissionFiles).flat());
       const payload = new FormData();
       for (const [key, value] of Object.entries(normalized)) payload.append(key, value);
-      for (const [key, list] of Object.entries(files)) for (const file of list) payload.append(key, file, file.name);
-      const response = await fetch(`https://app.swarsafqa.com/api/public/courier-applications/${internal ? 'internal' : 'external'}`, { method: 'POST', body: payload });
+      for (const [key, list] of Object.entries(submissionFiles)) for (const file of list) payload.append(key, file, file.name);
+      const response = await fetch(`https://app.swarsafqa.com/api/public/courier-applications/${internal ? 'internal' : 'external'}`, { method: 'POST', body: payload, credentials: 'omit' });
       const result = await response.json().catch(() => ({}));
       if (response.status !== 201 || result.success !== true) throw new Error(result.message || `تعذر إرسال الطلب (${response.status}).`);
-      setSuccess(result.message || 'تم إرسال الطلب بنجاح.'); setCode(result.application_code || ''); setValues({}); setFiles({});
+      setSuccess(result.message || 'تم إرسال الطلب بنجاح.'); setCode(result.application_code || ''); setValues({}); setFiles({}); setSelectedCities([]);
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'تعذر الاتصال بنظام المناديب. قد يحتاج الخادم إلى تفعيل CORS لهذا النطاق.'); }
     finally { setPending(false); }
   };
-  return <form className="form-grid" onSubmit={event => void submit(event)}>{fields.map(field => <div key={field.key} className="courier-field"><FormControl field={field} value={values[field.key] || ''} onChange={value => setValues(previous => ({ ...previous, [field.key]: field.key === 'phone' && internal ? saudiMobile(value).slice(0, 9) : value }))} />{field.key === 'phone' && internal && <span className="field-hint">رمز المملكة +966 · {saudiMobile(values.phone || '').length} من 9 أرقام</span>}</div>)}
-    <div className="attachments"><h2>المرفقات <small>اختيارية، PDF أو JPEG أو PNG</small></h2><div className="attachments-grid">{Object.entries(sections).map(([key, label]) => <div className="attachment-control" key={key}><label htmlFor={key}>{label}</label><input id={key} type="file" multiple accept=".pdf,.jpg,.jpeg,.png" onChange={event => { const selected = Array.from(event.currentTarget.files || []); setFiles(previous => ({ ...previous, [key]: [...(previous[key] || []), ...selected] })); event.currentTarget.value = ''; }} />{(files[key] || []).map((file, index) => <div className="file-row" key={`${file.name}-${index}`}><span>{file.name}</span><button type="button" onClick={() => setFiles(previous => ({ ...previous, [key]: previous[key].filter((_, i) => i !== index) }))}>إزالة</button></div>)}</div>)}</div><p className="field-hint">حتى 10 ملفات، 5 ميجابايت للملف و20 ميجابايت إجمالًا.</p></div>
+  const visibleFields = fields.filter(field => !internal || !['car_model', 'car_year'].includes(field.key) || values.owns_car === '1');
+  const visibleSections = internal && values.owns_car === '1' ? { ...sections, registration_files: 'استمارة السيارة' } : sections;
+  return <form className="form-grid" onSubmit={event => void submit(event)}>{visibleFields.map(field => field.key === 'city' && internal ? <CourierCityPicker key={field.key} label={field.label} selected={selectedCities} onChange={setSelectedCities} /> : <div key={field.key} className="courier-field"><FormControl field={field} value={values[field.key] || ''} onChange={value => {
+      if (field.key === 'owns_car') {
+        setValues(previous => ({ ...previous, owns_car: value, car_model: '', car_year: '' }));
+        setFiles(previous => { const next = { ...previous }; delete next.registration_files; return next; });
+      } else setValues(previous => ({ ...previous, [field.key]: field.key === 'phone' && internal ? saudiMobile(value).slice(0, 9) : value }));
+    }} />{field.key === 'phone' && internal && <span className="field-hint">رمز المملكة +966 · {saudiMobile(values.phone || '').length} من 9 أرقام</span>}</div>)}
+    <div className="attachments"><h2>المرفقات <small>اختيارية، PDF أو JPEG أو PNG</small></h2><div className="attachments-grid">{Object.entries(visibleSections).map(([key, label]) => <div className="attachment-control" key={key}><label htmlFor={key}>{label}</label><input id={key} type="file" multiple accept=".pdf,.jpg,.jpeg,.png" onChange={event => { const selected = Array.from(event.currentTarget.files || []); setFiles(previous => ({ ...previous, [key]: [...(previous[key] || []), ...selected] })); event.currentTarget.value = ''; }} />{(files[key] || []).map((file, index) => <div className="file-row" key={`${file.name}-${index}`}><span>{file.name}</span><button type="button" onClick={() => setFiles(previous => ({ ...previous, [key]: previous[key].filter((_, i) => i !== index) }))}>إزالة</button></div>)}</div>)}</div><p className="field-hint">حتى 10 ملفات، 5 ميجابايت للملف و20 ميجابايت إجمالًا.</p></div>
     <div className="form-footer"><button className="action action-primary" disabled={pending}>{pending ? 'جاري الإرسال...' : 'إرسال الطلب'}</button><SubmitState pending={pending} error={error} success={success} code={code} /></div>
   </form>;
 }

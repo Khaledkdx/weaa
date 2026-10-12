@@ -23,8 +23,29 @@ export function normalizeCms(raw: unknown): CmsContent {
   if (!value.courierFormsMigrated) {
     for (const form of courierForms) if (!merged.joinForms.some(item => item.slug === form.slug)) merged.joinForms.push(form);
   }
+  if (!value.courierCarFieldsMigrated) {
+    const newFields = courierForms[0].fields.filter(field => ['owns_car', 'car_model', 'car_year'].includes(field.key));
+    merged.joinForms = merged.joinForms.map(form => form.slug !== 'courier-internal' ? form : {
+      ...form,
+      fields: [...form.fields, ...newFields.filter(field => !form.fields.some(existing => existing.key === field.key))],
+    });
+  }
+  if (!value.courierInternalDetailsMigrated) {
+    const countField = courierForms[0].fields.find(field => field.key === 'sponsorship_transfer_count')!;
+    merged.joinForms = merged.joinForms.map(form => {
+      if (form.slug !== 'courier-internal') return form;
+      const renamed = form.fields.map(field => field.key === 'city' && field.label === 'المدينة' ? { ...field, label: 'المدن' } :
+        field.key === 'can_relocate' && field.label === 'قابلية الانتقال' ? { ...field, label: 'قابلية الانتقال لمدينة أخرى' } : field);
+      if (renamed.some(field => field.key === countField.key)) return { ...form, fields: renamed };
+      const expiryIndex = renamed.findIndex(field => field.key === 'identity_expires_on');
+      const insertAt = expiryIndex < 0 ? renamed.length : expiryIndex;
+      return { ...form, fields: [...renamed.slice(0, insertAt), countField, ...renamed.slice(insertAt)] };
+    });
+  }
   merged.accountantFormMigrated = true;
   merged.courierFormsMigrated = true;
+  merged.courierCarFieldsMigrated = true;
+  merged.courierInternalDetailsMigrated = true;
   return merged;
 }
 

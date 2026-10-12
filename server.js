@@ -3,10 +3,11 @@ const fs = require('fs');
 const path = require('path');
 
 const port = Number(process.env.PORT || 3000);
+const reactDir = path.join(__dirname, 'site');
 const buildDir = path.join(__dirname, 'build', 'web');
-const rootDir = fs.existsSync(path.join(buildDir, 'index.html'))
-  ? buildDir
-  : __dirname;
+const rootDir = fs.existsSync(path.join(reactDir, 'index.html'))
+  ? reactDir
+  : fs.existsSync(path.join(buildDir, 'index.html')) ? buildDir : __dirname;
 
 const mimeTypes = {
   '.html': 'text/html; charset=utf-8',
@@ -17,6 +18,7 @@ const mimeTypes = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
   '.gif': 'image/gif',
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
