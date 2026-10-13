@@ -4,6 +4,7 @@ import { Link, Navigate, Route, Routes, useParams } from 'react-router-dom';
 import { useCms, supabase } from './data';
 import { Action, SectionHeading, Shell } from './shell';
 import { ContactForm, CourierForm, DynamicForm, ServiceForm } from './forms';
+import { ServiceInquiry } from './serviceInquiryForm';
 import { Admin } from './admin';
 import type { CmsContent, CmsItem, HomeCard, HomeSection } from './types';
 
@@ -207,8 +208,9 @@ function HomeSectionView({ section, cms, index, cardMedia, listingMedia, bioMedi
 
 function ServicesHub() {
   const { cms } = useCms(); const page = cms.pages.services || { kicker: 'الخدمات', title: 'خدمات وعاء', body: '' };
-  return <Shell><main className="site-container page-body interior-page"><InteriorIntro eyebrow={page.kicker} title={page.title} body={page.body} /><div className="interior-category-grid"><ContentCard title="خدمات خفيفة" description="خدمات مرنة للأعمال والأفراد." to="/services/light" index={0} media={interiorImage('hub-light')} actionLabel="استكشف الخدمات" /><ContentCard title="خدمات وعقود" description="حلول تشغيلية بعقود واضحة." to="/services/contracts" index={1} media={interiorImage('hub-contracts')} actionLabel="استكشف العقود" /></div></main></Shell>;
+  return <Shell><main className="site-container page-body interior-page"><InteriorIntro eyebrow={page.kicker} title={page.title} body={page.body}><Action to="/request-services" icon="solar:arrow-left-linear">اطلب خدمة الآن</Action></InteriorIntro><div className="interior-category-grid"><ContentCard title="خدمات خفيفة" description="خدمات مرنة للأعمال والأفراد." to="/services/light" index={0} media={interiorImage('hub-light')} actionLabel="استكشف الخدمات" /><ContentCard title="خدمات وعقود" description="حلول تشغيلية بعقود واضحة." to="/services/contracts" index={1} media={interiorImage('hub-contracts')} actionLabel="استكشف العقود" /></div></main></Shell>;
 }
+function RequestServices() { return <Shell><main className="site-container page-body narrow-page interior-page interior-form-page"><Link className="back-link" to="/services"><Icon icon="solar:arrow-right-linear" /> العودة إلى الخدمات</Link><InteriorIntro eyebrow="طلب خدمة" title="نموذج الخدمات اللوجستية" body="حدد الخدمات التي تحتاجها، وسنتواصل معك لمناقشة طلبك." /><ServiceInquiry /></main></Shell>; }
 function ServiceListing({ category }: { category?: string }) {
   const { cms } = useCms(); const items = [...cms.generalInfo, ...cms.serviceModels].filter(item => !category || item.serviceCategory === category);
   const title = category === 'light' ? 'خدمات خفيفة' : category === 'contracts' ? 'خدمات وعقود' : 'جميع الخدمات';
@@ -270,5 +272,5 @@ function NotFound() { return <Shell><main className="site-container page-body na
 
 export function App() { return <Routes>
   <Route path="/" element={<Home />} /><Route path="/services" element={<ServicesHub />} /><Route path="/services/light" element={<ServiceListing category="light" />} /><Route path="/services/contracts" element={<ServiceListing category="contracts" />} /><Route path="/services/:slug" element={<ServiceDetail />} /><Route path="/frameworks" element={<Navigate to="/services" replace />} />
-  <Route path="/initiatives" element={<Initiatives />} /><Route path="/about" element={<Testimonials />} /><Route path="/company-market" element={<Market />} /><Route path="/company-market/:slug" element={<MarketDetail />} /><Route path="/contact" element={<Contact />} /><Route path="/join-us" element={<Join />} /><Route path="/join-us/:slug" element={<JoinDetail />} /><Route path="/payment-success" element={<PaymentSuccess />} /><Route path="/admin" element={<Admin />} /><Route path="*" element={<NotFound />} />
+  <Route path="/initiatives" element={<Initiatives />} /><Route path="/about" element={<Testimonials />} /><Route path="/company-market" element={<Market />} /><Route path="/company-market/:slug" element={<MarketDetail />} /><Route path="/contact" element={<Contact />} /><Route path="/request-services" element={<RequestServices />} /><Route path="/join-us" element={<Join />} /><Route path="/join-us/:slug" element={<JoinDetail />} /><Route path="/payment-success" element={<PaymentSuccess />} /><Route path="/admin" element={<Admin />} /><Route path="*" element={<NotFound />} />
 </Routes>; }
