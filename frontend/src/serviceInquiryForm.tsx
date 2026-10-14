@@ -1,8 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import { Icon } from '@iconify/react';
-import { createServiceRequest } from './data';
 import { normalizeDigits, saudiMobile } from './forms';
-import { inquiryDetails, serviceGroups } from './serviceInquiry';
+import { serviceGroups } from './serviceInquiry';
+import { submitServiceInquiry } from './serviceInquiryApi';
 
 type Details = { name: string; company: string; phone: string; city: string };
 const initial: Details = { name: '', company: '', phone: '', city: '' };
@@ -35,12 +35,7 @@ export function ServiceInquiry() {
     if (pending) return;
     setPending(true); setError('');
     try {
-      await createServiceRequest({
-        service_slug: 'logistics-inquiry', service_title: 'طلب خدمات لوجستية',
-        name: details.name.trim(), phone: `+966${saudiMobile(details.phone)}`, email: '',
-        details: inquiryDetails(details.company, details.city, selected), status: 'طلب جديد',
-        created_at_label: new Date().toLocaleDateString('ar-SA'),
-      });
+      await submitServiceInquiry(details, selected);
       setSuccess(true); setDetails(initial); setSelected([]);
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'تعذر إرسال الطلب. حاول مرة أخرى.'); }
     finally { setPending(false); }
