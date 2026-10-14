@@ -210,7 +210,7 @@ function ServicesHub() {
   const { cms } = useCms(); const page = cms.pages.services || { kicker: 'الخدمات', title: 'خدمات وعاء', body: '' };
   return <Shell><main className="site-container page-body interior-page"><InteriorIntro eyebrow={page.kicker} title={page.title} body={page.body}><Action to="/join-us/request-services" icon="solar:arrow-left-linear">اطلب خدمة الآن</Action></InteriorIntro><div className="interior-category-grid"><ContentCard title="خدمات خفيفة" description="خدمات مرنة للأعمال والأفراد." to="/services/light" index={0} media={interiorImage('hub-light')} actionLabel="استكشف الخدمات" /><ContentCard title="خدمات وعقود" description="حلول تشغيلية بعقود واضحة." to="/services/contracts" index={1} media={interiorImage('hub-contracts')} actionLabel="استكشف العقود" /></div></main></Shell>;
 }
-function RequestServices() { return <Shell><main className="site-container page-body narrow-page interior-page interior-form-page"><Link className="back-link" to="/join-us"><Icon icon="solar:arrow-right-linear" /> العودة إلى الفئات</Link><InteriorIntro eyebrow="انضم إلينا" title="نموذج الخدمات اللوجستية" body="حدد الخدمات التي تحتاجها، وسنتواصل معك لمناقشة طلبك." /><ServiceInquiry /></main></Shell>; }
+function RequestServices() { return <Shell><main className="page-body service-inquiry-page"><div className="service-inquiry-content"><Link className="back-link" to="/join-us"><Icon icon="solar:arrow-right-linear" /> العودة إلى الفئات</Link><header className="service-inquiry-intro"><img src={`${import.meta.env.BASE_URL}images/weaa-logo.jpeg`} alt="شعار وعاء" /><h1>نموذج الخدمات اللوجستية</h1><p>اختر الخدمات التي تحتاجها وسنتواصل معك في أقرب وقت.</p></header><ServiceInquiry /></div></main></Shell>; }
 function ServiceListing({ category }: { category?: string }) {
   const { cms } = useCms(); const items = [...cms.generalInfo, ...cms.serviceModels].filter(item => !category || item.serviceCategory === category);
   const title = category === 'light' ? 'خدمات خفيفة' : category === 'contracts' ? 'خدمات وعقود' : 'جميع الخدمات';
@@ -279,7 +279,7 @@ function Join() {
           : i === 1 ? 'join-investor' : undefined;
         return <ContentCard key={form.id || form.slug} title={form.title} description={form.audience} to={`/join-us/${form.slug}`} index={i} media={imageFor(form.imageUrl, fallback)} fallbackMedia={fallback ? interiorImage(fallback) : undefined} illustrative={!form.imageUrl && Boolean(fallback)} actionLabel="اضغط هنا" />;
       })}
-      <ContentCard title="طلب الخدمات اللوجستية" description="عقود تشغيلية وفرص استثمار" to="/join-us/request-services" index={forms.length} media={interiorImage('join-service-inquiry')} illustrative actionLabel="اضغط هنا" />
+      <ContentCard title="طلب الخدمات اللوجستية" description="اختر الخدمات المناسبة لعملك" to="/join-us/request-services" index={forms.length} media={interiorImage('join-service-inquiry')} illustrative actionLabel="اضغط هنا" />
     </div>
   </main></Shell>;
 }

@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { serviceInquiryPayload, submitServiceInquiry } from './serviceInquiryApi';
 
-const details = { name: ' أحمد ', company: ' شركة مثال ', phone: '٠٥١٢٣٤٥٦٧٨', city: ' جدة ' };
-const selected = ['باقة كوادر', 'عقد الهرم الماسي'];
+const details = { name: ' شركة مثال ', phone: '٠٥١٢٣٤٥٦٧٨' };
+const selected = ['ترخيص نقل خفيف', 'استثمار الهرم الماسي'];
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -22,13 +22,13 @@ describe('service inquiry API', () => {
     });
     const sent = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(sent).toEqual({
-      ...serviceInquiryPayload(details, selected, new Date('2026-10-14T12:00:00Z')),
+      ...serviceInquiryPayload(details, selected, undefined, new Date('2026-10-14T12:00:00Z')),
       created_at_label: expect.any(String),
     });
-    expect(serviceInquiryPayload(details, selected, new Date('2026-10-14T12:00:00Z'))).toEqual({
+    expect(serviceInquiryPayload(details, selected, undefined, new Date('2026-10-14T12:00:00Z'))).toEqual({
       service_slug: 'logistics-inquiry', service_title: 'طلب خدمات لوجستية',
-      name: 'أحمد', phone: '+966512345678', email: '',
-      details: 'اسم الشركة: شركة مثال\n\nالمدينة: جدة\n\nعقود تشغيلية:\n- باقة كوادر\n\nالاستثمار:\n- عقد الهرم الماسي',
+      name: 'شركة مثال', phone: '+966512345678', email: '',
+      details: 'ترخيص لوجستك:\n- ترخيص نقل خفيف\n\nالاستثمار:\n- استثمار الهرم الماسي',
       status: 'طلب جديد', created_at_label: new Date('2026-10-14T12:00:00Z').toLocaleDateString('ar-SA'),
     });
   });

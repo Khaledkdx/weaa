@@ -1,6 +1,6 @@
 # متغيرات نموذج الخدمات اللوجستية
 
-المسار: `/request-services`  
+المسار: `/join-us/request-services` (`/request-services` يحوّل إليه)
 المكوّن: `frontend/src/serviceInquiryForm.tsx`  
 قائمة الخدمات: `frontend/src/serviceInquiry.ts`
 
