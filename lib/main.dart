@@ -1857,7 +1857,7 @@ class CmsContent {
         nameEn: 'WEAA Company for Logistics and Administrative Services',
         taglineAr: 'الطبقة الأولى المتكاملة في عالم اللوجستيات',
         taglineEn: 'الطبقة الأولى المتكاملة في عالم اللوجستيات',
-        phone: '+966567018977',
+        phone: '+966 11 511 0441',
         email: 'info@weaa-sa.com',
         website: 'https://weaa-sa.com',
         headquarters: 'جدة، حي المروة، شارع عبدالله اليماني',

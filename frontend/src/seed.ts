@@ -23,7 +23,7 @@ export const courierForms: FormDefinition[] = [
 ];
 
 export const seed: CmsContent = {
-  company: { nameAr: 'شركة وعاء للخدمات اللوجستية والإدارية', nameEn: 'WEAA Logistics', taglineAr: 'الطبقة الأولى المتكاملة في عالم اللوجستيات', taglineEn: '', phone: '+966567018977', email: 'info@weaa-sa.com', website: 'https://weaa-sa.com', headquarters: 'جدة، حي المروة، شارع عبدالله اليماني', vat: '314375725200003', cr: '7052452385', vision: '', mission: '' },
+  company: { nameAr: 'شركة وعاء للخدمات اللوجستية والإدارية', nameEn: 'WEAA Logistics', taglineAr: 'الطبقة الأولى المتكاملة في عالم اللوجستيات', taglineEn: '', phone: '+966 11 511 0441', email: 'info@weaa-sa.com', website: 'https://weaa-sa.com', headquarters: 'جدة، حي المروة، شارع عبدالله اليماني', vat: '314375725200003', cr: '7052452385', vision: '', mission: '' },
   pages: {
     home: { kicker: 'وعاء', title: 'اللوجستيات تبدأ من وعاء', body: 'خدمات لوجستية وإدارية تجمع احتياجات الأفراد والشركات في مكان واحد.' },
     services: { kicker: 'الخدمات', title: 'اختر مسار الخدمة المناسب', body: 'حلول مرنة للأفراد والأعمال.' },

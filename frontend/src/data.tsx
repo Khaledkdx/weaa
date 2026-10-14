@@ -12,6 +12,7 @@ export function normalizeCms(raw: unknown): CmsContent {
   const value = raw as Partial<CmsContent>;
   const merged = { ...structuredClone(seed), ...value } as CmsContent;
   merged.company = { ...seed.company, ...(value.company || {}) };
+  if (merged.company.phone.replace(/\D/g, '') === '966567018977') merged.company.phone = seed.company.phone;
   merged.pages = value.pages ? { ...value.pages } : { ...seed.pages };
   merged.defaultServiceForm = value.defaultServiceForm || seed.defaultServiceForm;
   merged.serviceFormOverrides = value.serviceFormOverrides || {};

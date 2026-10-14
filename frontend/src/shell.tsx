@@ -71,7 +71,7 @@ export function Shell({ children, compact = false }: { children: ReactNode; comp
     <footer className="site-footer">
       <div><strong>وعاء</strong><p>حلول لوجستية وإدارية تبدأ من احتياجك.</p></div>
       <div className="footer-links"><Link to="/services">الخدمات</Link><Link to="/join-us">انضم إلينا</Link><Link to="/contact">تواصل</Link></div>
-      <div className="footer-contact"><a href={`tel:${cms.company.phone}`}>{cms.company.phone}</a><a href={`mailto:${cms.company.email}`}>{cms.company.email}</a></div>
+      <div className="footer-contact"><a href={`tel:${cms.company.phone.replace(/[^\d+]/g, '')}`}>{cms.company.phone}</a><a href={`mailto:${cms.company.email}`}>{cms.company.email}</a></div>
       <small>© {new Date().getFullYear()} وعاء للخدمات اللوجستية والإدارية</small>
     </footer>
   </div>;

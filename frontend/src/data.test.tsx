@@ -9,6 +9,11 @@ describe('CMS compatibility', () => {
     expect(result.company.nameAr).toBe('عنوان معدل');
     expect(result.homepageSections.map(section => section.id)).toEqual(['founder', 'intro']);
   });
+  it('replaces the old company contact number in saved CMS content', () => {
+    const result = normalizeCms({ ...seed, company: { ...seed.company, phone: '+966567018977' } });
+    expect(result.company.phone).toBe('+966 11 511 0441');
+    expect(normalizeCms({ ...seed, company: { ...seed.company, phone: '+966 12 345 6789' } }).company.phone).toBe('+966 12 345 6789');
+  });
   it('does not restore removed join forms after migration', () => {
     const result = normalizeCms({ ...seed, joinForms: [], accountantFormMigrated: true, courierFormsMigrated: true });
     expect(result.joinForms).toEqual([]);

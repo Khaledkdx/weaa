@@ -390,7 +390,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('القنوات الرسمية'), findsOneWidget);
-    expect(find.text('+966567018977'), findsWidgets);
+    expect(find.text('+966 11 511 0441'), findsWidgets);
     expect(find.text('info@weaa-sa.com'), findsWidgets);
   });
 
