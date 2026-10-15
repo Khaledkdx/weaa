@@ -3,9 +3,12 @@ export type ServiceSection = { title?: string; options: ServiceOption[] };
 export type ServiceGroup = { title: string; description: string; icon: string; sections: ServiceSection[] };
 
 export const serviceGroups: ServiceGroup[] = [
-  { title: 'ترخيص لوجستك', description: 'تراخيص النقل والهيئات الرسمية', icon: 'solar:clipboard-text-linear', sections: [{ options: [
-    { title: 'ترخيص هيئة النقل النهائي' }, { title: 'ترخيص نقل خفيف' }, { title: 'ترخيص نقل ثقيل' }, { title: 'ترخيص موجه تقني' },
-  ] }] },
+  { title: 'التراخيص', description: 'تراخيص نقل البضائع والركاب والمركبات', icon: 'solar:clipboard-text-linear', sections: [
+    { title: 'النقل الخفيف', options: ['ترخيص النقل الخفيف للبضائع على الطرق البرية', 'ترخيص الدراجات الآلية لنقل البضائع'].map(title => ({ title })) },
+    { title: 'النقل الثقيل', options: ['ترخيص النقل الثقيل للبضائع للأغراض التجارية للمنشأة', 'ترخيص النقل الثقيل للبضائع للأغراض التجارية للمنشأة - للغير'].map(title => ({ title })) },
+    { title: 'نقل الركاب', options: ['ترخيص النقل الخاص للركاب بالحافلات', 'ترخيص النقل التعليمي', 'ترخيص نقل متخصص'].map(title => ({ title })) },
+    { title: 'تراخيص أخرى', options: ['ترخيص أجرة عامة (تاكسي)', 'ترخيص سحب ونقل المركبات'].map(title => ({ title })) },
+  ] },
   { title: 'عقود', description: 'عقود مع شركات الطرود والمطاعم والماركت', icon: 'solar:document-text-linear', sections: [
     { title: 'عقود مع شركات طرود', options: ['أمازون (سيدان-فان)', 'نون', 'آي مايل iMile', 'زاجل', 'ناقل', 'سمسا', 'DHL', 'أخرى - طرود'].map(title => ({ title })) },
     { title: 'عقود مع شركات المطاعم', options: ['هنقرستيشن', 'كيتا', 'نينجا', 'تويو', 'مرسول', 'جاهز', 'داشينز', 'أخرى - مطاعم'].map(title => ({ title })) },
@@ -14,10 +17,8 @@ export const serviceGroups: ServiceGroup[] = [
   { title: 'مناديب', description: 'توفير مناديب بكفالة أو عقد أجير', icon: 'solar:users-group-rounded-linear', sections: [{ options: [
     { title: 'مناديب نقل كفالة' }, { title: 'مناديب عقد أجير' },
   ] }] },
-  { title: 'مركبات', description: 'نقل خفيف وثقيل، فان وباص', icon: 'solar:delivery-linear', sections: [
+  { title: 'مركبات', description: 'سيارات ودراجات للنقل الخفيف', icon: 'solar:delivery-linear', sections: [
     { title: 'نقل خفيف', options: ['سيارات إيجار شهري', 'إيجار ينتهي بالتمليك', 'دبابات إيجار شهري', 'دبابات كهربائية إيجار شهري'].map(title => ({ title })) },
-    { title: 'نقل ثقيل', options: ['دينات تبريد / جاف', 'تريلات'].map(title => ({ title })) },
-    { title: 'أخرى', options: ['فان', 'باص'].map(title => ({ title })) },
   ] },
   { title: 'مستودعات', description: 'تأجير، استئجار وإدارة المستودعات', icon: 'solar:buildings-linear', sections: [{ options: [
     { title: 'تأجير مستودعات' }, { title: 'استئجار مستودعات' }, { title: 'إدارة مستودعات' },

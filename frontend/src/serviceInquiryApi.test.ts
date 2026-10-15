@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { serviceInquiryPayload, submitServiceInquiry } from './serviceInquiryApi';
 
 const details = { name: ' أحمد ', company: ' شركة مثال ', phone: '٠٥١٢٣٤٥٦٧٨', city: ' جدة ' };
-const selected = ['ترخيص نقل خفيف', 'عقد الهرم الماسي'];
+const selected = ['ترخيص النقل الخفيف للبضائع على الطرق البرية', 'عقد الهرم الماسي'];
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -28,7 +28,7 @@ describe('service inquiry API', () => {
     expect(serviceInquiryPayload(details, selected, undefined, new Date('2026-10-14T12:00:00Z'))).toEqual({
       service_slug: 'logistics-inquiry', service_title: 'طلب خدمات لوجستية',
       name: 'أحمد', phone: '+966512345678', email: '',
-      details: 'اسم الشركة: شركة مثال\n\nالمدينة: جدة\n\nتاريخ الطلب: 14/10/2026, 15:00\n\nترخيص لوجستك:\n- ترخيص نقل خفيف\n\nالاستثمار:\n- عقد الهرم الماسي',
+      details: 'اسم الشركة: شركة مثال\n\nالمدينة: جدة\n\nتاريخ الطلب: 14/10/2026, 15:00\n\nالتراخيص:\nالنقل الخفيف\n- ترخيص النقل الخفيف للبضائع على الطرق البرية\n\nالاستثمار:\n- عقد الهرم الماسي',
       status: 'طلب جديد', created_at_label: '14/10/2026, 15:00',
     });
   });
