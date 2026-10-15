@@ -4,8 +4,8 @@ import { normalizeDigits, saudiMobile } from './forms';
 import { serviceGroups, type CourierRequirements } from './serviceInquiry';
 import { submitServiceInquiry } from './serviceInquiryApi';
 
-type Details = { name: string; phone: string };
-const initial: Details = { name: '', phone: '' };
+type Details = { name: string; company: string; phone: string; city: string };
+const initial: Details = { name: '', company: '', phone: '', city: '' };
 const initialCourier: CourierRequirements = { count: '', city: '', sponsorshipSpecs: '', ajeerSpecs: '' };
 const courierOptions = ['مناديب نقل كفالة', 'مناديب عقد أجير'];
 function phoneInput(value: string) {
@@ -29,8 +29,9 @@ export function ServiceInquiry() {
     event.preventDefault();
     setError('');
     if (step === 0) {
-      if (!details.name.trim()) { setError('أدخل الاسم أو اسم الشركة.'); return; }
+      if (!details.name.trim()) { setError('أدخل الاسم.'); return; }
       if (!/^5\d{8}$/.test(saudiMobile(details.phone))) { setError('رقم الجوال السعودي يجب أن يبدأ بـ 5 ويتكوّن من 9 أرقام بعد +966.'); return; }
+      if (!details.city.trim()) { setError('أدخل المدينة.'); return; }
     }
     if (step === 1 && !selected.length) { setError('اختر خدمة واحدة على الأقل.'); return; }
     if (step === 1 && selected.some(value => courierOptions.includes(value)) && (!/^[1-9]\d*$/.test(courier.count) || !courier.city.trim())) { setError('أدخل عدد المناديب المطلوب والمدينة.'); return; }
@@ -54,8 +55,10 @@ export function ServiceInquiry() {
       <form onSubmit={next} className="inquiry-form" noValidate>
         <div className="inquiry-heading"><h2>{['معلوماتك الشخصية', 'اختر الخدمات', 'راجع طلبك'][step]}</h2><p>{['الرجاء تعبئة بياناتك للتواصل معك.', 'يمكنك اختيار أكثر من خدمة. اضغط على الفئة لعرض الخيارات.', 'تأكد من بياناتك والخدمات المختارة قبل إرسال الطلب.'][step]}</p></div>
         {step === 0 && <div className="inquiry-fields">
-          <label className="form-control"><span>الاسم / اسم الشركة *</span><input required autoComplete="name" placeholder="أدخل اسمك الكامل أو اسم الشركة" value={details.name} onChange={event => setDetails(current => ({ ...current, name: event.target.value.slice(0, 120) }))} /></label>
+          <label className="form-control"><span>الاسم *</span><input required autoComplete="name" placeholder="أدخل اسمك الكامل" value={details.name} onChange={event => setDetails(current => ({ ...current, name: event.target.value.slice(0, 120) }))} /></label>
+          <label className="form-control"><span>اسم الشركة (اختياري)</span><input autoComplete="organization" placeholder="اسم الشركة" value={details.company} onChange={event => setDetails(current => ({ ...current, company: event.target.value.slice(0, 120) }))} /></label>
           <label className="form-control"><span>رقم الجوال *</span><div className="inquiry-phone"><span className="inquiry-country" dir="ltr">+966 السعودية</span><input required type="tel" inputMode="numeric" autoComplete="tel-national" dir="ltr" placeholder="5xxxxxxxx" value={details.phone} onChange={event => setDetails(current => ({ ...current, phone: phoneInput(event.target.value) }))} /></div></label>
+          <label className="form-control"><span>في أي مدينة *</span><input required autoComplete="address-level2" placeholder="مثال: الرياض" value={details.city} onChange={event => setDetails(current => ({ ...current, city: event.target.value.slice(0, 100) }))} /></label>
         </div>}
         {step === 1 && <div className="inquiry-groups">{serviceGroups.map(group => {
           const options = group.sections.flatMap(section => section.options);
@@ -64,7 +67,7 @@ export function ServiceInquiry() {
             {hasCourier && <div className="inquiry-courier-fields"><div className="inquiry-courier-row"><label className="form-control">عدد المناديب المطلوب *<input type="number" min="1" inputMode="numeric" value={courier.count} onChange={event => setCourier(current => ({ ...current, count: event.target.value }))} placeholder="مثال: 5" /></label><label className="form-control">المدينة *<input value={courier.city} onChange={event => setCourier(current => ({ ...current, city: event.target.value.slice(0, 100) }))} placeholder="مثال: الرياض" /></label></div>{selected.includes('مناديب نقل كفالة') && <label className="form-control">مواصفات أخرى - مناديب نقل كفالة<input value={courier.sponsorshipSpecs} onChange={event => setCourier(current => ({ ...current, sponsorshipSpecs: event.target.value.slice(0, 500) }))} placeholder="اكتب المواصفات المطلوبة" /></label>}{selected.includes('مناديب عقد أجير') && <label className="form-control">مواصفات أخرى - مناديب عقد أجير<input value={courier.ajeerSpecs} onChange={event => setCourier(current => ({ ...current, ajeerSpecs: event.target.value.slice(0, 500) }))} placeholder="اكتب المواصفات المطلوبة" /></label>}</div>}
           </div></details>;
         })}</div>}
-        {step === 2 && <div className="inquiry-review"><div><span>الاسم / اسم الشركة</span><strong>{details.name.trim()}</strong></div><div><span>رقم الجوال</span><strong dir="ltr">+966{saudiMobile(details.phone)}</strong></div><div className="inquiry-review-services"><span>الخدمات المختارة</span><strong>{selected.join('، ')}</strong></div>{selected.some(value => courierOptions.includes(value)) && <><div><span>عدد المناديب</span><strong>{courier.count}</strong></div><div><span>المدينة</span><strong>{courier.city}</strong></div></>}</div>}
+        {step === 2 && <div className="inquiry-review"><div><span>الاسم</span><strong>{details.name.trim()}</strong></div>{details.company.trim() && <div><span>اسم الشركة</span><strong>{details.company.trim()}</strong></div>}<div><span>رقم الجوال</span><strong dir="ltr">+966{saudiMobile(details.phone)}</strong></div><div><span>المدينة</span><strong>{details.city.trim()}</strong></div><div className="inquiry-review-services"><span>الخدمات المختارة</span><strong>{selected.join('، ')}</strong></div>{selected.some(value => courierOptions.includes(value)) && <><div><span>عدد المناديب</span><strong>{courier.count}</strong></div><div><span>مدينة عمل المناديب</span><strong>{courier.city}</strong></div></>}</div>}
         {error && <p className="error inquiry-error" role="alert">{error}</p>}
         <div className="inquiry-actions">{step > 0 && <button type="button" className="action action-secondary" disabled={pending} onClick={() => { setError(''); setStep(current => current - 1); showStepStart(); }}><Icon icon="solar:arrow-right-linear" /> رجوع</button>}{step < 2 ? <button type="submit" className="action action-primary">التالي <Icon icon="solar:arrow-left-linear" /></button> : <button type="button" className="action action-primary" disabled={pending} onClick={() => void submit()}>{pending ? 'جاري الإرسال...' : 'إرسال الطلب'} <Icon icon="solar:arrow-left-linear" /></button>}</div>
       </form>}

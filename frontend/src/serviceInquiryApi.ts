@@ -1,27 +1,28 @@
 import { saudiMobile } from './forms';
 import { inquiryDetails, type CourierRequirements } from './serviceInquiry';
 
-export type ServiceInquiryDetails = { name: string; phone: string };
+export type ServiceInquiryDetails = { name: string; company: string; phone: string; city: string };
 
 const endpoint = 'https://app.swarsafqa.com/api/public/customer-service-requests';
 
 export function serviceInquiryPayload(details: ServiceInquiryDetails, selected: string[], courier?: CourierRequirements, createdAt = new Date()) {
+  const dateLabel = createdAt.toLocaleString('en-GB', { timeZone: 'Asia/Riyadh', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
   return {
     service_slug: 'logistics-inquiry',
     service_title: 'طلب خدمات لوجستية',
     name: details.name.trim(),
     phone: `+966${saudiMobile(details.phone)}`,
     email: '',
-    details: inquiryDetails(selected, courier),
+    details: inquiryDetails(selected, { company: details.company, city: details.city, dateLabel, courier }),
     status: 'طلب جديد',
-    created_at_label: createdAt.toLocaleDateString('ar-SA'),
+    created_at_label: dateLabel,
   };
 }
 
 export async function submitServiceInquiry(details: ServiceInquiryDetails, selected: string[], courier?: CourierRequirements) {
   let response: Response;
   try {
-    response = await fetch(endpoint, {
+    response = await fetch(import.meta.env.PROD ? '/api/service-inquiry' : endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(serviceInquiryPayload(details, selected, courier)),

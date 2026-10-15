@@ -22,11 +22,17 @@ export const serviceGroups: ServiceGroup[] = [
   { title: 'مستودعات', description: 'تأجير، استئجار وإدارة المستودعات', icon: 'solar:buildings-linear', sections: [{ options: [
     { title: 'تأجير مستودعات' }, { title: 'استئجار مستودعات' }, { title: 'إدارة مستودعات' },
   ] }] },
-  { title: 'إدارة وتشغيل', description: 'إدارة المشاريع اللوجستية الكاملة', icon: 'solar:settings-linear', sections: [{ options: [
-    { title: 'إدارة وتشغيل المشروع اللوجستي' },
+  { title: 'عقود تشغيلية', description: 'عقود تأسيس وتشغيل وتطوير المشاريع اللوجستية', icon: 'solar:settings-linear', sections: [{ options: [
+    { title: 'إدارة وتشغيل مشروع لوجستي' },
+    { title: 'عقد استشارات وتطوير' },
+    { title: 'عقد إنشاء وتأسيس مشروع لوجستي' },
+    { title: 'باقة كوادر' },
+    { title: 'عقد جلب أعمال وتشغيل مستودعات' },
+    { title: 'عقد إشراف وتطوير أعمال' },
   ] }] },
   { title: 'الاستثمار', description: 'فرص استثمارية في القطاع اللوجستي', icon: 'solar:diamond-linear', sections: [{ options: [
-    { title: 'استثمار الهرم الماسي', description: 'استثمار المبالغ المالية في القطاع اللوجستي' },
+    { title: 'عقد الهرم الماسي', description: 'استثمار المبالغ المالية في القطاع اللوجستي' },
+    { title: 'عقد اتحاد الطبقة الأولى', description: 'التشغيل الثلاثي في توفير المستودعات والمنتجات وتشغيلها ونقلها' },
   ] }] },
   { title: 'استشارات', description: 'استشارات لوجستية متخصصة', icon: 'solar:lightbulb-linear', sections: [{ options: [
     { title: 'بدء شركة لوجستية' }, { title: 'بدء مشروع لوجستي' }, { title: 'تشغيل مشروع لوجستي' }, { title: 'إجابات وحلول للمشكلات' }, { title: 'أخرى' },
@@ -34,8 +40,14 @@ export const serviceGroups: ServiceGroup[] = [
 ];
 
 export type CourierRequirements = { count: string; city: string; sponsorshipSpecs: string; ajeerSpecs: string };
+export type InquiryContext = { company?: string; city?: string; dateLabel?: string; courier?: CourierRequirements };
 
-export function inquiryDetails(selections: string[], courier?: CourierRequirements) {
+export function inquiryDetails(selections: string[], { company, city, dateLabel, courier }: InquiryContext = {}) {
+  const prefix = [
+    company?.trim() && `اسم الشركة: ${company.trim()}`,
+    city?.trim() && `المدينة: ${city.trim()}`,
+    dateLabel && `تاريخ الطلب: ${dateLabel}`,
+  ].filter(Boolean);
   const categories = serviceGroups.map(group => {
     const sections = group.sections.map(section => {
       const chosen = section.options.filter(option => selections.includes(option.title));
@@ -53,5 +65,5 @@ export function inquiryDetails(selections: string[], courier?: CourierRequiremen
     ].filter(Boolean);
     if (extras.length) categories.push(extras.join('\n'));
   }
-  return categories.join('\n\n');
+  return [...prefix, ...categories].join('\n\n');
 }

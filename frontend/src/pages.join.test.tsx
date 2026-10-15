@@ -21,13 +21,13 @@ describe('join us service inquiry', () => {
     renderRoute('/join-us');
     const card = screen.getByRole('link', { name: /طلب الخدمات اللوجستية/ });
     expect(card.getAttribute('href')).toBe('/join-us/request-services');
-    expect(screen.queryByRole('textbox', { name: 'الاسم / اسم الشركة *' })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: 'الاسم *' })).toBeNull();
   });
 
   it('opens the form at /join-us/request-services', () => {
     renderRoute('/join-us/request-services');
     expect(screen.getByRole('heading', { name: 'نموذج الخدمات اللوجستية' })).toBeTruthy();
-    expect(screen.getByRole('textbox', { name: 'الاسم / اسم الشركة *' })).toBeTruthy();
+    expect(screen.getByRole('textbox', { name: 'الاسم *' })).toBeTruthy();
     expect(screen.getByRole('link', { name: /العودة إلى الفئات/ }).getAttribute('href')).toBe('/join-us');
   });
 

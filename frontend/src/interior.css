@@ -82,7 +82,7 @@
 .inquiry-heading{text-align:center;margin:0 0 28px}
 .inquiry-heading h2{font-size:clamp(25px,3vw,31px);margin:0 0 7px;line-height:1.25}
 .inquiry-heading p{color:var(--muted);margin:0;line-height:1.6}
-.inquiry-fields{display:grid;grid-template-columns:1fr;gap:16px;padding:24px;background:var(--surface);border:1px solid var(--line);border-radius:6px}
+.inquiry-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;padding:24px;background:var(--surface);border:1px solid var(--line);border-radius:6px}
 .inquiry-fields .form-control{min-width:0}
 .inquiry-fields .form-control>span{display:block;margin-bottom:8px;font-weight:800;font-size:14px}
 .inquiry-fields input{width:100%;min-height:50px;background:var(--surface-2);color:var(--text);border:1px solid var(--line)}
@@ -135,5 +135,5 @@
 .inquiry-result p{color:var(--muted)}
 .inquiry-result button{margin:20px auto 0}
 @media(max-width:800px){.inquiry-options{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:700px){.service-inquiry-page{padding:20px 14px 75px}.service-inquiry-page .back-link{margin-bottom:22px}.service-inquiry-intro img{width:86px;height:70px;margin-bottom:12px}.service-inquiry-intro p{font-size:15px}.inquiry-progress li{width:94px}.inquiry-progress li:not(:last-child)::after{left:-18px;width:36px}.inquiry-fields{padding:18px}.inquiry-options,.inquiry-courier-row{grid-template-columns:1fr}.inquiry-actions .action{flex:1;justify-content:center}}
+@media(max-width:700px){.service-inquiry-page{padding:20px 14px 75px}.service-inquiry-page .back-link{margin-bottom:22px}.service-inquiry-intro img{width:86px;height:70px;margin-bottom:12px}.service-inquiry-intro p{font-size:15px}.inquiry-progress li{width:94px}.inquiry-progress li:not(:last-child)::after{left:-18px;width:36px}.inquiry-fields{grid-template-columns:1fr;padding:18px}.inquiry-options,.inquiry-courier-row{grid-template-columns:1fr}.inquiry-actions .action{flex:1;justify-content:center}}
 @media(prefers-reduced-motion:reduce){.inquiry-chevron,.inquiry-option{transition:none}}
