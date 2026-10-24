@@ -9,6 +9,33 @@ describe('CMS compatibility', () => {
     expect(result.company.nameAr).toBe('عنوان معدل');
     expect(result.homepageSections.map(section => section.id)).toEqual(['founder', 'intro']);
   });
+  it('removes the old heavy transport card without changing other homepage cards', () => {
+    const transport = seed.homepageSections.find(section => section.id === 'transport')!;
+    const legacy = { ...transport, cards: [{ ...transport.cards[0], id: 'transport-0', title: 'النقل الثقيل' }, ...transport.cards] };
+    const result = normalizeCms({ ...seed, homepageSections: [legacy], heavyTransportCardRemoved: false });
+    expect(result.homepageSections[0].cards).toEqual(transport.cards);
+    expect(normalizeCms(result).homepageSections[0].cards).toEqual(transport.cards);
+    expect(seed.homepageSections.find(section => section.id === 'transport')?.cards.some(card => card.title === 'النقل الثقيل')).toBe(false);
+  });
+  it('moves only the three legacy services out of light without deleting them', () => {
+    const oldItems = seed.generalInfo.map(item => ({ ...item, serviceCategory: 'light' }));
+    const result = normalizeCms({ ...seed, generalInfo: oldItems, lightServicesUnlisted: false });
+    expect(result.generalInfo.filter(item => item.serviceCategory === 'light').map(item => item.slug)).toEqual(['delivery', 'advisory']);
+    expect(result.generalInfo.filter(item => item.serviceCategory === 'unlisted').map(item => item.slug)).toEqual(['warehousing', 'intercity', 'international']);
+    expect(result.generalInfo.map(item => item.titleAr)).toEqual(oldItems.map(item => item.titleAr));
+    expect(normalizeCms(result).generalInfo).toEqual(result.generalInfo);
+  });
+  it('also unlists the older CMS entries that have no slug', () => {
+    const generalInfo = [
+      { ...seed.generalInfo[0], id: 'service:التخزين', slug: undefined, serviceCategory: 'light' },
+      { ...seed.generalInfo[2], id: 'service:الشحن بين المدن B2B', slug: undefined, serviceCategory: 'light' },
+      { ...seed.generalInfo[3], id: 'service:الشحن الدولي', slug: undefined, serviceCategory: 'light' },
+      seed.generalInfo[1],
+    ];
+    const result = normalizeCms({ ...seed, generalInfo, lightServicesUnlisted: false });
+    expect(result.generalInfo.map(item => item.serviceCategory)).toEqual(['unlisted', 'unlisted', 'unlisted', 'light']);
+    expect(result.generalInfo.map(item => item.slug)).toEqual(['warehousing', 'intercity', 'international', 'delivery']);
+  });
   it('replaces the old company contact number in saved CMS content', () => {
     const result = normalizeCms({ ...seed, company: { ...seed.company, phone: '+966567018977' } });
     expect(result.company.phone).toBe('+966 11 511 0441');
@@ -56,6 +83,15 @@ describe('CMS compatibility', () => {
     const result = normalizeCms({ ...seed, joinForms: [internal], courierInternalDetailsMigrated: false });
     expect(result.joinForms[0].fields.find(field => field.key === 'city')?.label).toBe('المدن');
     expect(result.joinForms[0].fields.find(field => field.key === 'can_relocate')?.label).toBe('قابلية الانتقال لمدينة أخرى');
+  });
+  it('adds the current profession to saved external forms once without overwriting edits', () => {
+    const external = { ...seed.joinForms[2], fields: seed.joinForms[2].fields.filter(field => field.key !== 'profession').map(field => field.key === 'education' ? { ...field, label: 'المؤهل الدراسي' } : field) };
+    const result = normalizeCms({ ...seed, joinForms: [external], courierExternalProfessionMigrated: false });
+    expect(result.joinForms[0].fields.map(field => field.key)).toEqual(seed.joinForms[2].fields.map(field => field.key));
+    expect(result.joinForms[0].fields.find(field => field.key === 'education')?.label).toBe('المؤهل الدراسي');
+    expect(result.joinForms[0].fields.find(field => field.key === 'profession')?.label).toBe('المهنة الحالية');
+    expect(normalizeCms(result).joinForms[0].fields).toEqual(result.joinForms[0].fields);
+    expect(normalizeCms({ ...seed, joinForms: [], courierExternalProfessionMigrated: false }).joinForms).toEqual([]);
   });
 });
 

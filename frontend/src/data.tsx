@@ -14,9 +14,33 @@ export function normalizeCms(raw: unknown): CmsContent {
   merged.company = { ...seed.company, ...(value.company || {}) };
   if (merged.company.phone.replace(/\D/g, '') === '966567018977') merged.company.phone = seed.company.phone;
   merged.pages = value.pages ? { ...value.pages } : { ...seed.pages };
+  const legacyServiceSlugs: Record<string, string> = {
+    'service:التخزين': 'warehousing',
+    'service:التوصيل للمستهلك B2C': 'delivery',
+    'service:الشحن بين المدن B2B': 'intercity',
+    'service:الشحن الدولي': 'international',
+    'service:الخدمات الإدارية والاستشارية': 'advisory',
+  };
+  merged.generalInfo = merged.generalInfo.map(item => ({
+    ...item,
+    slug: item.slug || legacyServiceSlugs[item.id],
+    titleAr: item.titleAr === 'التوصيل للمستهلك B2C' ? 'التوصيل للمستهلك' : item.titleAr === 'الشحن بين المدن B2B' ? 'الشحن بين المدن' : item.titleAr,
+  }));
   merged.defaultServiceForm = value.defaultServiceForm || seed.defaultServiceForm;
   merged.serviceFormOverrides = value.serviceFormOverrides || {};
   merged.homepageSections = Array.isArray(value.homepageSections) ? value.homepageSections : seed.homepageSections;
+  if (!value.heavyTransportCardRemoved) {
+    merged.homepageSections = merged.homepageSections.map(section => section.id !== 'transport' ? section : {
+      ...section,
+      cards: section.cards.filter(card => card.title.trim() !== 'النقل الثقيل'),
+    });
+  }
+  if (!value.lightServicesUnlisted) {
+    const excludedSlugs = new Set(['warehousing', 'intercity', 'international']);
+    const legacyIds = new Set(['service:التخزين', 'service:الشحن بين المدن B2B', 'service:الشحن الدولي']);
+    merged.generalInfo = merged.generalInfo.map(item => (excludedSlugs.has(item.slug || '') || legacyIds.has(item.id)) && item.serviceCategory === 'light'
+      ? { ...item, serviceCategory: 'unlisted' } : item);
+  }
   merged.joinForms = Array.isArray(value.joinForms) ? [...value.joinForms] : [...seed.joinForms];
   if (!value.accountantFormMigrated && !merged.joinForms.some(form => form.slug === 'join-accountant')) {
     merged.joinForms.unshift(seed.joinForms[0]);
@@ -43,10 +67,22 @@ export function normalizeCms(raw: unknown): CmsContent {
       return { ...form, fields: [...renamed.slice(0, insertAt), countField, ...renamed.slice(insertAt)] };
     });
   }
+  if (!value.courierExternalProfessionMigrated) {
+    const professionField = courierForms[1].fields.find(field => field.key === 'profession')!;
+    merged.joinForms = merged.joinForms.map(form => {
+      if (form.slug !== 'courier-external' || form.fields.some(field => field.key === professionField.key)) return form;
+      const educationIndex = form.fields.findIndex(field => field.key === 'education');
+      const insertAt = educationIndex < 0 ? form.fields.length : educationIndex + 1;
+      return { ...form, fields: [...form.fields.slice(0, insertAt), professionField, ...form.fields.slice(insertAt)] };
+    });
+  }
   merged.accountantFormMigrated = true;
   merged.courierFormsMigrated = true;
   merged.courierCarFieldsMigrated = true;
   merged.courierInternalDetailsMigrated = true;
+  merged.courierExternalProfessionMigrated = true;
+  merged.heavyTransportCardRemoved = true;
+  merged.lightServicesUnlisted = true;
   return merged;
 }
 
@@ -122,12 +158,6 @@ export function useCms() {
   return value;
 }
 
-export async function createServiceRequest(request: Omit<ServiceRequest, 'id'>) {
-  if (!supabase) throw new Error('إرسال الطلبات يحتاج اتصال Supabase.');
-  const { error } = await supabase.from('service_requests').insert(request);
-  if (error) throw error;
-}
-
 export async function createJoinRequest(request: Omit<JoinRequest, 'id'>, file?: File) {
   if (!supabase) throw new Error('إرسال الطلبات يحتاج اتصال Supabase.');
   let attachment_path: string | undefined;
@@ -139,6 +169,24 @@ export async function createJoinRequest(request: Omit<JoinRequest, 'id'>, file?:
   }
   const { error } = await supabase.from('join_requests').insert({ ...request, attachment_path });
   if (error) throw error;
+}
+
+export async function submitCompanySale(request: Omit<JoinRequest, 'id'>, documents: { key: string; label: string; file: File }[], uploads = new Map<File, string>()) {
+  if (!supabase) throw new Error('إرسال الطلبات يحتاج اتصال Supabase.');
+  const fields = { ...request.fields };
+  for (const document of documents) {
+    let path = uploads.get(document.file);
+    if (!path) {
+      const extension = document.file.name.split('.').pop()?.toLowerCase() || 'pdf';
+      path = `company-sales/${crypto.randomUUID()}/${document.key}.${extension}`;
+      const { error } = await supabase.storage.from('join-attachments').upload(path, document.file, { upsert: false });
+      if (error) throw new Error(`تعذر رفع ${document.label}. أعد المحاولة.`);
+      uploads.set(document.file, path);
+    }
+    fields[`company_document:${document.label}`] = path;
+  }
+  const { error } = await supabase.from('join_requests').insert({ ...request, fields });
+  if (error) throw new Error('تعذر حفظ الطلب. بياناتك محفوظة في الصفحة؛ أعد المحاولة.');
 }
 
 export async function loadRequests() {

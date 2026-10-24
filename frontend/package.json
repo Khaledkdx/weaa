@@ -4,7 +4,9 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/generate-icons.mjs",
     "dev": "vite --host 127.0.0.1",
+    "prebuild": "node scripts/generate-icons.mjs",
     "build": "tsc -b && vite build",
     "test": "vitest run",
     "preview": "vite preview --host 127.0.0.1"
@@ -19,6 +21,7 @@
     "react-router-dom": "^7.0.0"
   },
   "devDependencies": {
+    "@iconify-json/solar": "^1.2.13",
     "@testing-library/react": "^16.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

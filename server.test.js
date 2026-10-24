@@ -23,6 +23,15 @@ const inquiry = {
   created_at_label: '14/10/2026, 15:00',
 };
 
+test('keeps the executive sale form unindexed on direct links', async () => {
+  for (const path of ['/join-us/company-sale-executive', '/weaa/join-us/company-sale-executive/?review=1']) {
+    const headers = await new Promise((resolve, reject) => {
+      http.get({ port: server.address().port, path }, response => { response.resume(); response.on('end', () => resolve(response.headers)); }).on('error', reject);
+    });
+    assert.equal(headers['x-robots-tag'], 'noindex, nofollow, noarchive');
+  }
+});
+
 test('forwards a valid request and emails only after acceptance', async () => {
   const originalFetch = global.fetch;
   const originalEnv = [process.env.RESEND_API_KEY, process.env.NOTIFICATION_EMAIL, process.env.NOTIFICATION_FROM_EMAIL];

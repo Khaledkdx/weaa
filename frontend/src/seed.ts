@@ -18,7 +18,7 @@ export const courierForms: FormDefinition[] = [
     field('name', 'الاسم'), field('phone', 'رقم التواصل', 'phone'), field('nationality', 'الجنسية'), field('identity_number', 'رقم الهوية / الإقامة', 'text', false), field('sponsorship_transfer_count', 'عدد مرات نقل الكفالة', 'number', false), field('identity_expires_on', 'انتهاء الهوية', 'date'), field('city', 'المدن'), field('profession', 'المهنة في الإقامة'), field('license_type', 'نوع الرخصة', 'select'), field('can_relocate', 'قابلية الانتقال لمدينة أخرى', 'select'), field('owns_car', 'هل تملك سيارة؟', 'select', false), field('car_model', 'نوع وموديل السيارة'), field('car_year', 'سنة الصنع'),
   ]},
   { id: 'form:courier-external', slug: 'courier-external', title: 'مناديب خارج المملكة', description: 'انضم إلى فريق المناديب من خارج المملكة.', audience: 'مناديب خارج المملكة', kind: 'join', enabled: true, submissionType: 'courier-external', fields: [
-    field('name', 'الاسم'), field('phone', 'رقم الجوال مع رمز البلد', 'phone'), field('marital_status', 'الحالة الاجتماعية', 'select'), field('education', 'التعليم'), field('has_license', 'هل لديك رخصة؟', 'select'), field('country', 'البلد'), field('age', 'السن بالسنوات', 'number'),
+    field('name', 'الاسم'), field('phone', 'رقم الجوال مع رمز البلد', 'phone'), field('marital_status', 'الحالة الاجتماعية', 'select'), field('education', 'التعليم'), field('profession', 'المهنة الحالية'), field('has_license', 'هل لديك رخصة؟', 'select'), field('country', 'البلد'), field('age', 'السن بالسنوات', 'number'),
   ]},
 ];
 
@@ -31,14 +31,14 @@ export const seed: CmsContent = {
     initiatives: { kicker: 'المبادرات', title: 'القطاع لا يكبر بالأرقام وحدها', body: 'مبادرات وعاء تضع العامل والعميل والمستثمر داخل منظومة أوضح.' },
     about: { kicker: 'قالوا عنا', title: 'تجارب من عملائنا', body: 'شاهد آراء وتجارب العملاء عبر منصات التواصل الاجتماعي.' },
     'company-market': { kicker: 'عالم التقبيل', title: 'فرص بيع وشراء الشركات', body: 'اكتشف الفرص المتاحة أو تواصل معنا بشأن شركتك.' },
-    contact: { kicker: 'تواصل', title: 'لنبدأ المحادثة', body: 'أرسل رسالتك وسيصل طلبك إلى فريق وعاء.' },
+    contact: { kicker: 'تواصل', title: 'لنبدأ المحادثة', body: 'تواصل معنا عبر الهاتف أو البريد الإلكتروني.' },
     admin: { kicker: 'الإدارة', title: 'لوحة إدارة وعاء', body: 'محتوى الموقع والطلبات في مكان واحد.' },
   },
   generalInfo: [
-    item('التخزين', 'إدارة السعة والمخزون ونقاط الجاهزية.', 'warehousing'),
+    item('التخزين', 'إدارة السعة والمخزون ونقاط الجاهزية.', 'warehousing', 'unlisted'),
     item('التوصيل للمستهلك', 'تسليم مباشر لآخر ميل.', 'delivery'),
-    item('الشحن بين المدن', 'مسارات للشركات بوضوح في التكلفة والزمن.', 'intercity'),
-    item('الشحن الدولي', 'توصيل سلاسل التوريد عالميًا.', 'international'),
+    item('الشحن بين المدن', 'مسارات للشركات بوضوح في التكلفة والزمن.', 'intercity', 'unlisted'),
+    item('الشحن الدولي', 'توصيل سلاسل التوريد عالميًا.', 'international', 'unlisted'),
     item('الخدمات الإدارية والاستشارية', 'بنية إدارية واستشارية للمشروعات.', 'advisory'),
   ],
   serviceModels: [
@@ -60,10 +60,10 @@ export const seed: CmsContent = {
     section('founder', 'نبذة عن خادم القوم', 'bio'),
     section('individual', 'الخدمات الفردية', 'cards', [card('light', 'الخدمات الفردية', '/services/light'), { ...card('feasibility', 'دراسات الجدوى', ''), destinationType: 'contact', description: 'ناقش مشروعك وخطواته مع فريق وعاء.' }, { ...card('books', 'الكتب المتاحة للتحميل', ''), destinationType: 'download', buttonLabel: 'تحميل الكتاب' }], 'ابدأ باحتياجك، واختر الخدمة المناسبة لك.'),
     section('operations', 'خدمات التشغيل والعقود', 'cards', [{ ...card('vehicles', 'السيارات', ''), destinationType: 'contact' }, card('couriers', 'المناديب', '/join-us'), card('contracts', 'العقود', '/services/contracts'), { ...card('licenses', 'الترخيص', ''), destinationType: 'contact' }], 'خيارات واضحة لتجهيز أعمالك وتشغيلها.'),
-    section('transport', 'النقل البري', 'cards', ['النقل الثقيل', 'النقل الخفيف', 'الدينات', 'الحافلات', 'الدراجات', 'السيارات السيدان'].map((title, index) => ({ ...card(`transport-${index}`, title, ''), destinationType: 'contact' })), 'اختر نوع النقل، وأخبرنا بما تحتاجه.'),
+    section('transport', 'النقل البري', 'cards', ['النقل الخفيف', 'الدينات', 'الحافلات', 'الدراجات', 'السيارات السيدان'].map((title, index) => ({ ...card(`transport-${index + 1}`, title, ''), destinationType: 'contact' })), 'اختر نوع النقل، وأخبرنا بما تحتاجه.'),
     section('market', 'عالم التقبيل', 'market', [{ ...card('sell', 'أريد بيع شركة', ''), destinationType: 'contact' }, { ...card('buy', 'أريد شراء شركة', ''), destinationType: 'contact' }, card('market-all', 'استكشف الفرص', '/company-market')], 'فرص بيع وشراء الشركات، وخطوتك التالية نحو الاستثمار.'),
     section('join', 'انضم إلينا', 'cards', [{ ...card('inside', 'مناديب داخل المملكة', 'form:courier-internal'), destinationType: 'form' }, { ...card('outside', 'مناديب خارج المملكة', 'form:courier-external'), destinationType: 'form' }, card('jobs', 'طالب وظيفة', '/join-us')], 'اختر المسار الأقرب إليك وسجل بياناتك.'),
     section('contact', 'لنبقَ على تواصل', 'contact'),
   ],
-  accountantFormMigrated: true, courierFormsMigrated: true, courierCarFieldsMigrated: true, courierInternalDetailsMigrated: true,
+  accountantFormMigrated: true, courierFormsMigrated: true, courierCarFieldsMigrated: true, courierInternalDetailsMigrated: true, courierExternalProfessionMigrated: true, heavyTransportCardRemoved: true, lightServicesUnlisted: true,
 };

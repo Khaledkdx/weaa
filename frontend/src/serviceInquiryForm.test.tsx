@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ServiceInquiry } from './serviceInquiryForm';
 import { submitServiceInquiry } from './serviceInquiryApi';
 
 vi.mock('./serviceInquiryApi', () => ({ submitServiceInquiry: vi.fn() }));
+beforeEach(() => { vi.spyOn(window, 'scrollTo').mockImplementation(() => {}); });
 
-afterEach(() => { cleanup(); vi.clearAllMocks(); });
+afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); });
 
 describe('service inquiry steps', () => {
   it('requires valid contact details and a service before review', () => {

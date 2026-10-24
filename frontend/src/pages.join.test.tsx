@@ -36,3 +36,42 @@ describe('join us service inquiry', () => {
     expect(screen.getByRole('heading', { name: 'نموذج الخدمات اللوجستية' })).toBeTruthy();
   });
 });
+
+describe('public form locations', () => {
+  it('links selling a company to the preliminary form but never lists the executive form', () => {
+    const market = renderRoute('/company-market');
+    expect(screen.getByRole('link', { name: 'أريد بيع شركة' }).getAttribute('href')).toBe('/join-us/company-sale');
+    expect(market.container.querySelector('a[href="/join-us/company-sale-executive"]')).toBeNull();
+    cleanup();
+    const home = renderRoute('/');
+    expect(screen.getByRole('link', { name: /أريد بيع شركة/ }).getAttribute('href')).toBe('/join-us/company-sale');
+    expect(home.container.querySelector('a[href="/join-us/company-sale-executive"]')).toBeNull();
+    cleanup();
+    const join = renderRoute('/join-us');
+    expect(join.container.querySelector('a[href="/join-us/company-sale-executive"]')).toBeNull();
+  });
+
+  it('hides road transport from the homepage while keeping service navigation', () => {
+    renderRoute('/');
+    expect(screen.queryByText('النقل البري')).toBeNull();
+    expect(screen.queryByText('الدينات')).toBeNull();
+    expect(screen.getByRole('link', { name: 'خدمات وعقود' }).getAttribute('href')).toBe('/services/contracts');
+  });
+
+  it('shows contact details without a submission form', () => {
+    const { container } = renderRoute('/contact');
+    expect(container.querySelector('form')).toBeNull();
+    expect(screen.getByRole('link', { name: /11 511 0441/ }).getAttribute('href')).toBe('tel:+966115110441');
+  });
+
+  it('opens the Join Us form from a service without embedding a form', () => {
+    const { container } = renderRoute('/services/warehousing');
+    expect(container.querySelector('form')).toBeNull();
+    expect(screen.getByRole('link', { name: 'اطلب الخدمة' }).getAttribute('href')).toBe('/join-us/request-services');
+  });
+
+  it('keeps courier submissions on their Join Us route', () => {
+    const { container } = renderRoute('/join-us/courier-external');
+    expect(container.querySelector('form')).not.toBeNull();
+  });
+});

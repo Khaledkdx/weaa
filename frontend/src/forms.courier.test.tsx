@@ -60,3 +60,25 @@ describe('internal courier request payload', () => {
     expect(body.has('registration_files')).toBe(false);
   });
 });
+
+describe('external courier request payload', () => {
+  it('requires the current profession and sends it as profession', async () => {
+    const fetchMock = vi.fn(async () => ({ status: 201, json: async () => ({ success: true }) }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { container } = render(<CourierForm form={courierForms[1]} />);
+    expect(screen.getByLabelText(/المهنة الحالية/)).toHaveProperty('required', true);
+    fireEvent.change(screen.getByLabelText(/الاسم \*/), { target: { value: 'أحمد محمد' } });
+    fireEvent.change(screen.getByLabelText(/رقم الجوال مع رمز البلد \*/), { target: { value: '+201001234567' } });
+    fireEvent.change(screen.getByLabelText(/الحالة الاجتماعية \*/), { target: { value: 'single' } });
+    fireEvent.change(screen.getByLabelText(/التعليم \*/), { target: { value: 'ثانوي' } });
+    fireEvent.change(screen.getByLabelText(/المهنة الحالية \*/), { target: { value: 'سائق توصيل' } });
+    fireEvent.change(screen.getByLabelText(/هل لديك رخصة؟ \*/), { target: { value: '1' } });
+    fireEvent.change(screen.getByLabelText(/^البلد \*/), { target: { value: 'مصر' } });
+    fireEvent.change(screen.getByLabelText(/السن بالسنوات \*/), { target: { value: '30' } });
+    fireEvent.submit(container.querySelector('form')!);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toMatch(/\/external$/);
+    expect((init.body as FormData).get('profession')).toBe('سائق توصيل');
+  });
+});

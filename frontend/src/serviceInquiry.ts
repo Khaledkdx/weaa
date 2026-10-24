@@ -31,7 +31,7 @@ export const serviceGroups: ServiceGroup[] = [
     { title: 'عقد جلب أعمال وتشغيل مستودعات' },
     { title: 'عقد إشراف وتطوير أعمال' },
   ] }] },
-  { title: 'الاستثمار', description: 'فرص استثمارية في القطاع اللوجستي', icon: 'solar:diamond-linear', sections: [{ options: [
+  { title: 'الاستثمار', description: 'فرص استثمارية في القطاع اللوجستي', icon: 'solar:chart-2-linear', sections: [{ options: [
     { title: 'عقد الهرم الماسي', description: 'استثمار المبالغ المالية في القطاع اللوجستي' },
     { title: 'عقد اتحاد الطبقة الأولى', description: 'التشغيل الثلاثي في توفير المستودعات والمنتجات وتشغيلها ونقلها' },
   ] }] },

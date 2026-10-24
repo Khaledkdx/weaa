@@ -1,0 +1,12 @@
+WEAA third-party asset notices
+
+Solar icons by 480 Design
+Source: https://www.figma.com/community/file/1166831539721848736
+Distributed through: https://github.com/iconify/icon-sets
+License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+https://creativecommons.org/licenses/by/4.0/
+Changes: selected icons are bundled locally, resized and colored by the site's CSS.
+
+Tajawal font by Boutros International
+Licensed under the SIL Open Font License 1.1.
+See assets/fonts in the source repository for the font license.

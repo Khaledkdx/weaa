@@ -3,9 +3,11 @@ import { Icon } from '@iconify/react';
 import { Link, Navigate, Route, Routes, useParams } from 'react-router-dom';
 import { useCms, supabase } from './data';
 import { Action, SectionHeading, Shell } from './shell';
-import { ContactForm, CourierForm, DynamicForm, ServiceForm } from './forms';
+import { CourierForm, DynamicForm } from './forms';
 import { ServiceInquiry } from './serviceInquiryForm';
 import { Admin } from './admin';
+import { CompanySalePage } from './companySaleForm';
+import { salePath, executiveSalePath } from './companySale';
 import type { CmsContent, CmsItem, HomeCard, HomeSection } from './types';
 
 function safeExternal(url: string) { try { const parsed = new URL(url); return ['https:', 'http:'].includes(parsed.protocol) ? parsed.toString() : null; } catch { return null; } }
@@ -21,13 +23,13 @@ function cardTarget(card: HomeCard, cms: CmsContent) {
   if (card.destinationType === 'service') return cms.serviceModels.find(item => item.id === card.target)?.slug ? `/services/${cms.serviceModels.find(item => item.id === card.target)!.slug}` : null;
   if (card.destinationType === 'form') return cms.joinForms.find(form => form.id === card.target)?.slug ? `/join-us/${cms.joinForms.find(form => form.id === card.target)!.slug}` : null;
   if (card.destinationType === 'external' || card.destinationType === 'download') return safeExternal(card.target);
-  if (card.destinationType === 'contact') return `/contact?subject=${encodeURIComponent(card.title)}`;
+  if (card.destinationType === 'contact') return card.id === 'sell' || /بيع.*شركة/.test(card.title) ? salePath : '/contact';
   return card.target.startsWith('/') && !card.target.startsWith('//') ? card.target : null;
 }
 function ContentCard({ title, description, to, index, media, actionLabel, illustrative = false, fallbackMedia }: { title: string; description?: string; to: string; index?: number; media?: string; actionLabel?: string; illustrative?: boolean; fallbackMedia?: string }) {
   const [fallbackUsed, setFallbackUsed] = React.useState(false);
   return <Link to={to} className={`content-card${media ? ' has-media' : ''}`} data-reveal>
-    <div className="content-card-top"><span className="card-index">{String((index || 0) + 1).padStart(2, '0')}</span><Icon icon="solar:arrow-up-left-linear" /></div>
+    <div className="content-card-top"><span className="card-index">{String((index || 0) + 1).padStart(2, '0')}</span><Icon icon="solar:arrow-left-up-linear" /></div>
     {media && <div className="interior-card-media"><img src={media} alt="" loading="lazy" onError={event => { if (fallbackMedia && event.currentTarget.src !== new URL(fallbackMedia, location.href).href) { event.currentTarget.src = fallbackMedia; setFallbackUsed(true); } else event.currentTarget.hidden = true; }} />{(illustrative || fallbackUsed) && <span>صورة توضيحية</span>}</div>}
     <div><h3>{title}</h3>{description && <p>{description}</p>}{actionLabel && <span className="card-action">{actionLabel}</span>}</div>
   </Link>;
@@ -49,7 +51,7 @@ function InteriorIntro({ eyebrow, title, body, image, fallbackImage, illustrativ
 }
 function HomeCardView({ card, cms, index, media }: { card: HomeCard; cms: CmsContent; index: number; media?: string }) {
   const target = cardTarget(card, cms); if (!card.enabled || !target) return null;
-  if (/^https?:\/\//.test(target)) return <a href={target} className={`content-card${media ? ' has-media' : ''}`} target="_blank" rel="noopener noreferrer" data-reveal><div className="content-card-top"><span className="card-index">{String(index + 1).padStart(2, '0')}</span><Icon icon="solar:arrow-up-left-linear" /></div>{media && <img src={media} alt="" loading="lazy" />}<div><h3>{card.title}</h3><p>{card.description}</p><span className="card-action">{card.buttonLabel || 'استكشف'}</span></div></a>;
+  if (/^https?:\/\//.test(target)) return <a href={target} className={`content-card${media ? ' has-media' : ''}`} target="_blank" rel="noopener noreferrer" data-reveal><div className="content-card-top"><span className="card-index">{String(index + 1).padStart(2, '0')}</span><Icon icon="solar:arrow-left-up-linear" /></div>{media && <div className="interior-card-media"><img src={media} alt="" loading="lazy" /></div>}<div><h3>{card.title}</h3><p>{card.description}</p><span className="card-action">{card.buttonLabel || 'استكشف'}</span></div></a>;
   return <ContentCard title={card.title} description={card.description} to={target} index={index} media={media} actionLabel={card.buttonLabel} />;
 }
 
@@ -66,7 +68,6 @@ const editorialImages = {
   feasibility: `${import.meta.env.BASE_URL}images/feasibility.webp`,
   courierFleet: `${import.meta.env.BASE_URL}images/courier-fleet.webp`,
   licensing: `${import.meta.env.BASE_URL}images/licensing.webp`,
-  heavyTruck: `${import.meta.env.BASE_URL}images/heavy-truck.webp`,
   lightTruck: `${import.meta.env.BASE_URL}images/light-truck.webp`,
   boxTruck: `${import.meta.env.BASE_URL}images/box-truck.webp`,
   executiveSedan: `${import.meta.env.BASE_URL}images/executive-sedan.webp`,
@@ -87,7 +88,6 @@ const cardImageById: Record<string, string> = {
   couriers: editorialImages.courierFleet,
   contracts: editorialImages.contract,
   licenses: editorialImages.licensing,
-  'transport-0': editorialImages.heavyTruck,
   'transport-1': editorialImages.lightTruck,
   'transport-2': editorialImages.boxTruck,
   'transport-3': editorialImages.bus,
@@ -117,7 +117,6 @@ function preferredHomeImage(section: HomeSection, card: HomeCard) {
     return editorialImages.careers;
   }
   if (section.id === 'transport' || /النقل البري/.test(section.title)) {
-    if (/ثقيل/.test(title)) return editorialImages.heavyTruck;
     if (/خفيف/.test(title)) return editorialImages.lightTruck;
     if (/دينات/.test(title)) return editorialImages.boxTruck;
     if (/حافلات/.test(title)) return editorialImages.bus;
@@ -141,7 +140,6 @@ function imageKey(src: string) {
 const categories = [
   { title: 'خدمات خفيفة', to: '/services/light', image: editorialImages.delivery },
   { title: 'خدمات وعقود', to: '/services/contracts', image: editorialImages.yard },
-  { title: 'النقل البري', to: '/services/contracts', image: editorialImages.freight },
   { title: 'عالم التقبيل', to: '/company-market', image: editorialImages.market },
 ];
 
@@ -151,7 +149,7 @@ function CategoryRail({ images }: { images: string[] }) {
 
 function Home() {
   const { cms } = useCms();
-  const sections = cms.homepageSections.filter(section => section.enabled);
+  const sections = cms.homepageSections.filter(section => section.enabled && section.id !== 'transport' && section.title.trim() !== 'النقل البري');
   const hero = sections.find(section => section.type === 'hero');
   const heroImage = safeExternal(hero?.imageUrl || '') || `${import.meta.env.BASE_URL}images/weaa-logistics-hero.webp`;
   const usedImages = new Set<string>([imageKey(heroImage)]);
@@ -186,14 +184,14 @@ function Home() {
     }
   }
   const heroActions = hero?.cards.filter(card => card.enabled && cardTarget(card, cms)) || [];
-  return <Shell>
+  return <Shell><main>
     <section className="hero" style={{ backgroundImage: `linear-gradient(270deg,rgba(10,10,9,.87) 5%,rgba(10,10,9,.55) 54%,rgba(10,10,9,.08)),url(${heroImage})` }}>
       <div className="hero-inner"><span className="hero-rule hero-animate">وعاء للخدمات اللوجستية والإدارية</span><h1 className="hero-animate">{hero?.title || cms.pages.home?.title || 'اللوجستيات تبدأ من وعاء'}</h1><p className="hero-animate">{hero?.description || cms.pages.home?.body || 'خدمات لوجستية وإدارية تناسب احتياجاتك.'}</p><div className="hero-actions hero-animate">{heroActions.length ? heroActions.map((card, index) => <Action key={card.id} to={cardTarget(card, cms)!} secondary={index !== 0} icon={index === 0 ? 'solar:arrow-left-linear' : undefined}>{card.buttonLabel || card.title}</Action>) : <><Action to="/services" icon="solar:arrow-left-linear">استكشف الخدمات</Action><Action to="/join-us" secondary>سجل الآن</Action></>}</div></div>
       <div className="hero-bottom"><span>من جدة، نحو أعمال أكثر تنظيمًا</span><span>مرر لاكتشاف المزيد <Icon icon="solar:arrow-down-linear" /></span></div>
     </section>
     <CategoryRail images={categoryImages} />
     {sections.filter(section => section.id !== hero?.id).map((section, sectionIndex) => <HomeSectionView key={section.id} section={section} cms={cms} index={sectionIndex} cardMedia={cardMedia} listingMedia={listingMedia} bioMedia={bioMedia} />)}
-  </Shell>;
+  </main></Shell>;
 }
 function HomeSectionView({ section, cms, index, cardMedia, listingMedia, bioMedia }: { section: HomeSection; cms: CmsContent; index: number; cardMedia: Map<string, string>; listingMedia: Map<string, string>; bioMedia: Map<string, string> }) {
   if (section.type === 'bio' && !section.description.trim()) return null;
@@ -214,18 +212,17 @@ function RequestServices() { return <Shell><main className="page-body service-in
 function ServiceListing({ category }: { category?: string }) {
   const { cms } = useCms(); const items = [...cms.generalInfo, ...cms.serviceModels].filter(item => !category || item.serviceCategory === category);
   const title = category === 'light' ? 'خدمات خفيفة' : category === 'contracts' ? 'خدمات وعقود' : 'جميع الخدمات';
-  return <Shell><main className="site-container page-body interior-page"><Link className="back-link" to="/services"><Icon icon="solar:arrow-right-linear" /> جميع الخدمات</Link><InteriorIntro eyebrow="خدمات وعاء" title={title} body="اختر ما يناسب أعمالك، ثم اطلع على التفاصيل وقدّم طلبك مباشرة." /><div className="interior-service-grid">{items.map((item, index) => { const fallback = serviceImages[item.slug || ''] ? `list-${serviceImages[item.slug || '']}` : undefined; return <ContentCard key={item.id || item.titleAr} title={item.titleAr} description={item.description} to={item.slug ? `/services/${item.slug}` : `/contact?subject=${encodeURIComponent(item.titleAr)}`} index={index} media={imageFor(item.imageUrl, fallback)} fallbackMedia={fallback ? interiorImage(fallback) : undefined} actionLabel="تفاصيل الخدمة" />; })}</div></main></Shell>;
+  return <Shell><main className="site-container page-body interior-page"><Link className="back-link" to="/services"><Icon icon="solar:arrow-right-linear" /> جميع الخدمات</Link><InteriorIntro eyebrow="خدمات وعاء" title={title} body="اختر ما يناسب أعمالك، ثم اطلع على التفاصيل واختر نموذج الطلب من انضم إلينا." /><div className="interior-service-grid">{items.map((item, index) => { const fallback = serviceImages[item.slug || ''] ? `list-${serviceImages[item.slug || '']}` : undefined; return <ContentCard key={item.id || item.titleAr} title={item.titleAr} description={item.description} to={item.slug ? `/services/${item.slug}` : '/contact'} index={index} media={imageFor(item.imageUrl, fallback)} fallbackMedia={fallback ? interiorImage(fallback) : undefined} actionLabel="تفاصيل الخدمة" />; })}</div></main></Shell>;
 }
 function ServiceDetail() {
   const { slug } = useParams(); const { cms } = useCms(); const service = cms.serviceModels.find(item => item.slug === slug) || cms.generalInfo.find(item => item.slug === slug);
   if (!service) return <NotFound />;
   const embed = youtubeEmbed(service.videoUrl);
   const fallback = serviceImages[service.slug || ''] ? `detail-${serviceImages[service.slug || '']}` : undefined;
-  return <Shell><main className="site-container page-body interior-page"><Link className="back-link" to="/services"><Icon icon="solar:arrow-right-linear" /> الخدمات</Link><div className="service-detail-intro"><div><span className="eyebrow">تفاصيل الخدمة</span><h1>{service.titleAr}</h1><p>{service.description}</p><a className="action action-primary" href="#service-request">اطلب الخدمة <Icon icon="solar:arrow-left-linear" /></a></div>{imageFor(service.detailImageUrl, fallback) && <img src={imageFor(service.detailImageUrl, fallback)} alt="" onError={event => { if (fallback) event.currentTarget.src = interiorImage(fallback); else event.currentTarget.hidden = true; }} />}</div>
+  return <Shell><main className="site-container page-body interior-page"><Link className="back-link" to="/services"><Icon icon="solar:arrow-right-linear" /> الخدمات</Link><div className="service-detail-intro"><div><span className="eyebrow">تفاصيل الخدمة</span><h1>{service.titleAr}</h1><p>{service.description}</p><Action to="/join-us/request-services" icon="solar:arrow-left-linear">اطلب الخدمة</Action></div>{imageFor(service.detailImageUrl, fallback) && <img src={imageFor(service.detailImageUrl, fallback)} alt="" onError={event => { if (fallback) event.currentTarget.src = interiorImage(fallback); else event.currentTarget.hidden = true; }} />}</div>
     {service.benefits.length > 0 && <section className="content-section"><SectionHeading title="ما الذي ستحصل عليه؟" /><div className="benefits-grid">{service.benefits.map((benefit, index) => <div key={index} data-reveal><Icon icon="solar:check-circle-linear" /><span>{benefit}</span></div>)}</div></section>}
     {embed && <section className="content-section"><SectionHeading title="فيديو الخدمة" /><div className="video-wrap"><iframe title={`فيديو ${service.titleAr}`} src={embed} loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen /></div></section>}
-    {service.videoUrl && !embed && safeExternal(service.videoUrl) && <section className="content-section"><Action to={service.videoUrl} secondary icon="solar:arrow-up-left-linear">مشاهدة فيديو الخدمة</Action></section>}
-    <section id="service-request" className="content-section form-section"><SectionHeading eyebrow="طلب خدمة" title={`اطلب ${service.titleAr}`} body="أكمل بياناتك وسيتواصل معك فريق وعاء." /><ServiceForm service={service} form={cms.serviceFormOverrides[service.slug || ''] || cms.defaultServiceForm} /></section>
+    {service.videoUrl && !embed && safeExternal(service.videoUrl) && <section className="content-section"><Action to={service.videoUrl} secondary icon="solar:arrow-left-up-linear">مشاهدة فيديو الخدمة</Action></section>}
     {service.paymentEnabled && service.paymentPriceSar > 0 && <PaymentPanel service={service} />}
     {service.reviews.length > 0 && <section className="content-section"><SectionHeading title="آراء العملاء" /><div className="card-grid">{service.reviews.map((review, i) => <blockquote className="quote-card" key={i}><div className="stars" aria-label={`التقييم ${review.rating} من 5`}>{'★'.repeat(Math.max(0, Math.min(5, review.rating)))}</div><p>{review.body}</p><footer>{review.customer} · {review.dateLabel}</footer></blockquote>)}</div></section>}
   </main></Shell>;
@@ -246,7 +243,7 @@ function PaymentPanel({ service }: { service: CmsItem }) {
   return <section className="payment-band"><div><span className="eyebrow">الدفع الإلكتروني</span><h2>{service.paymentDescription || service.titleAr}</h2><p>{service.paymentPriceSar.toLocaleString('ar-SA')} ر.س</p></div><button type="button" className="action action-primary" disabled={busy} onClick={() => void start()}>{busy ? 'جاري فتح الدفع...' : 'ادفع الآن'}</button>{error && <p role="alert" className="error">{error}</p>}</section>;
 }
 
-function Initiatives() { const { cms } = useCms(); const page = cms.pages.initiatives || { kicker: 'المبادرات', title: 'مبادرات وعاء', body: '' }; return <Shell><main className="site-container page-body interior-page"><InteriorIntro eyebrow={page.kicker} title={page.title} body={page.body} image={imageFor(page.imageUrl, 'initiatives')} />{cms.initiatives.length ? <div className="interior-service-grid">{cms.initiatives.map((item, i) => <ContentCard key={item.id || i} title={item.titleAr} description={item.description} to={`/contact?subject=${encodeURIComponent(item.titleAr)}`} index={i} media={imageFor(item.imageUrl)} actionLabel="تواصل بشأن المبادرة" />)}</div> : <div className="interior-empty"><h2>المبادرات قيد الإعداد</h2><p>ستظهر المبادرات المنشورة هنا عند إضافتها من لوحة الإدارة.</p><Action to="/contact">تواصل معنا</Action></div>}</main></Shell>; }
+function Initiatives() { const { cms } = useCms(); const page = cms.pages.initiatives || { kicker: 'المبادرات', title: 'مبادرات وعاء', body: '' }; return <Shell><main className="site-container page-body interior-page"><InteriorIntro eyebrow={page.kicker} title={page.title} body={page.body} image={imageFor(page.imageUrl, 'initiatives')} />{cms.initiatives.length ? <div className="interior-service-grid">{cms.initiatives.map((item, i) => <ContentCard key={item.id || i} title={item.titleAr} description={item.description} to="/contact" index={i} media={imageFor(item.imageUrl)} actionLabel="تواصل بشأن المبادرة" />)}</div> : <div className="interior-empty"><h2>المبادرات قيد الإعداد</h2><p>ستظهر المبادرات المنشورة هنا عند إضافتها من لوحة الإدارة.</p><Action to="/contact">تواصل معنا</Action></div>}</main></Shell>; }
 function Testimonials() { const { cms } = useCms(); const page = cms.pages.about || { kicker: 'قالوا عنا', title: 'قالوا عنا', body: '' }; const items = cms.socialTestimonials.filter(item => item.enabled && safeExternal(item.videoUrl)); return <Shell><main className="site-container page-body interior-page"><InteriorIntro eyebrow={page.kicker} title={page.title} body={page.body} image={imageFor(page.imageUrl, 'testimonials')} />{items.length ? <div className="interior-service-grid">{items.map((item, i) => <a className={`content-card${imageFor(item.imageUrl) ? ' has-media' : ''}`} href={safeExternal(item.videoUrl)!} target="_blank" rel="noopener noreferrer" key={item.id} data-reveal><div className="content-card-top"><span className="card-index">{String(i + 1).padStart(2, '0')}</span><Icon icon="solar:play-circle-linear" /></div>{imageFor(item.imageUrl) && <div className="interior-card-media"><img src={imageFor(item.imageUrl)} alt="" loading="lazy" /></div>}<div><h3>{item.title}</h3><p>{item.customer} · {item.platform}</p><span className="card-action">شاهد الفيديو</span></div></a>)}</div> : <div className="interior-empty"><h2>لا توجد فيديوهات منشورة بعد</h2><p>عند إضافة تجارب موثقة ستظهر هنا.</p></div>}</main></Shell>; }
 function Market() {
   const { cms } = useCms();
@@ -254,17 +251,33 @@ function Market() {
   const items = cms.companyListings.filter(item => item.enabled);
   return <Shell><main className="site-container page-body interior-page">
     <InteriorIntro eyebrow={page.kicker} title={page.title} body={page.body} image={imageFor(page.imageUrl, 'market-index')} illustrative>
-      <div className="market-actions"><Action to="/contact?subject=أريد%20بيع%20شركة">أريد بيع شركة</Action><Action secondary to="/contact?subject=أريد%20شراء%20شركة">أريد شراء شركة</Action></div>
+      <div className="market-actions"><Action to={salePath}>أريد بيع شركة</Action><Action secondary to="/contact">أريد شراء شركة</Action></div>
     </InteriorIntro>
     <div className="interior-section-head"><span className="eyebrow">الفرص المنشورة</span><h2>استكشف الشركات</h2></div>
     {items.length ? <div className="interior-service-grid">{items.map((item, i) => {
       const fallback = i < 5 ? (i === 0 ? 'spare-company' : `market-list-${i + 1}`) : undefined;
       return <ContentCard key={item.slug} title={item.name} description={`${item.sector} · ${item.city} · ${item.status}`} to={`/company-market/${item.slug}`} index={i} media={imageFor(item.imageUrl, fallback)} fallbackMedia={fallback ? interiorImage(fallback) : undefined} illustrative={!item.imageUrl && Boolean(fallback)} actionLabel="عرض التفاصيل" />;
-    })}</div> : <div className="interior-empty"><h2>لا توجد شركات منشورة الآن</h2><p>يمكنك إرسال طلب بيع أو شراء، وسيتواصل معك الفريق.</p></div>}
+    })}</div> : <div className="interior-empty"><h2>لا توجد شركات منشورة الآن</h2><p>للاستفسار عن بيع أو شراء شركة، تواصل مع فريق وعاء.</p></div>}
   </main></Shell>;
 }
-function MarketDetail() { const { slug } = useParams(); const { cms } = useCms(); const listing = cms.companyListings.find(item => item.slug === slug && item.enabled); if (!listing) return <NotFound />; return <Shell><main className="site-container page-body interior-page"><Link className="back-link" to="/company-market"><Icon icon="solar:arrow-right-linear" /> عالم التقبيل</Link><InteriorIntro eyebrow={listing.sector} title={listing.name} body={listing.summary} image={imageFor(listing.detailImageUrl, 'market-detail')} illustrative={!listing.detailImageUrl} /><div className="market-detail-layout"><div className="detail-list"><div><strong>المدينة</strong><span>{listing.city}</span></div><div><strong>الحالة</strong><span>{listing.status}</span></div>{Object.entries(listing.metadata).map(([key, value]) => <div key={key}><strong>{key}</strong><span>{value}</span></div>)}</div><aside><span className="eyebrow">مهتم بهذه الفرصة؟</span><h2>لنبدأ المحادثة</h2><p>أرسل استفسارك مباشرة إلى فريق وعاء للحصول على التفاصيل المتاحة.</p><Action to={safeExternal(listing.contactUrl) || `/contact?subject=${encodeURIComponent(listing.name)}`}>تواصل حول الفرصة</Action></aside></div></main></Shell>; }
-function Contact() { const { cms } = useCms(); const page = cms.pages.contact || { kicker: 'تواصل', title: 'تواصل مع وعاء', body: '' }; const body = /جاهزة لاحقًا|ربط.*لاحقًا|Supabase/i.test(page.body) ? 'اكتب تفاصيل طلبك، وسيتواصل معك فريق وعاء.' : page.body; return <Shell><main className="site-container page-body interior-page"><InteriorIntro eyebrow={page.kicker} title={page.title} body={body} image={imageFor(page.imageUrl, 'contact')} /><div className="contact-layout"><ContactForm /><aside className="contact-details"><h2>بيانات التواصل</h2><a href={`tel:${cms.company.phone.replace(/[^\d+]/g, '')}`}>{cms.company.phone}</a><a href={`mailto:${cms.company.email}`}>{cms.company.email}</a><p>{cms.company.headquarters}</p></aside></div></main></Shell>; }
+function MarketDetail() { const { slug } = useParams(); const { cms } = useCms(); const listing = cms.companyListings.find(item => item.slug === slug && item.enabled); if (!listing) return <NotFound />; return <Shell><main className="site-container page-body interior-page"><Link className="back-link" to="/company-market"><Icon icon="solar:arrow-right-linear" /> عالم التقبيل</Link><InteriorIntro eyebrow={listing.sector} title={listing.name} body={listing.summary} image={imageFor(listing.detailImageUrl, 'market-detail')} illustrative={!listing.detailImageUrl} /><div className="market-detail-layout"><div className="detail-list"><div><strong>المدينة</strong><span>{listing.city}</span></div><div><strong>الحالة</strong><span>{listing.status}</span></div>{Object.entries(listing.metadata).map(([key, value]) => <div key={key}><strong>{key}</strong><span>{value}</span></div>)}</div><aside><span className="eyebrow">مهتم بهذه الفرصة؟</span><h2>لنبدأ المحادثة</h2><p>تواصل مع فريق وعاء عبر الهاتف أو البريد للحصول على التفاصيل المتاحة.</p><Action to={safeExternal(listing.contactUrl) || '/contact'}>تواصل حول الفرصة</Action></aside></div></main></Shell>; }
+function Contact() {
+  const { cms } = useCms();
+  const page = cms.pages.contact || { kicker: 'تواصل', title: 'تواصل مع وعاء', body: '' };
+  const body = /جاهزة لاحقًا|ربط.*لاحقًا|Supabase|أرسل رسالتك|اكتب تفاصيل طلبك/i.test(page.body) ? 'تواصل معنا عبر الهاتف أو البريد الإلكتروني.' : page.body;
+  return <Shell><main className="site-container page-body interior-page">
+    <InteriorIntro eyebrow={page.kicker} title={page.title} body={body} image={imageFor(page.imageUrl, 'contact')} />
+    <section className="contact-channels" aria-label="بيانات التواصل">
+      <a className="contact-channel" href={`tel:${cms.company.phone.replace(/[^\d+]/g, '')}`}>
+        <Icon icon="solar:phone-calling-linear" /><span>الهاتف</span><strong><bdi dir="ltr">{cms.company.phone}</bdi></strong><span className="channel-action">اتصل بنا <Icon icon="solar:arrow-left-up-linear" /></span>
+      </a>
+      <a className="contact-channel" href={`mailto:${cms.company.email}`}>
+        <Icon icon="solar:letter-linear" /><span>البريد الإلكتروني</span><strong><bdi dir="ltr">{cms.company.email}</bdi></strong><span className="channel-action">راسلنا <Icon icon="solar:arrow-left-up-linear" /></span>
+      </a>
+      <div className="contact-channel"><Icon icon="solar:map-point-linear" /><span>المقر</span><strong>{cms.company.headquarters}</strong></div>
+    </section>
+  </main></Shell>;
+}
 function Join() {
   const { cms } = useCms();
   const forms = cms.joinForms.filter(form => form.enabled);
@@ -288,6 +301,7 @@ function PaymentSuccess() { return <Shell><main className="site-container page-b
 function NotFound() { return <Shell><main className="site-container page-body narrow-page interior-page interior-status"><Icon icon="solar:map-point-wave-linear" /><InteriorIntro eyebrow="الصفحة غير متاحة" title="لم نجد هذا الرابط" body="قد يكون المحتوى قد تغير أو أُزيل. يمكنك العودة للرئيسية ومتابعة التصفح." /><Action to="/">العودة للرئيسية</Action></main></Shell>; }
 
 export function App() { return <Routes>
+  <Route path={salePath} element={<CompanySalePage key="preliminary" />} /><Route path={executiveSalePath} element={<CompanySalePage key="executive" executive />} />
   <Route path="/" element={<Home />} /><Route path="/services" element={<ServicesHub />} /><Route path="/services/light" element={<ServiceListing category="light" />} /><Route path="/services/contracts" element={<ServiceListing category="contracts" />} /><Route path="/services/:slug" element={<ServiceDetail />} /><Route path="/frameworks" element={<Navigate to="/services" replace />} />
   <Route path="/initiatives" element={<Initiatives />} /><Route path="/about" element={<Testimonials />} /><Route path="/company-market" element={<Market />} /><Route path="/company-market/:slug" element={<MarketDetail />} /><Route path="/contact" element={<Contact />} /><Route path="/request-services" element={<Navigate to="/join-us/request-services" replace />} /><Route path="/join-us" element={<Join />} /><Route path="/join-us/request-services" element={<RequestServices />} /><Route path="/join-us/:slug" element={<JoinDetail />} /><Route path="/payment-success" element={<PaymentSuccess />} /><Route path="/admin" element={<Admin />} /><Route path="*" element={<NotFound />} />
 </Routes>; }

@@ -29,7 +29,7 @@ export type CmsContent = {
   defaultServiceForm: FormDefinition; serviceFormOverrides: Record<string, FormDefinition>;
   joinForms: FormDefinition[]; companyListings: CompanyListing[];
   socialTestimonials: SocialTestimonial[]; homepageSections: HomeSection[];
-  accountantFormMigrated?: boolean; courierFormsMigrated?: boolean; courierCarFieldsMigrated?: boolean; courierInternalDetailsMigrated?: boolean;
+  accountantFormMigrated?: boolean; courierFormsMigrated?: boolean; courierCarFieldsMigrated?: boolean; courierInternalDetailsMigrated?: boolean; courierExternalProfessionMigrated?: boolean; heavyTransportCardRemoved?: boolean; lightServicesUnlisted?: boolean;
   [key: string]: unknown;
 };
 export type ServiceRequest = {

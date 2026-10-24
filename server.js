@@ -133,6 +133,10 @@ function serveFile(response, filePath) {
 }
 
 const server = http.createServer((request, response) => {
+  const route = new URL(request.url || '/', 'http://localhost').pathname.replace(/^\/weaa(?=\/)/, '').replace(/\/+$/, '');
+  if (route === '/join-us/company-sale-executive') {
+    response.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+  }
   if ((request.url || '').split('?')[0] === '/api/service-inquiry') {
     if (request.method !== 'POST') { json(response, 405, { success: false, message: 'الطريقة غير مدعومة.' }); return; }
     void submitInquiry(request, response);

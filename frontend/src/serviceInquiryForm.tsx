@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Icon } from '@iconify/react';
 import { normalizeDigits, saudiMobile } from './forms';
 import { serviceGroups, type CourierRequirements } from './serviceInquiry';
@@ -23,7 +23,17 @@ export function ServiceInquiry() {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
-  const showStepStart = () => document.querySelector('.service-inquiry-intro')?.scrollIntoView?.({ block: 'start' });
+  const headingRef = useRef<HTMLDivElement>(null);
+  const previousStep = useRef(0);
+  useEffect(() => {
+    if (previousStep.current === step) return;
+    previousStep.current = step;
+    const heading = headingRef.current;
+    if (heading) {
+      heading.focus({ preventScroll: true });
+      window.scrollTo({ top: heading.getBoundingClientRect().top + window.scrollY - 96, behavior: 'instant' });
+    }
+  }, [step]);
 
   const next = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -36,7 +46,6 @@ export function ServiceInquiry() {
     if (step === 1 && !selected.length) { setError('اختر خدمة واحدة على الأقل.'); return; }
     if (step === 1 && selected.some(value => courierOptions.includes(value)) && (!/^[1-9]\d*$/.test(courier.count) || !courier.city.trim())) { setError('أدخل عدد المناديب المطلوب والمدينة.'); return; }
     setStep(current => Math.min(current + 1, 2));
-    showStepStart();
   };
   const submit = async () => {
     if (pending) return;
@@ -52,8 +61,8 @@ export function ServiceInquiry() {
   return <section className={`inquiry-shell${step === 1 ? ' inquiry-shell-wide' : ''}`} aria-label="نموذج طلب الخدمات">
     <ol className="inquiry-progress" aria-label="مراحل النموذج">{['البيانات', 'الخدمات', 'المراجعة'].map((label, index) => <li key={label} className={index === step ? 'current' : index < step ? 'complete' : ''} aria-current={index === step ? 'step' : undefined}><span>{index < step ? <Icon icon="solar:check-read-linear" /> : index + 1}</span><strong>{label}</strong></li>)}</ol>
     {success ? <div className="inquiry-result" role="status"><Icon icon="solar:check-circle-bold" /><h2>تم إرسال طلبك بنجاح</h2><p>وصل طلبك إلى فريق وعاء، وسنتواصل معك قريبًا.</p><button type="button" className="action action-secondary" onClick={() => { setStep(0); setSuccess(false); }}>إرسال طلب آخر</button></div> :
-      <form onSubmit={next} className="inquiry-form" noValidate>
-        <div className="inquiry-heading"><h2>{['معلوماتك الشخصية', 'اختر الخدمات', 'راجع طلبك'][step]}</h2><p>{['الرجاء تعبئة بياناتك للتواصل معك.', 'يمكنك اختيار أكثر من خدمة. اضغط على الفئة لعرض الخيارات.', 'تأكد من بياناتك والخدمات المختارة قبل إرسال الطلب.'][step]}</p></div>
+      <form onSubmit={next} className="inquiry-form" noValidate aria-busy={pending}>
+        <div className="inquiry-heading" ref={headingRef} tabIndex={-1}><h2>{['معلوماتك الشخصية', 'اختر الخدمات', 'راجع طلبك'][step]}</h2><p>{['الرجاء تعبئة بياناتك للتواصل معك.', 'يمكنك اختيار أكثر من خدمة. اضغط على الفئة لعرض الخيارات.', 'تأكد من بياناتك والخدمات المختارة قبل إرسال الطلب.'][step]}</p></div>
         {step === 0 && <div className="inquiry-fields">
           <label className="form-control"><span>الاسم *</span><input required autoComplete="name" placeholder="أدخل اسمك الكامل" value={details.name} onChange={event => setDetails(current => ({ ...current, name: event.target.value.slice(0, 120) }))} /></label>
           <label className="form-control"><span>اسم الشركة (اختياري)</span><input autoComplete="organization" placeholder="اسم الشركة" value={details.company} onChange={event => setDetails(current => ({ ...current, company: event.target.value.slice(0, 120) }))} /></label>
@@ -69,7 +78,7 @@ export function ServiceInquiry() {
         })}</div>}
         {step === 2 && <div className="inquiry-review"><div><span>الاسم</span><strong>{details.name.trim()}</strong></div>{details.company.trim() && <div><span>اسم الشركة</span><strong>{details.company.trim()}</strong></div>}<div><span>رقم الجوال</span><strong dir="ltr">+966{saudiMobile(details.phone)}</strong></div><div><span>المدينة</span><strong>{details.city.trim()}</strong></div><div className="inquiry-review-services"><span>الخدمات المختارة</span><strong>{selected.join('، ')}</strong></div>{selected.some(value => courierOptions.includes(value)) && <><div><span>عدد المناديب</span><strong>{courier.count}</strong></div><div><span>مدينة عمل المناديب</span><strong>{courier.city}</strong></div></>}</div>}
         {error && <p className="error inquiry-error" role="alert">{error}</p>}
-        <div className="inquiry-actions">{step > 0 && <button type="button" className="action action-secondary" disabled={pending} onClick={() => { setError(''); setStep(current => current - 1); showStepStart(); }}><Icon icon="solar:arrow-right-linear" /> رجوع</button>}{step < 2 ? <button type="submit" className="action action-primary">التالي <Icon icon="solar:arrow-left-linear" /></button> : <button type="button" className="action action-primary" disabled={pending} onClick={() => void submit()}>{pending ? 'جاري الإرسال...' : 'إرسال الطلب'} <Icon icon="solar:arrow-left-linear" /></button>}</div>
+        <div className="inquiry-actions">{step > 0 && <button type="button" className="action action-secondary" disabled={pending} onClick={() => { setError(''); setStep(current => current - 1); }}><Icon icon="solar:arrow-right-linear" /> رجوع</button>}{step < 2 ? <button type="submit" className="action action-primary">التالي <Icon icon="solar:arrow-left-linear" /></button> : <button type="button" className="action action-primary" disabled={pending} onClick={() => void submit()}>{pending ? 'جاري الإرسال...' : 'إرسال الطلب'} <Icon icon="solar:arrow-left-linear" /></button>}</div>
       </form>}
   </section>;
 }

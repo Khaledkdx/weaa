@@ -1,10 +1,12 @@
 import { useMemo, useState, type FormEvent } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { createJoinRequest, createServiceRequest } from './data';
+import { Icon } from '@iconify/react';
+import { createJoinRequest } from './data';
 import { prepareInternalCarSubmission } from './courierCar';
 import { courierCities, prepareInternalCourierFields, validIdentityExpiry } from './courierInternal';
 import { courierForms } from './seed';
-import type { CmsItem, FormDefinition, FormField } from './types';
+import type { FormDefinition, FormField } from './types';
+
+export { FormControl, validateFiles };
 
 const courierOptions: Record<string, Record<string, string>> = {
   license_type: { private: 'خصوصي', public: 'عمومي', light: 'نقل خفيف', heavy: 'نقل ثقيل', motorcycle: 'دراجة نارية', equipment: 'معدات / أشغال عامة', none: 'لا توجد رخصة', other: 'أخرى' },
@@ -28,12 +30,28 @@ export function saudiMobile(value: string) {
 function FormControl({ field, value, onChange, file, onFile }: { field: FormField; value: string; onChange: (next: string) => void; file?: File; onFile?: (next?: File) => void }) {
   const type = field.type;
   const options = courierOptions[field.key] || Object.fromEntries(field.options.map(option => [option, option]));
+  if (type === 'file') return <div className="form-control">
+    <span>{field.label}{field.required && <b aria-label="مطلوب"> *</b>}</span>
+    <FilePicker label={field.label} required={field.required && !file} onFiles={selected => onFile?.(selected[0])} />
+    {file && <button className="inline-remove" type="button" onClick={() => onFile?.(undefined)}>إزالة {file.name}</button>}
+  </div>;
+  const autoComplete = ({ name: 'name', full_name: 'name', phone: 'tel', email: 'email', city: 'address-level2', country: 'country-name' } as Record<string, string>)[field.key];
   return <label className={`form-control ${['multiline', 'textarea', 'details'].includes(type) ? 'form-wide' : ''}`}><span>{field.label}{field.required && <b aria-label="مطلوب"> *</b>}</span>
-    {type === 'file' ? <><input type="file" required={field.required && !file} accept=".pdf,.jpg,.jpeg,.png" onChange={event => onFile?.(event.currentTarget.files?.[0])} />{file && <button className="inline-remove" type="button" onClick={() => onFile?.(undefined)}>إزالة {file.name}</button>}</> :
-      type === 'select' ? <select required={field.required} value={value} onChange={event => onChange(event.target.value)}><option value="">{field.key === 'owns_car' ? 'غير محدد' : 'اختر'}</option>{Object.entries(options).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select> :
+    {type === 'select' ? <select required={field.required} value={value} onChange={event => onChange(event.target.value)}><option value="">{field.key === 'owns_car' ? 'غير محدد' : 'اختر'}</option>{Object.entries(options).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select> :
         ['multiline', 'textarea', 'details'].includes(type) ? <textarea required={field.required} value={value} onChange={event => onChange(event.target.value)} rows={4} /> :
-          <input required={field.required} type={field.key === 'sponsorship_transfer_count' ? 'text' : type === 'phone' ? 'tel' : type} inputMode={type === 'phone' ? 'tel' : type === 'number' || field.key === 'car_year' ? 'numeric' : undefined} minLength={field.key === 'car_model' ? 2 : undefined} maxLength={field.key === 'car_model' ? 160 : field.key === 'car_year' ? 4 : undefined} pattern={field.key === 'car_year' ? '[0-9٠-٩۰-۹]{4}' : undefined} value={value} onChange={event => onChange(event.target.value)} />}
+          <input required={field.required} autoComplete={autoComplete} dir={['phone', 'email', 'number', 'date'].includes(type) ? 'ltr' : undefined} type={field.key === 'sponsorship_transfer_count' ? 'text' : type === 'phone' ? 'tel' : type} inputMode={type === 'phone' ? 'tel' : type === 'number' || field.key === 'car_year' ? 'numeric' : undefined} minLength={field.key === 'car_model' ? 2 : undefined} maxLength={field.key === 'car_model' ? 160 : field.key === 'car_year' ? 4 : undefined} pattern={field.key === 'car_year' ? '[0-9٠-٩۰-۹]{4}' : undefined} value={value} onChange={event => onChange(event.target.value)} />}
   </label>;
+}
+function FilePicker({ label, multiple = false, required = false, onFiles }: { label: string; multiple?: boolean; required?: boolean; onFiles: (files: File[]) => void }) {
+  return <div className="file-picker">
+    <Icon icon="solar:upload-minimalistic-linear" />
+    <span>{multiple ? 'اختيار الملفات' : 'اختيار ملف'}</span>
+    <input aria-label={label} type="file" multiple={multiple} required={required} accept=".pdf,.jpg,.jpeg,.png" onChange={event => {
+      const selected = Array.from(event.currentTarget.files || []);
+      if (selected.length) onFiles(selected);
+      event.currentTarget.value = '';
+    }} />
+  </div>;
 }
 function CourierCityPicker({ label, selected, onChange }: { label: string; selected: string[]; onChange: (next: string[]) => void }) {
   const [query, setQuery] = useState('');
@@ -57,32 +75,6 @@ function CourierCityPicker({ label, selected, onChange }: { label: string; selec
 }
 function SubmitState({ pending, error, success, code }: { pending: boolean; error: string; success: string; code?: string }) {
   return <div className="submit-state" aria-live="polite">{pending && <span>جاري الإرسال...</span>}{error && <p className="error" role="alert">{error}</p>}{success && <p className="success" role="status">{success}{code && <><br />كود الطلب: {code}</>}</p>}</div>;
-}
-
-export function ServiceForm({ service, form }: { service: CmsItem; form: FormDefinition }) {
-  const [values, setValues] = useState<Record<string, string>>({}); const [pending, setPending] = useState(false); const [error, setError] = useState(''); const [success, setSuccess] = useState('');
-  const submit = async (event: FormEvent) => {
-    event.preventDefault(); if (pending) return; setPending(true); setError(''); setSuccess('');
-    try {
-      const phone = normalizeDigits(values.phone || '');
-      if (!phone.trim()) throw new Error('أدخل رقم الجوال.');
-      await createServiceRequest({ service_slug: service.slug || service.titleAr, service_title: service.titleAr, name: values.name || values.full_name || '', phone, email: values.email || '', details: Object.entries(values).filter(([key]) => !['name', 'full_name', 'phone', 'email'].includes(key)).map(([key, value]) => `${form.fields.find(field => field.key === key)?.label || key}: ${value}`).join('\n') || values.details || '', status: 'طلب جديد', created_at_label: new Date().toLocaleDateString('ar-SA') });
-      setSuccess('تم إرسال طلبك بنجاح. سنتواصل معك قريبًا.'); setValues({});
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'تعذر إرسال الطلب.'); } finally { setPending(false); }
-  };
-  return <form className="form-grid" onSubmit={event => void submit(event)}>{form.fields.filter(field => field.type !== 'file').map(field => <FormControl key={field.key} field={field} value={values[field.key] || ''} onChange={value => setValues(previous => ({ ...previous, [field.key]: value }))} />)}<div className="form-footer"><button className="action action-primary" disabled={pending}>{pending ? 'جاري الإرسال...' : 'إرسال الطلب'}</button><SubmitState pending={pending} error={error} success={success} /></div></form>;
-}
-
-export function ContactForm() {
-  const [params] = useSearchParams(); const [values, setValues] = useState({ name: '', phone: '', email: '', subject: params.get('subject') || '', body: '' });
-  const [pending, setPending] = useState(false); const [error, setError] = useState(''); const [success, setSuccess] = useState('');
-  const submit = async (event: FormEvent) => {
-    event.preventDefault(); if (pending) return; setPending(true); setError(''); setSuccess('');
-    try { await createServiceRequest({ service_slug: 'contact-message', service_title: 'رسالة تواصل', name: values.name, phone: normalizeDigits(values.phone), email: values.email, details: `${values.subject}\n\n${values.body}`, status: 'جديدة', created_at_label: new Date().toLocaleDateString('ar-SA') }); setSuccess('وصلت رسالتك. سنتواصل معك قريبًا.'); setValues({ name: '', phone: '', email: '', subject: '', body: '' }); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : 'تعذر إرسال الرسالة.'); }
-    finally { setPending(false); }
-  };
-  return <form className="form-grid" onSubmit={event => void submit(event)}>{([['name', 'الاسم', 'text'], ['phone', 'الجوال', 'tel'], ['email', 'البريد الإلكتروني', 'email'], ['subject', 'الموضوع', 'text']] as const).map(([key, label, type]) => <label className="form-control" key={key}><span>{label} *</span><input type={type} required value={values[key]} onChange={event => setValues(previous => ({ ...previous, [key]: event.target.value }))} /></label>)}<label className="form-control form-wide"><span>الرسالة *</span><textarea rows={6} required value={values.body} onChange={event => setValues(previous => ({ ...previous, body: event.target.value }))} /></label><div className="form-footer"><button className="action action-primary" disabled={pending}>{pending ? 'جاري الإرسال...' : 'إرسال الرسالة'}</button><SubmitState pending={pending} error={error} success={success} /></div></form>;
 }
 
 export function DynamicForm({ form }: { form: FormDefinition }) {
@@ -165,7 +157,7 @@ export function CourierForm({ form }: { form: FormDefinition }) {
         setFiles(previous => { const next = { ...previous }; delete next.registration_files; return next; });
       } else setValues(previous => ({ ...previous, [field.key]: field.key === 'phone' && internal ? saudiMobile(value).slice(0, 9) : value }));
     }} />{field.key === 'phone' && internal && <span className="field-hint">رمز المملكة +966 · {saudiMobile(values.phone || '').length} من 9 أرقام</span>}</div>)}
-    <div className="attachments"><h2>المرفقات <small>اختيارية، PDF أو JPEG أو PNG</small></h2><div className="attachments-grid">{Object.entries(visibleSections).map(([key, label]) => <div className="attachment-control" key={key}><label htmlFor={key}>{label}</label><input id={key} type="file" multiple accept=".pdf,.jpg,.jpeg,.png" onChange={event => { const selected = Array.from(event.currentTarget.files || []); setFiles(previous => ({ ...previous, [key]: [...(previous[key] || []), ...selected] })); event.currentTarget.value = ''; }} />{(files[key] || []).map((file, index) => <div className="file-row" key={`${file.name}-${index}`}><span>{file.name}</span><button type="button" onClick={() => setFiles(previous => ({ ...previous, [key]: previous[key].filter((_, i) => i !== index) }))}>إزالة</button></div>)}</div>)}</div><p className="field-hint">حتى 10 ملفات، 5 ميجابايت للملف و20 ميجابايت إجمالًا.</p></div>
+    <div className="attachments"><h2>المرفقات <small>اختيارية، PDF أو JPEG أو PNG</small></h2><div className="attachments-grid">{Object.entries(visibleSections).map(([key, label]) => <div className="attachment-control" key={key}><strong>{label}</strong><FilePicker label={label} multiple onFiles={selected => setFiles(previous => ({ ...previous, [key]: [...(previous[key] || []), ...selected] }))} />{(files[key] || []).map((file, index) => <div className="file-row" key={`${file.name}-${index}`}><span>{file.name}</span><button type="button" aria-label={`إزالة ${file.name}`} onClick={() => setFiles(previous => ({ ...previous, [key]: previous[key].filter((_, i) => i !== index) }))}>إزالة</button></div>)}</div>)}</div><p className="field-hint">حتى 10 ملفات، 5 ميجابايت للملف و20 ميجابايت إجمالًا.</p></div>
     <div className="form-footer"><button className="action action-primary" disabled={pending}>{pending ? 'جاري الإرسال...' : 'إرسال الطلب'}</button><SubmitState pending={pending} error={error} success={success} code={code} /></div>
   </form>;
 }

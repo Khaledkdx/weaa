@@ -4,6 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#f4f4f2" />
+    <script>
+      try { document.documentElement.dataset.theme = localStorage.getItem('weaa-theme') === 'light' ? 'light' : 'dark'; }
+      catch { document.documentElement.dataset.theme = 'dark'; }
+    </script>
     <meta name="description" content="وعاء للخدمات اللوجستية والإدارية. خدمات للأفراد والأعمال من الطلب إلى التشغيل." />
     <link rel="icon" href="%BASE_URL%images/weaa-logo.jpeg" />
     <title>وعاء | خدمات لوجستية وإدارية</title>
