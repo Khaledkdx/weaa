@@ -17,25 +17,41 @@ async function contact(executive = false) {
   await screen.findByRole('heading', { name: executive ? 'مستندات الشركة والأسعار' : 'البيانات التشغيلية' });
 }
 describe('company sale forms', () => {
+  it('waits for an intent before showing the preliminary form and preserves details when switching', () => {
+    const { container } = render(<MemoryRouter><CompanySalePage /></MemoryRouter>);
+    expect(container.querySelector('form')).toBeNull();
+    expect(screen.queryByLabelText('اسم الشركة', { exact: false })).toBeNull();
+    fireEvent.click(screen.getByRole('radio', { name: 'هل تبحث عن شريك؟' }));
+    fill('اسم الشركة', 'شركة محفوظة');
+    fireEvent.click(screen.getByRole('radio', { name: 'هل ترغب في بيع الشركة بالكامل؟' }));
+    expect((screen.getByLabelText('اسم الشركة', { exact: false }) as HTMLInputElement).value).toBe('شركة محفوظة');
+  });
+
   it('shows the conditional representative role and removes it when not needed', () => {
     render(<MemoryRouter><CompanySalePage /></MemoryRouter>);
+    fireEvent.click(screen.getByRole('radio', { name: 'هل ترغب في بيع الشركة بالكامل؟' }));
     fill('بصفته', 'أخرى'); expect(screen.getByLabelText('الصفة الأخرى', { exact: false })).toBeTruthy();
     fill('بصفته', 'مالك'); expect(screen.queryByLabelText('الصفة الأخرى', { exact: false })).toBeNull();
   });
-  it('reviews the preliminary details, keeps them after failure, then confirms a successful retry', async () => {
+  it.each([
+    ['هل تبحث عن شريك؟', 'البحث عن شريك'],
+    ['هل ترغب في بيع الشركة بالكامل؟', 'بيع الشركة بالكامل'],
+  ])('saves %s with the preliminary request through review and retry', async (choice, intent) => {
     submitSale.mockRejectedValueOnce(new Error('تعذر الاتصال'));
     render(<MemoryRouter><CompanySalePage /></MemoryRouter>);
+    fireEvent.click(screen.getByRole('radio', { name: choice }));
     await contact();
     for (const field of operatingGroups.flatMap(group => group.fields).filter(field => field.required)) fill(field.label, field.type === 'select' ? 'نعم' : 'بيانات الاختبار');
     fireEvent.click(screen.getByRole('button', { name: 'التالي' }));
     await screen.findByRole('heading', { name: 'مراجعة الطلب' });
+    expect(screen.getByText(intent)).toBeTruthy();
     expect(submitSale).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'إرسال الطلب' }));
     await screen.findByRole('alert');
     expect(screen.getByText('شركة اختبار')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'إرسال الطلب' }));
     await screen.findByRole('heading', { name: 'تم استلام طلبكم' });
-    expect(submitSale.mock.calls[1][0]).toMatchObject({ form_slug: 'company-sale', name: 'ممثل الاختبار', fields: { 'اسم الشركة': 'شركة اختبار' } });
+    expect(submitSale.mock.calls[1][0]).toMatchObject({ form_slug: 'company-sale', name: 'ممثل الاختبار', fields: { 'اسم الشركة': 'شركة اختبار', 'نوع الطلب': intent } });
     expect(submitSale.mock.calls[1][1]).toEqual([]);
   });
   it('requires the six executive documents and excludes the page from indexing', async () => {

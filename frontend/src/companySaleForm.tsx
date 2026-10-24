@@ -4,7 +4,7 @@ import { Shell } from './shell';
 import { FormControl, normalizeDigits, validateFiles } from './forms';
 import { submitCompanySale } from './data';
 import type { FormField } from './types';
-import { companyContactFields, representativeFields, otherRoleField, operatingGroups, companyDocuments, salePriceFields, saleSuccess } from './companySale';
+import { companyContactFields, representativeFields, otherRoleField, operatingGroups, companyDocuments, salePriceFields, saleSuccess, saleIntents, saleIntentField } from './companySale';
 
 export function CompanySalePage({ executive = false }: { executive?: boolean }) {
   const [step, setStep] = useState(0);
@@ -27,9 +27,11 @@ export function CompanySalePage({ executive = false }: { executive?: boolean }) 
   useEffect(() => { heading.current?.focus({ preventScroll: true }); }, [step, success]);
   const firstFields = executive ? companyContactFields : [...companyContactFields, ...representativeFields, ...(values.representative_role === 'أخرى' ? [otherRoleField] : [])];
   const groups = executive ? [{ title: 'مستندات الشركة', fields: companyDocuments }, { title: 'البيانات المالية', fields: salePriceFields }] : operatingGroups;
-  const allFields = [...firstFields, ...groups.flatMap(group => group.fields)];
+  const hasIntent = executive || saleIntents.some(intent => intent.value === values.request_intent);
+  const allFields = [...(executive ? [] : [saleIntentField]), ...firstFields, ...groups.flatMap(group => group.fields)];
   const changeStep = (next: number) => { setError(''); setStep(next); window.scrollTo({ top: 0, behavior: 'instant' }); };
   const validateStep = async () => {
+    if (!hasIntent) throw new Error('اختر نوع الطلب أولًا.');
     const fields = step === 0 ? firstFields : groups.flatMap(group => group.fields);
     for (const field of fields) {
       if (field.required && (field.type === 'file' ? !files[field.key] : !values[field.key]?.trim())) throw new Error(`أكمل حقل: ${field.label}.`);
@@ -46,7 +48,7 @@ export function CompanySalePage({ executive = false }: { executive?: boolean }) 
     }
   };
   const submit = async (event: FormEvent) => {
-    event.preventDefault(); if (pending) return; setError(''); setPending(true);
+    event.preventDefault(); if (pending || !hasIntent) return; setError(''); setPending(true);
     try {
       if (step < 2) { await validateStep(); changeStep(step + 1); return; }
       const details = Object.fromEntries(allFields.filter(field => field.type !== 'file' && !['name', 'phone', 'email'].includes(field.key)).map(field => [field.label, values[field.key]?.trim() || '']));
@@ -61,6 +63,14 @@ export function CompanySalePage({ executive = false }: { executive?: boolean }) 
     <Link className="back-link" to="/company-market">العودة إلى عالم التقبيل</Link>
     <header className="interior-intro"><div className="interior-intro-copy"><span className="eyebrow">بيع الشركة</span><h1>{title}</h1></div></header>
     {success ? <section role="status"><h2 ref={heading} tabIndex={-1}>تم استلام طلبكم</h2><p>{saleSuccess}</p><Link className="action action-primary" to="/company-market">العودة إلى عالم التقبيل</Link></section> : <>
+      {!executive && step === 0 && <fieldset className="sale-intent" disabled={pending}>
+        <legend>ما هدف طلبك؟</legend>
+        <div className="sale-intent-options">{saleIntents.map(intent => <label key={intent.value} className="sale-intent-option">
+          <input type="radio" name="request_intent" value={intent.value} checked={values.request_intent === intent.value} onChange={() => { setError(''); setValues(previous => ({ ...previous, request_intent: intent.value })); }} />
+          <span>{intent.label}</span>
+        </label>)}</div>
+      </fieldset>}
+      {hasIntent && <>
       <ol className="sale-steps" aria-label="مراحل الطلب">{['تسجيل البيانات', executive ? 'المستندات والأسعار' : 'البيانات التشغيلية', 'مراجعة وإرسال'].map((label, i) => <li key={label} aria-current={step === i ? 'step' : undefined}><span>{i + 1}</span>{label}</li>)}</ol>
       <h2 ref={heading} tabIndex={-1}>{step === 0 ? 'تسجيل البيانات' : step === 1 ? (executive ? 'مستندات الشركة والأسعار' : 'البيانات التشغيلية') : 'مراجعة الطلب'}</h2>
       <form onSubmit={event => void submit(event)} aria-busy={pending}>
@@ -72,6 +82,7 @@ export function CompanySalePage({ executive = false }: { executive?: boolean }) 
         </fieldset>
         {error && <p className="error" role="alert">{error}</p>}
       </form>
+      </>}
     </>}
   </main></Shell>;
 }

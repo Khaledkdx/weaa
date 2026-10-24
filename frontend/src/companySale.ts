@@ -5,6 +5,11 @@ export const executiveSalePath = '/join-us/company-sale-executive';
 export const attachmentPrefix = 'company_document:';
 export const saleSuccess = 'شكرًا لثقتكم بشركة وعاء للخدمات اللوجستية والإدارية. تم استلام طلبكم بنجاح، وسيقوم الفريق المختص بمراجعة بيانات الشركة والتواصل معكم لاستكمال الإجراءات اللازمة.';
 const field = (key: string, label: string, type: FormField['type'] = 'text', required = true, options: string[] = []): FormField => ({ key, label, type, required, options });
+export const saleIntents = [
+  { value: 'البحث عن شريك', label: 'هل تبحث عن شريك؟' },
+  { value: 'بيع الشركة بالكامل', label: 'هل ترغب في بيع الشركة بالكامل؟' },
+];
+export const saleIntentField = field('request_intent', 'نوع الطلب', 'select', true, saleIntents.map(intent => intent.value));
 export const companyContactFields = [
   field('company_name', 'اسم الشركة'), field('phone', 'رقم الهاتف', 'phone'),
   field('name', 'اسم ممثل الشركة'), field('email', 'البريد الإلكتروني الرسمي', 'email'),

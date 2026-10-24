@@ -158,3 +158,11 @@ a.contact-channel:hover{border-color:var(--gold);background:var(--surface-2)}
 .sale-review dt{font-weight:700}.sale-review dd{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
 .company-sale-page h2{font-size:28px;line-height:1.5}.company-sale-page h2:focus{outline:none}
 @media(max-width:600px){.sale-review>div{grid-template-columns:1fr;gap:6px}.sale-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.sale-steps li{flex-direction:column;text-align:center;font-size:13px;line-height:1.5}.sale-actions .action{flex:1}}
+.sale-intent{border:0;padding:0;margin:0 0 32px;min-width:0}
+.sale-intent legend{font-size:24px;font-weight:700;margin-bottom:18px}
+.sale-intent-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.sale-intent-option{display:flex;align-items:center;gap:14px;min-height:100px;padding:20px;border:1px solid var(--line);border-radius:6px;background:var(--surface);cursor:pointer;font-size:18px;font-weight:700;line-height:1.6}
+.sale-intent-option input{width:22px;height:22px;flex:none;margin:0;accent-color:var(--gold)}
+.sale-intent-option:has(input:checked){border-color:var(--gold);background:var(--surface-2)}
+.sale-intent-option:focus-within{outline:2px solid var(--gold);outline-offset:4px}
+@media(max-width:600px){.sale-intent-options{grid-template-columns:1fr}.sale-intent-option{min-height:88px;font-size:17px}}
