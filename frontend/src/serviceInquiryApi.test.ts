@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { serviceInquiryPayload, submitServiceInquiry } from './serviceInquiryApi';
+import { createServiceRequest } from './data';
+import type { DeliveryCache } from './requestDelivery';
+vi.mock('./data', () => ({ createServiceRequest: vi.fn().mockResolvedValue(undefined) }));
 
 const details = { name: ' أحمد ', company: ' شركة مثال ', phone: '٠٥١٢٣٤٥٦٧٨', city: ' جدة ' };
 const selected = ['ترخيص النقل الخفيف للبضائع على الطرق البرية', 'عقد الهرم الماسي'];
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); vi.clearAllMocks(); });
 
 describe('service inquiry API', () => {
   it('normalizes the phone and sends the selected services to the public endpoint', async () => {
@@ -25,6 +28,7 @@ describe('service inquiry API', () => {
     expect(sent.phone).toBe('+966512345678');
     expect(sent.details).toContain(`تاريخ الطلب: ${sent.created_at_label}`);
     expect(sent.details).toContain('اسم الشركة: شركة مثال\n\nالمدينة: جدة');
+    expect(createServiceRequest).toHaveBeenCalledWith(expect.objectContaining({ service_slug: 'logistics-inquiry', details: expect.stringContaining('الربط الخارجي: تم الإرسال') }));
     expect(serviceInquiryPayload(details, selected, undefined, new Date('2026-10-14T12:00:00Z'))).toEqual({
       service_slug: 'logistics-inquiry', service_title: 'طلب خدمات لوجستية',
       name: 'أحمد', phone: '+966512345678', email: '',
@@ -33,13 +37,26 @@ describe('service inquiry API', () => {
     });
   });
 
-  it('shows the API error rather than reporting a false success', async () => {
+  it('records an external rejection in the dashboard without losing the local request', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 422, json: async () => ({ success: false, message: 'اختر خدمة صحيحة' }) }));
-    await expect(submitServiceInquiry(details, selected)).rejects.toThrow('اختر خدمة صحيحة');
+    await submitServiceInquiry(details, selected);
+    expect(createServiceRequest).toHaveBeenCalledWith(expect.objectContaining({ details: expect.stringContaining('سبب التعذر: اختر خدمة صحيحة') }));
   });
 
-  it('reports connection failures', async () => {
+  it('saves locally even if the external connection fails', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
-    await expect(submitServiceInquiry(details, selected)).rejects.toThrow('تعذر الاتصال بنظام الطلبات');
+    await submitServiceInquiry(details, selected);
+    expect(createServiceRequest).toHaveBeenCalledWith(expect.objectContaining({ details: expect.stringContaining('الربط الخارجي: يحتاج متابعة') }));
+  });
+
+  it('fails if the dashboard cannot save and does not duplicate an accepted upstream request on retry', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 201, json: async () => ({ success: true }) });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.mocked(createServiceRequest).mockRejectedValueOnce(new Error('تعذر حفظ الطلب'));
+    const cache: DeliveryCache = { current: null };
+    await expect(submitServiceInquiry(details, selected, undefined, cache)).rejects.toThrow('تعذر حفظ الطلب');
+    await submitServiceInquiry(details, selected, undefined, cache);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(createServiceRequest).toHaveBeenCalledTimes(2);
   });
 });

@@ -158,7 +158,16 @@ export function useCms() {
   return value;
 }
 
-export async function createJoinRequest(request: Omit<JoinRequest, 'id'>, file?: File) {
+type RequestDocument = { key: string; label: string; file: File };
+
+export async function createServiceRequest(request: Omit<ServiceRequest, 'id'>) {
+  if (!supabase) throw new Error('حفظ الطلب في أدمن وعاء يحتاج اتصال Supabase.');
+  const { error } = await supabase.from('service_requests').insert(request);
+  if (error) throw new Error('تعذر حفظ الطلب في أدمن وعاء. أعد المحاولة.');
+}
+
+export async function createJoinRequest(request: Omit<JoinRequest, 'id'>, file?: File | RequestDocument[], uploads = new Map<File, string>()) {
+  if (Array.isArray(file)) return saveRequestDocuments(request, file, uploads, 'join-forms', 'request_document:');
   if (!supabase) throw new Error('إرسال الطلبات يحتاج اتصال Supabase.');
   let attachment_path: string | undefined;
   if (file) {
@@ -172,18 +181,22 @@ export async function createJoinRequest(request: Omit<JoinRequest, 'id'>, file?:
 }
 
 export async function submitCompanySale(request: Omit<JoinRequest, 'id'>, documents: { key: string; label: string; file: File }[], uploads = new Map<File, string>()) {
+  return saveRequestDocuments(request, documents, uploads, 'company-sales', 'company_document:');
+}
+
+async function saveRequestDocuments(request: Omit<JoinRequest, 'id'>, documents: RequestDocument[], uploads: Map<File, string>, folder: string, prefix: string) {
   if (!supabase) throw new Error('إرسال الطلبات يحتاج اتصال Supabase.');
   const fields = { ...request.fields };
   for (const document of documents) {
     let path = uploads.get(document.file);
     if (!path) {
       const extension = document.file.name.split('.').pop()?.toLowerCase() || 'pdf';
-      path = `company-sales/${crypto.randomUUID()}/${document.key}.${extension}`;
+      path = `${folder}/${crypto.randomUUID()}/${document.key.replace(/[^A-Za-z0-9_-]/g, '_')}.${extension}`;
       const { error } = await supabase.storage.from('join-attachments').upload(path, document.file, { upsert: false });
       if (error) throw new Error(`تعذر رفع ${document.label}. أعد المحاولة.`);
       uploads.set(document.file, path);
     }
-    fields[`company_document:${document.label}`] = path;
+    fields[`${prefix}${document.label}`] = path;
   }
   const { error } = await supabase.from('join_requests').insert({ ...request, fields });
   if (error) throw new Error('تعذر حفظ الطلب. بياناتك محفوظة في الصفحة؛ أعد المحاولة.');
@@ -198,8 +211,10 @@ export async function loadRequests() {
   ]);
   if (services.error) throw services.error;
   if (messages.error) throw messages.error;
-  if (joins.error && joins.error.code !== 'PGRST205' && joins.error.code !== '42P01') throw joins.error;
-  return { services: services.data as ServiceRequest[], messages: messages.data as ServiceRequest[], joins: (joins.data || []) as JoinRequest[] };
+  const joinError = joins.error ? ['PGRST205', '42P01'].includes(joins.error.code)
+    ? 'جدول طلبات الانضمام وبيع الشركات غير مفعّل في Supabase. يلزم تطبيق ملف إعداد نماذج الانضمام قبل استقبال هذه الطلبات.'
+    : 'تعذر تحميل طلبات الانضمام وبيع الشركات. تحقق من الاتصال وصلاحيات الحساب.' : '';
+  return { services: services.data as ServiceRequest[], messages: messages.data as ServiceRequest[], joins: (joins.data || []) as JoinRequest[], joinError };
 }
 
 export async function updateRequestStatus(kind: 'service' | 'join', id: string, status: string) {

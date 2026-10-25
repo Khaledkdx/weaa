@@ -2,8 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { CourierForm } from './forms';
 import { courierForms } from './seed';
+import { createJoinRequest } from './data';
+vi.mock('./data', () => ({ createJoinRequest: vi.fn().mockResolvedValue(undefined) }));
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.clearAllMocks(); });
 
 function fillBaseForm() {
   fireEvent.change(screen.getByLabelText(/الاسم \*/), { target: { value: 'أحمد محمد' } });
@@ -36,6 +38,8 @@ describe('internal courier request payload', () => {
     expect(body.has('owns_car')).toBe(false);
     expect(body.has('car_model')).toBe(false);
     expect(body.has('registration_files')).toBe(false);
+    await waitFor(() => expect(createJoinRequest).toHaveBeenCalled());
+    expect(vi.mocked(createJoinRequest).mock.calls[0][0]).toMatchObject({ form_slug: 'courier-internal', fields: { 'المدن': 'القصيم، الشرقية', 'الربط الخارجي': 'تم الإرسال' } });
   });
 
   it('preserves zero and strips car details after switching from yes to no', async () => {
@@ -80,5 +84,31 @@ describe('external courier request payload', () => {
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toMatch(/\/external$/);
     expect((init.body as FormData).get('profession')).toBe('سائق توصيل');
+    await waitFor(() => expect(createJoinRequest).toHaveBeenCalled());
+    expect(vi.mocked(createJoinRequest).mock.calls[0][0]).toMatchObject({ form_slug: 'courier-external', fields: { 'المهنة الحالية': 'سائق توصيل' } });
+  });
+
+  it('saves locally when the external system is unavailable', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
+    const { container } = render(<CourierForm form={courierForms[0]} />);
+    fillBaseForm();
+    fireEvent.submit(container.querySelector('form')!);
+    await waitFor(() => expect(createJoinRequest).toHaveBeenCalled());
+    expect(vi.mocked(createJoinRequest).mock.calls[0][0].fields).toMatchObject({ 'الربط الخارجي': 'يحتاج متابعة', 'سبب تعذر الربط الخارجي': 'offline' });
+    await screen.findByRole('status');
+  });
+
+  it('retains the external receipt when the dashboard save fails and is retried', async () => {
+    vi.mocked(createJoinRequest).mockRejectedValueOnce(new Error('تعذر الحفظ'));
+    const fetchMock = vi.fn().mockResolvedValue({ status: 201, json: async () => ({ success: true, application_code: 'TEST' }) });
+    vi.stubGlobal('fetch', fetchMock);
+    const { container } = render(<CourierForm form={courierForms[0]} />);
+    fillBaseForm();
+    fireEvent.submit(container.querySelector('form')!);
+    await screen.findByRole('alert');
+    fireEvent.submit(container.querySelector('form')!);
+    await screen.findByRole('status');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(createJoinRequest).toHaveBeenCalledTimes(2);
   });
 });

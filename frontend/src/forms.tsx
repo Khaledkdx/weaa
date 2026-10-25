@@ -1,10 +1,11 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useRef, useState, type FormEvent } from 'react';
 import { Icon } from '@iconify/react';
 import { createJoinRequest } from './data';
 import { prepareInternalCarSubmission } from './courierCar';
 import { courierCities, prepareInternalCourierFields, validIdentityExpiry } from './courierInternal';
 import { courierForms } from './seed';
 import type { FormDefinition, FormField } from './types';
+import { externalReceipt, type DeliveryReceipt } from './requestDelivery';
 
 export { FormControl, validateFiles };
 
@@ -80,14 +81,14 @@ function SubmitState({ pending, error, success, code }: { pending: boolean; erro
 export function DynamicForm({ form }: { form: FormDefinition }) {
   const [values, setValues] = useState<Record<string, string>>({}); const [files, setFiles] = useState<Record<string, File | undefined>>({});
   const [pending, setPending] = useState(false); const [error, setError] = useState(''); const [success, setSuccess] = useState('');
+  const uploads = useRef(new Map<File, string>());
   const submit = async (event: FormEvent) => {
     event.preventDefault(); if (pending) return; setError(''); setSuccess('');
     const missingFile = form.fields.find(field => field.type === 'file' && field.required && !files[field.key]);
     if (missingFile) { setError(`أرفق ${missingFile.label}.`); return; }
-    const file = Object.values(files).find(Boolean);
-    if (file && file.size > 5 * 1024 * 1024) { setError('الملف يجب ألا يتجاوز 5 ميجابايت.'); return; }
+    const documents = form.fields.flatMap(field => files[field.key] ? [{ key: field.key, label: field.label, file: files[field.key]! }] : []);
     setPending(true);
-    try { await createJoinRequest({ form_slug: form.slug, form_title: form.title, name: values.name || values.full_name || '', phone: normalizeDigits(values.phone || ''), email: values.email || '', fields: Object.fromEntries(Object.entries(values).filter(([key]) => !['name', 'full_name', 'phone', 'email'].includes(key))), status: 'طلب جديد', created_at_label: new Date().toLocaleDateString('ar-SA') }, file); setSuccess('تم إرسال طلب الانضمام بنجاح.'); setValues({}); setFiles({}); }
+    try { await validateFiles(documents.map(document => document.file)); await createJoinRequest({ form_slug: form.slug, form_title: form.title, name: values.name || values.full_name || '', phone: normalizeDigits(values.phone || ''), email: values.email || '', fields: Object.fromEntries(Object.entries(values).filter(([key]) => !['name', 'full_name', 'phone', 'email'].includes(key))), status: 'طلب جديد', created_at_label: new Date().toLocaleDateString('ar-SA') }, documents, uploads.current); setSuccess('تم إرسال طلب الانضمام بنجاح.'); setValues({}); setFiles({}); uploads.current.clear(); }
     catch (cause) { setError(cause instanceof Error ? cause.message : 'تعذر إرسال الطلب.'); } finally { setPending(false); }
   };
   return <form className="form-grid" onSubmit={event => void submit(event)}>{form.fields.map(field => <FormControl key={field.key} field={field} value={values[field.key] || ''} onChange={value => setValues(previous => ({ ...previous, [field.key]: value }))} file={files[field.key]} onFile={file => setFiles(previous => ({ ...previous, [field.key]: file }))} />)}<div className="form-footer"><button className="action action-primary" disabled={pending}>{pending ? 'جاري الإرسال...' : 'إرسال الطلب'}</button><SubmitState pending={pending} error={error} success={success} /></div></form>;
@@ -112,6 +113,9 @@ export function CourierForm({ form }: { form: FormDefinition }) {
   const [values, setValues] = useState<Record<string, string>>({}); const [files, setFiles] = useState<Record<string, File[]>>({});
   const [selectedCities, setSelectedCities] = useState<string[]>([]);
   const [pending, setPending] = useState(false); const [error, setError] = useState(''); const [success, setSuccess] = useState(''); const [code, setCode] = useState('');
+  const delivery = useRef<DeliveryReceipt | null>(null);
+  const uploads = useRef(new Map<File, string>());
+  const fileIds = useRef(new WeakMap<File, string>());
   const sections = courierSections(internal);
   const submit = async (event: FormEvent) => {
     event.preventDefault(); if (pending) return; setError(''); setSuccess(''); setCode('');
@@ -142,10 +146,27 @@ export function CourierForm({ form }: { form: FormDefinition }) {
       const payload = new FormData();
       for (const [key, value] of Object.entries(normalized)) payload.append(key, value);
       for (const [key, list] of Object.entries(submissionFiles)) for (const file of list) payload.append(key, file, file.name);
-      const response = await fetch(`https://app.swarsafqa.com/api/public/courier-applications/${internal ? 'internal' : 'external'}`, { method: 'POST', body: payload, credentials: 'omit' });
-      const result = await response.json().catch(() => ({}));
-      if (response.status !== 201 || result.success !== true) throw new Error(result.message || `تعذر إرسال الطلب (${response.status}).`);
-      setSuccess(result.message || 'تم إرسال الطلب بنجاح.'); setCode(result.application_code || ''); setValues({}); setFiles({}); setSelectedCities([]);
+      const fingerprint = JSON.stringify([normalized, Object.entries(submissionFiles).map(([key, list]) => [key, list.map(file => {
+        if (!fileIds.current.has(file)) fileIds.current.set(file, crypto.randomUUID());
+        return fileIds.current.get(file);
+      })])]);
+      const receipt = await externalReceipt(fingerprint, async () => {
+        const response = await fetch(`https://app.swarsafqa.com/api/public/courier-applications/${internal ? 'internal' : 'external'}`, { method: 'POST', body: payload, credentials: 'omit' });
+        const result = await response.json().catch(() => ({}));
+        if (response.status !== 201 || result.success !== true) throw new Error(result.message || `تعذر إرسال الطلب (${response.status}).`);
+        return result;
+      }, delivery);
+      const details: Record<string, string> = Object.fromEntries(Object.entries(normalized).filter(([key]) => !['name', 'phone', 'email'].includes(key)).map(([key, value]) => {
+        const field = fields.find(field => field.key === key);
+        return [field?.label || key, courierOptions[key]?.[value] || value];
+      }));
+      details['الربط الخارجي'] = receipt.error ? 'يحتاج متابعة' : 'تم الإرسال';
+      if (receipt.error) details['سبب تعذر الربط الخارجي'] = receipt.error;
+      if (receipt.result) details['رد النظام الخارجي'] = JSON.stringify(receipt.result);
+      const sectionNames: Record<string, string> = { ...sections, registration_files: 'استمارة السيارة' };
+      const documents = Object.entries(submissionFiles).flatMap(([key, list]) => list.map((file, i) => ({ key: `${key}_${i + 1}`, label: `${sectionNames[key] || key} (${i + 1})`, file })));
+      await createJoinRequest({ form_slug: internal ? 'courier-internal' : 'courier-external', form_title: form.title, name: normalized.name || '', phone: normalized.phone || '', email: normalized.email || '', fields: details, status: 'طلب جديد' }, documents, uploads.current);
+      setSuccess('تم إرسال طلبك إلى فريق وعاء بنجاح.'); setCode(String(receipt.result?.application_code || '')); setValues({}); setFiles({}); setSelectedCities([]); uploads.current.clear(); delivery.current = null;
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'تعذر الاتصال بنظام المناديب. قد يحتاج الخادم إلى تفعيل CORS لهذا النطاق.'); }
     finally { setPending(false); }
   };

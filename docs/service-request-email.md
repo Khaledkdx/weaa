@@ -1,6 +1,6 @@
 # تنبيه البريد لطلبات الخدمات
 
-نماذج الخدمات التي تكتب إلى Supabase تحفظ الطلب في جدول `service_requests`، ويضبط عمود `created_at` التاريخ والوقت تلقائيًا. أما نموذج `/join-us/request-services` فيمر عبر خادم GoDaddy (`/api/service-inquiry`) إلى نظام الطلبات الخارجي `app.swarsafqa.com`، ولذلك إعدادات Webhook أدناه لا تنطبق عليه.
+طلبات الخدمات تُحفظ في Supabase بجدول `service_requests`، ويضبط عمود `created_at` التاريخ والوقت تلقائيًا. نموذج `/join-us/request-services` يرسل أيضًا عبر خادم GoDaddy (`/api/service-inquiry`) إلى نظام الطلبات الخارجي `app.swarsafqa.com`. إعدادات Webhook أدناه تشمل نسخته المحفوظة في وعاء. اختر تنبيه GoDaddy أو تنبيه Supabase لهذا النموذج لتجنب وصول إشعارين للطلب نفسه.
 
 ## إشعار نموذج طلب الخدمات اللوجستية
 

@@ -3,6 +3,7 @@ import { Icon } from '@iconify/react';
 import { normalizeDigits, saudiMobile } from './forms';
 import { serviceGroups, type CourierRequirements } from './serviceInquiry';
 import { submitServiceInquiry } from './serviceInquiryApi';
+import type { DeliveryReceipt } from './requestDelivery';
 
 type Details = { name: string; company: string; phone: string; city: string };
 const initial: Details = { name: '', company: '', phone: '', city: '' };
@@ -25,6 +26,7 @@ export function ServiceInquiry() {
   const [success, setSuccess] = useState(false);
   const headingRef = useRef<HTMLDivElement>(null);
   const previousStep = useRef(0);
+  const delivery = useRef<DeliveryReceipt | null>(null);
   useEffect(() => {
     if (previousStep.current === step) return;
     previousStep.current = step;
@@ -51,7 +53,7 @@ export function ServiceInquiry() {
     if (pending) return;
     setPending(true); setError('');
     try {
-      await submitServiceInquiry(details, selected, courier);
+      await submitServiceInquiry(details, selected, courier, delivery);
       setSuccess(true); setDetails(initial); setSelected([]); setCourier(initialCourier);
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'تعذر إرسال الطلب. حاول مرة أخرى.'); }
     finally { setPending(false); }

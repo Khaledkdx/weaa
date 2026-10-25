@@ -39,7 +39,7 @@ with check (true);
 
 insert into storage.buckets (id, name, public)
 values ('join-attachments', 'join-attachments', false)
-on conflict (id) do nothing;
+on conflict (id) do update set public = false;
 
 drop policy if exists "public can upload join attachments" on storage.objects;
 create policy "public can upload join attachments"

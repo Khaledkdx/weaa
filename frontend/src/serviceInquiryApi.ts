@@ -1,5 +1,7 @@
 import { saudiMobile } from './forms';
 import { inquiryDetails, type CourierRequirements } from './serviceInquiry';
+import { createServiceRequest } from './data';
+import { externalReceipt, type DeliveryCache } from './requestDelivery';
 
 export type ServiceInquiryDetails = { name: string; company: string; phone: string; city: string };
 
@@ -19,13 +21,15 @@ export function serviceInquiryPayload(details: ServiceInquiryDetails, selected: 
   };
 }
 
-export async function submitServiceInquiry(details: ServiceInquiryDetails, selected: string[], courier?: CourierRequirements) {
+export async function submitServiceInquiry(details: ServiceInquiryDetails, selected: string[], courier?: CourierRequirements, cache: DeliveryCache = { current: null }) {
+  const payload = serviceInquiryPayload(details, selected, courier);
+  const receipt = await externalReceipt(JSON.stringify({ details, selected, courier }), async () => {
   let response: Response;
   try {
     response = await fetch(import.meta.env.PROD ? '/api/service-inquiry' : endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(serviceInquiryPayload(details, selected, courier)),
+      body: JSON.stringify(payload),
       credentials: 'omit',
     });
   } catch {
@@ -36,5 +40,10 @@ export async function submitServiceInquiry(details: ServiceInquiryDetails, selec
   if (!response.ok || result?.success === false) {
     throw new Error(result?.message || `تعذر إرسال الطلب (${response.status}). حاول مرة أخرى.`);
   }
-  return result;
+  return result || {};
+  }, cache);
+  const syncDetails = receipt.error ? `الربط الخارجي: يحتاج متابعة\nسبب التعذر: ${receipt.error}` : 'الربط الخارجي: تم الإرسال';
+  await createServiceRequest({ ...payload, details: `${payload.details}\n\n${syncDetails}\n${receipt.result ? JSON.stringify(receipt.result) : ''}`.trim() });
+  cache.current = null;
+  return { success: true };
 }

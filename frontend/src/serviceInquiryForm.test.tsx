@@ -51,7 +51,7 @@ describe('service inquiry steps', () => {
     fireEvent.click(screen.getByRole('button', { name: /التالي/ }));
     fireEvent.click(screen.getByRole('button', { name: /إرسال الطلب/ }));
     await waitFor(() => expect(submitServiceInquiry).toHaveBeenCalledWith(
-      { name: 'أحمد', company: '', phone: '512345678', city: 'جدة' }, ['إدارة مستودعات'], { count: '', city: '', sponsorshipSpecs: '', ajeerSpecs: '' },
+      { name: 'أحمد', company: '', phone: '512345678', city: 'جدة' }, ['إدارة مستودعات'], { count: '', city: '', sponsorshipSpecs: '', ajeerSpecs: '' }, expect.objectContaining({ current: null }),
     ));
     expect(submitServiceInquiry).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('status').textContent).toContain('تم إرسال طلبك بنجاح');
