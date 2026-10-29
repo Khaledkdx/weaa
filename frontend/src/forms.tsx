@@ -30,6 +30,7 @@ export function saudiMobile(value: string) {
 }
 function FormControl({ field, value, onChange, file, onFile }: { field: FormField; value: string; onChange: (next: string) => void; file?: File; onFile?: (next?: File) => void }) {
   const type = field.type;
+  const transportNumeric = field.key.includes('_capacity_') || field.key === 'reefer_cooling_range';
   const options = courierOptions[field.key] || Object.fromEntries(field.options.map(option => [option, option]));
   if (type === 'file') return <div className="form-control">
     <span>{field.label}{field.required && <b aria-label="مطلوب"> *</b>}</span>
@@ -40,7 +41,7 @@ function FormControl({ field, value, onChange, file, onFile }: { field: FormFiel
   return <label className={`form-control ${['multiline', 'textarea', 'details'].includes(type) ? 'form-wide' : ''}`}><span>{field.label}{field.required && <b aria-label="مطلوب"> *</b>}</span>
     {type === 'select' ? <select required={field.required} value={value} onChange={event => onChange(event.target.value)}><option value="">{field.key === 'owns_car' ? 'غير محدد' : 'اختر'}</option>{Object.entries(options).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select> :
         ['multiline', 'textarea', 'details'].includes(type) ? <textarea required={field.required} value={value} onChange={event => onChange(event.target.value)} rows={4} /> :
-          <input required={field.required} autoComplete={autoComplete} dir={['phone', 'email', 'number', 'date'].includes(type) ? 'ltr' : undefined} type={field.key === 'sponsorship_transfer_count' ? 'text' : type === 'phone' ? 'tel' : type} inputMode={type === 'phone' ? 'tel' : type === 'number' || field.key === 'car_year' ? 'numeric' : undefined} minLength={field.key === 'car_model' ? 2 : undefined} maxLength={field.key === 'car_model' ? 160 : field.key === 'car_year' ? 4 : undefined} pattern={field.key === 'car_year' ? '[0-9٠-٩۰-۹]{4}' : undefined} value={value} onChange={event => onChange(event.target.value)} />}
+          <input required={field.required} autoComplete={autoComplete} dir={transportNumeric || ['phone', 'email', 'number', 'date'].includes(type) ? 'ltr' : undefined} type={field.key === 'sponsorship_transfer_count' ? 'text' : type === 'phone' ? 'tel' : type} inputMode={type === 'phone' ? 'tel' : field.key.includes('_capacity_') ? 'decimal' : type === 'number' || field.key === 'car_year' ? 'numeric' : undefined} minLength={field.key === 'car_model' ? 2 : undefined} maxLength={field.key === 'car_model' ? 160 : field.key === 'car_year' ? 4 : undefined} pattern={field.key === 'car_year' ? '[0-9٠-٩۰-۹]{4}' : undefined} value={value} onChange={event => onChange(event.target.value)} />}
   </label>;
 }
 function FilePicker({ label, multiple = false, required = false, onFiles }: { label: string; multiple?: boolean; required?: boolean; onFiles: (files: File[]) => void }) {

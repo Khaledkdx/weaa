@@ -89,4 +89,16 @@ describe('form submissions in the dashboard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'طلبات العملاء' }));
     await screen.findByText('عميل محفوظ');
   });
+
+  it('shows road transport requests and all specifications in their own section', async () => {
+    await createJoinRequest(request('road-transport', 'نقل بري', { 'نوع الخدمة': 'مزود خدمة نقل', 'تريلات: العدد': '5', 'تريلات: الحمولة بالطن': '20', 'طريقة التعاقد': 'عقد سنوي، بالطلب' }));
+    render(<MemoryRouter><Admin /></MemoryRouter>);
+    fireEvent.click(screen.getByRole('button', { name: 'طلبات النقل البري' }));
+    await screen.findByText('نقل بري');
+    expect(screen.getByText('مزود خدمة نقل')).toBeTruthy();
+    expect(screen.getByText('عقد سنوي، بالطلب')).toBeTruthy();
+    expect(screen.getByText('20')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'طلبات الانضمام' }));
+    await screen.findByText(/لا توجد طلبات الانضمام/);
+  });
 });

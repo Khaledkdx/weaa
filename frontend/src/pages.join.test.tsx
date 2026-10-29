@@ -38,6 +38,14 @@ describe('join us service inquiry', () => {
 });
 
 describe('public form locations', () => {
+  it('opens the road transport form from contracts and Join Us', () => {
+    renderRoute('/services/contracts');
+    expect(screen.getByRole('link', { name: 'نموذج النقل البري' }).getAttribute('href')).toBe('/join-us/road-transport');
+    cleanup(); renderRoute('/join-us');
+    expect(screen.getByRole('link', { name: /النقل البري/ }).getAttribute('href')).toBe('/join-us/road-transport');
+    cleanup(); renderRoute('/join-us/road-transport');
+    expect(screen.getByRole('heading', { name: 'نموذج عملاء النقل البري' })).toBeTruthy();
+  });
   it('links selling a company to the preliminary form but never lists the executive form', () => {
     const market = renderRoute('/company-market');
     expect(screen.getByRole('link', { name: 'أريد بيع شركة' }).getAttribute('href')).toBe('/join-us/company-sale');
@@ -51,11 +59,15 @@ describe('public form locations', () => {
     expect(join.container.querySelector('a[href="/join-us/company-sale-executive"]')).toBeNull();
   });
 
-  it('hides road transport from the homepage while keeping service navigation', () => {
+  it('links road transport from the homepage and services without restoring old vehicle cards', () => {
     renderRoute('/');
-    expect(screen.queryByText('النقل البري')).toBeNull();
+    expect(screen.getByRole('link', { name: 'النقل البري' }).getAttribute('href')).toBe('/join-us/road-transport');
     expect(screen.queryByText('الدينات')).toBeNull();
     expect(screen.getByRole('link', { name: 'خدمات وعقود' }).getAttribute('href')).toBe('/services/contracts');
+    cleanup();
+    const { container } = renderRoute('/services');
+    expect(screen.getByRole('link', { name: /النقل البري/ }).getAttribute('href')).toBe('/join-us/road-transport');
+    expect(container.querySelector('form')).toBeNull();
   });
 
   it('shows contact details without a submission form', () => {

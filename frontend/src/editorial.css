@@ -66,7 +66,7 @@ input::placeholder,textarea::placeholder{color:var(--muted);opacity:.85}
 .category-band-heading{display:flex;align-items:end;justify-content:space-between;gap:24px;margin-bottom:24px}
 .category-band-heading span{font-size:14px;color:var(--gold-bright);font-weight:700}
 .category-band-heading h2{font-size:35px;line-height:1.2;margin:0;font-weight:900}
-.category-rail{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+.category-rail{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px}
 .category-link{display:block;min-width:0}
 .category-link img{aspect-ratio:1.52;width:100%;object-fit:cover;border-radius:8px;transition:transform .35s ease,filter .35s ease}
 .category-link:hover img{transform:translateY(-4px);filter:brightness(.93)}
