@@ -32,7 +32,7 @@ Project stack: React + Vite web frontend in `frontend/`. Use the web path unless
 ## Order for new or changed motion
 
 1. **Decide.** `find-animation-opportunities` proposes places and exact values. Drop anything it rejects. Use `animation-vocabulary` if the request is vague.
-2. **Build.** `animate` writes the motion. The output must state the purpose, the properties animated, the curve and duration, and how it interrupts and exits.
+2. **Build.** For any UI surface (sheets, gestures, materials, typography), read `apple-design` first for the feel targets. Then `animate` writes the motion. The output must state the purpose, the properties animated, the curve and duration, and how it interrupts and exits.
 3. **Check performance.** `animation-performance` confirms only composite-friendly properties move and the frame budget holds. Skip only for static or non-animated changes.
 4. **Review.** `review-animations` reads the diff. Its default is to flag. Fix every flagged item, then review again if the fix changed the motion.
 5. **Break it.** `break-ui` runs the component with worst-case data. Fix layout breaks before shipping.
