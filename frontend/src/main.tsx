@@ -9,6 +9,7 @@ import solarIcons from './solar-icons.json';
 import './styles.css';
 import './editorial.css';
 import './interior.css';
+import './glass.css';
 
 const basename = import.meta.env.BASE_URL.replace(/\/$/, '') || '/';
 addCollection(solarIcons);

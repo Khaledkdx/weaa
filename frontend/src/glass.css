@@ -1,0 +1,382 @@
+/* glass.css — the design-token and material layer. Loaded last, so it owns
+   colors, radii, shadows and easing from here on. styles.css, editorial.css and
+   interior.css stay as the structural base; this file restyles surfaces toward a
+   frosted-glass, soft-card look and gives every transition a shared curve.
+   Admin screens only inherit the neutral tokens; glass is scoped to public UI. */
+
+/* ---------- 1. Tokens ---------- */
+:root,
+:root[data-theme=light] {
+  --bg: #f5f5f7;
+  --surface: #ffffff;
+  --surface-2: #ebebee;
+  --text: #1d1d1f;
+  --muted: #65656a;
+  --line: rgba(0, 0, 0, .08);
+  --gold: #8f6a33;
+  --gold-bright: #a97c3e;
+  --gold-text: #ffffff;
+  --gold-50: #faf5ea;
+  --gold-100: #f1e5cc;
+  --gold-300: #d9b77c;
+  --glass: rgba(255, 255, 255, .72);
+  --glass-strong: rgba(255, 255, 255, .86);
+  --glass-border: rgba(255, 255, 255, .9);
+  --glass-dark: rgba(20, 20, 22, .55);
+  --header: rgba(245, 245, 247, .72);
+  --success: #176b4b;
+  --danger: #a12d27;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .04), 0 4px 12px rgba(0, 0, 0, .05);
+  --shadow-md: 0 2px 4px rgba(0, 0, 0, .04), 0 12px 28px rgba(0, 0, 0, .09);
+  --shadow-lg: 0 4px 8px rgba(0, 0, 0, .05), 0 24px 56px rgba(0, 0, 0, .14);
+  --r-sm: 10px;
+  --r-md: 16px;
+  --r-lg: 22px;
+  --r-pill: 999px;
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+  --ease-spring: var(--ease-out);
+  --dur-press: 100ms;
+  --dur-hover: 350ms;
+  --dur-enter: 500ms;
+  --dur-sheet: 320ms;
+  color-scheme: light;
+}
+
+:root[data-theme=dark] {
+  --bg: #0d0d0f;
+  --surface: #1c1c1e;
+  --surface-2: #2c2c2e;
+  --text: #f5f5f7;
+  --muted: #a1a1a6;
+  --line: rgba(255, 255, 255, .1);
+  --gold: #d8b273;
+  --gold-bright: #e6c58a;
+  --gold-text: #1c150a;
+  --gold-50: rgba(216, 178, 115, .08);
+  --gold-100: rgba(216, 178, 115, .14);
+  --gold-300: rgba(216, 178, 115, .35);
+  --glass: rgba(28, 28, 30, .6);
+  --glass-strong: rgba(28, 28, 30, .82);
+  --glass-border: rgba(255, 255, 255, .08);
+  --glass-dark: rgba(10, 10, 12, .6);
+  --header: rgba(13, 13, 15, .7);
+  --success: #63cba0;
+  --danger: #ff8f83;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .3), 0 4px 12px rgba(0, 0, 0, .3), inset 0 1px 0 rgba(255, 255, 255, .06);
+  --shadow-md: 0 2px 4px rgba(0, 0, 0, .3), 0 12px 28px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .08);
+  --shadow-lg: 0 4px 8px rgba(0, 0, 0, .35), 0 24px 56px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .08);
+  color-scheme: dark;
+}
+
+/* A gentle spring (~2% overshoot, roughly damping .8) for anything the user
+   pokes. Browsers without linear() fall back to the expo-out curve above. */
+@supports (animation-timing-function: linear(0, 1)) {
+  :root {
+    --ease-spring: linear(0, .006, .025 2.8%, .101 6.1%, .539 18.9%, .721 25.3%, .849 31.5%, .937 38.1%, .968 41.8%, .991 45.7%, 1.006 50.1%, 1.015 55%, 1.017 63.9%, 1.001);
+  }
+}
+
+/* ---------- 2. Base ---------- */
+body { background: var(--bg); color: var(--text); }
+/* Arabic is a connected script: tracking stays at 0, only leading tightens on display sizes. */
+.hero h1 { line-height: 1.15; }
+.interior-intro h1, .service-detail-intro h1, .page-heading h1 { line-height: 1.2; }
+:focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; border-radius: 4px; }
+
+/* ---------- 3. Header: floating frosted bar ---------- */
+.site-header {
+  background: var(--header);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  box-shadow: 0 1px 0 var(--line);
+  transition: background-color var(--dur-hover) var(--ease-out), box-shadow var(--dur-hover) var(--ease-out);
+}
+.site-header.is-scrolled { background: var(--glass-strong); box-shadow: 0 1px 0 var(--line), var(--shadow-sm); }
+.brand img { border-radius: var(--r-sm); border-color: var(--line); }
+.desktop-nav a {
+  padding: 8px 14px;
+  border-radius: var(--r-pill);
+  transition: background-color var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out), transform var(--dur-hover) var(--ease-spring);
+}
+.desktop-nav a:hover { background: var(--surface-2); color: var(--text); }
+.desktop-nav a.active { background: var(--gold-100); color: var(--gold); box-shadow: none; }
+.desktop-nav a:active { transform: scale(.96); transition-duration: var(--dur-press); }
+.icon-button { border-radius: var(--r-pill); transition: background-color var(--dur-hover) var(--ease-out), transform var(--dur-hover) var(--ease-spring); }
+.icon-button:hover { background: var(--surface-2); }
+.icon-button:active { transform: scale(.92); transition-duration: var(--dur-press); }
+
+/* Mobile sheet settles in (320ms) and eases out (200ms). Opacity + translate only: the sheet already pays for a
+   backdrop blur, so animating its own filter or resizing its backdrop region would re-blur per frame on phones. */
+.mobile-nav {
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--line);
+  border-top: 0;
+  border-radius: 0 0 var(--r-lg) var(--r-lg);
+  box-shadow: var(--shadow-lg);
+  transform-origin: top center;
+  transition-property: opacity, transform, display;
+  transition-duration: var(--dur-sheet);
+  transition-timing-function: var(--ease-out), var(--ease-spring);
+  transition-behavior: allow-discrete;
+}
+.mobile-nav[hidden] {
+  display: none;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition-duration: 200ms;
+  transition-timing-function: var(--ease-out);
+}
+@starting-style {
+  .mobile-nav { opacity: 0; transform: translateY(-8px); }
+}
+.mobile-nav a { border-radius: var(--r-md); transition: background-color var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out); }
+.mobile-nav a:hover, .mobile-nav a.active { background: var(--gold-100); color: var(--gold); }
+
+/* ---------- 4. Hero: image layer + scrim, glass secondary action ---------- */
+.hero { background-image: none !important; overflow: hidden; }
+.hero-media {
+  position: absolute; inset: 0; z-index: -2;
+  width: 100%; height: 100%; object-fit: cover; object-position: center 52%;
+}
+/* Hero copy materializes (rise + unblur) as CSS keyframes: off the main thread during the busiest moment of the page,
+   and it finishes in a background tab, so no JS fallback is needed. The actions row is never blurred: an animated
+   filter there would become the backdrop root for the glass button inside it, which would then blur nothing. */
+/* `backwards`, not `both`: once done, the element returns to its natural style with no residual filter or transform. */
+.hero-animate { animation: hero-in .9s var(--ease-out) backwards; }
+.hero-animate:not(.hero-actions) { animation-name: hero-in-blur; }
+.hero-inner > .hero-animate:nth-child(2) { animation-delay: 80ms; }
+.hero-inner > .hero-animate:nth-child(3) { animation-delay: 160ms; }
+.hero-inner > .hero-animate:nth-child(4) { animation-delay: 240ms; }
+@keyframes hero-in { from { opacity: 0; transform: translateY(28px); } to { opacity: 1; transform: none; } }
+@keyframes hero-in-blur { from { opacity: 0; transform: translateY(28px); filter: blur(6px); } to { opacity: 1; transform: none; filter: none; } }
+.hero-scrim {
+  position: absolute; inset: 0; z-index: -1;
+  background: linear-gradient(270deg, rgba(10, 10, 9, .87) 5%, rgba(10, 10, 9, .55) 54%, rgba(10, 10, 9, .08));
+}
+.hero .action-primary { background: #f5f5f7; color: #1d1d1f; border-color: #f5f5f7; }
+.hero .action-primary:hover { background: #fff; color: #1d1d1f; }
+.hero .action-secondary {
+  background: rgba(255, 255, 255, .14);
+  border-color: rgba(255, 255, 255, .35);
+  color: #fff;
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  backdrop-filter: blur(16px) saturate(160%);
+}
+.hero .action-secondary:hover { background: rgba(255, 255, 255, .24); border-color: rgba(255, 255, 255, .55); color: #fff; }
+.hero-bottom { border-top-color: rgba(255, 255, 255, .18); }
+@media (max-width: 700px) { .hero-media { object-position: 38% center; } }
+
+/* ---------- 5. Bands with ambient light, so glass has something to blur ---------- */
+.home-band, .category-band, .contact-band, .interior-page {
+  position: relative;
+  isolation: isolate;
+  background: var(--bg);
+}
+.home-band::before, .contact-band::before, .interior-page::before {
+  content: "";
+  position: absolute; inset: 0; z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(60% 55% at 18% 8%, var(--gold-50), transparent 70%),
+    radial-gradient(45% 50% at 88% 92%, color-mix(in srgb, var(--surface-2) 75%, transparent), transparent 70%);
+}
+.home-band:nth-of-type(even)::before {
+  background:
+    radial-gradient(55% 50% at 85% 10%, var(--gold-50), transparent 70%),
+    radial-gradient(50% 55% at 12% 95%, color-mix(in srgb, var(--surface-2) 75%, transparent), transparent 70%);
+}
+.home-band-1 { background: var(--bg); }
+
+/* ---------- 6. Cards: one system for home, listing and interior cards ---------- */
+/* Cards are translucent but not blurred: over the bands' faint ambient light there is nothing to blur, and a row of
+   blur surfaces re-renders every frame of a reveal. Blur is reserved for the header, the sheet and chips over imagery. */
+.content-card,
+.home-band .content-card,
+.home-band-1 .content-card,
+.page-body .content-card,
+.interior-page .content-card {
+  background: var(--glass);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm), inset 0 1px 0 var(--glass-border);
+  transition:
+    transform var(--dur-hover) var(--ease-spring),
+    box-shadow var(--dur-hover) var(--ease-out),
+    border-color var(--dur-hover) var(--ease-out),
+    background-color var(--dur-hover) var(--ease-out);
+}
+.content-card:hover,
+.home-band .content-card:hover,
+.page-body .content-card:hover,
+.interior-page .content-card:hover {
+  background: var(--glass-strong);
+  border: 1px solid var(--gold-300);
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-md), inset 0 1px 0 var(--glass-border);
+}
+/* While GSAP is writing a reveal frame by frame, the element's own transitions stay off; otherwise each frame is eased again. */
+[data-reveal]:not(.is-revealed) { transition: none; }
+.content-card:active,
+.home-band .content-card:active,
+.interior-page .content-card:active { transform: translateY(-2px) scale(.995); transition-duration: var(--dur-press); }
+.home-band .content-card.has-media img,
+.interior-card-media img { transition: transform 600ms var(--ease-out); }
+.home-band .content-card.has-media:hover img,
+.interior-page .content-card:hover .interior-card-media img { transform: scale(1.04); }
+.interior-page .content-card:not(.has-media) .content-card-top :is(.card-index, svg) { border-radius: var(--r-sm); background: var(--gold-100); color: var(--gold); }
+.card-action, .interior-page .content-card .card-action, .text-link { color: var(--gold); }
+
+/* Chips floating over imagery: small dark glass pills with white text. */
+.home-band .content-card.has-media .content-card-top > *,
+.interior-page .content-card .card-index,
+.interior-page .content-card-top svg,
+.interior-card-media span,
+.interior-image-label {
+  background: var(--glass-dark);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, .18);
+  border-radius: var(--r-sm);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  backdrop-filter: blur(12px) saturate(160%);
+}
+.interior-page .content-card-top svg { border-radius: var(--r-pill); }
+
+/* Category tiles and contact channels follow the card rules. */
+.category-link img { border-radius: var(--r-lg); box-shadow: var(--shadow-sm); transition: transform var(--dur-hover) var(--ease-spring), box-shadow var(--dur-hover) var(--ease-out), filter var(--dur-hover) var(--ease-out); }
+.category-link:hover img { transform: translateY(-4px); box-shadow: var(--shadow-md); filter: brightness(.96); }
+.category-link svg { color: var(--gold); transition: transform var(--dur-hover) var(--ease-spring); }
+.contact-channel, .market-detail-layout aside, .quote-card, .inquiry-review, .inquiry-result {
+  background: var(--glass);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm), inset 0 1px 0 var(--glass-border);
+  transition: transform var(--dur-hover) var(--ease-spring), box-shadow var(--dur-hover) var(--ease-out), border-color var(--dur-hover) var(--ease-out);
+}
+a.contact-channel:hover { transform: translateY(-4px); border-color: var(--gold-300); box-shadow: var(--shadow-md), inset 0 1px 0 var(--glass-border); }
+
+/* Interior hero image block */
+.interior-intro.with-image { border-radius: var(--r-lg); box-shadow: var(--shadow-md); background: #15161a; }
+.interior-intro.with-image .eyebrow { color: var(--gold-300); }
+.interior-intro .market-actions .action-secondary {
+  background: rgba(255, 255, 255, .14); border-color: rgba(255, 255, 255, .35); color: #fff;
+  -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+}
+.eyebrow { color: var(--gold); }
+
+/* ---------- 7. Contact band and footer: tokens, not hardcoded charcoal ---------- */
+.contact-band { color: var(--text); border-top: 1px solid var(--line); }
+.contact-band .eyebrow { color: var(--gold); }
+.contact-band p { color: var(--muted); }
+.contact-band .action-primary { background: var(--text); color: var(--bg); border-color: var(--text); }
+.contact-band .action-primary:hover { background: var(--gold); color: var(--gold-text); border-color: var(--gold); }
+.site-footer { background: var(--bg); border-top: 1px solid var(--line); }
+.site-footer a:hover { color: var(--gold); }
+
+/* ---------- 8. Buttons: instant press, soft hover ---------- */
+.action {
+  border-radius: var(--r-pill);
+  transition:
+    transform var(--dur-hover) var(--ease-spring),
+    background-color var(--dur-hover) var(--ease-out),
+    color var(--dur-hover) var(--ease-out),
+    border-color var(--dur-hover) var(--ease-out),
+    box-shadow var(--dur-hover) var(--ease-out);
+}
+.action:hover { box-shadow: var(--shadow-sm); }
+.action:active { transform: scale(.97); box-shadow: none; transition-duration: var(--dur-press); }
+.action-primary { background: var(--text); color: var(--bg); border-color: var(--text); }
+.action-primary:hover { background: var(--gold); color: var(--gold-text); border-color: var(--gold); }
+.action-secondary { background: var(--surface); border-color: var(--line); color: var(--text); }
+.action-secondary:hover { background: var(--surface-2); border-color: var(--gold-300); color: var(--text); }
+.inquiry-actions .action-primary { background: var(--gold); color: var(--gold-text); border-color: var(--gold); }
+.inquiry-actions .action-primary:hover { background: var(--gold-bright); border-color: var(--gold-bright); }
+
+/* ---------- 9. Forms: solid surfaces (never light glass on glass), soft focus ring ---------- */
+.form-grid, .interior-form-page .form-grid {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
+}
+/* Inputs do not transition: the focus ring is keyboard feedback and must land on the same frame as focus. */
+.form-control :is(input, select, textarea) {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+.form-control :is(input, select, textarea):hover { border-color: color-mix(in srgb, var(--text) 22%, transparent); }
+.form-control :is(input, select, textarea):focus-visible {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 4px var(--gold-100);
+  background: var(--surface);
+}
+.file-picker { border-radius: var(--r-sm); }
+.form-control b { color: var(--gold); }
+
+/* Choice tiles: one selected state, no stacked outline + border. */
+.inquiry-option, .sale-intent-option, .transport-choice, .courier-offer, .inquiry-group {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  transition:
+    transform var(--dur-hover) var(--ease-spring),
+    background-color var(--dur-hover) var(--ease-out),
+    border-color var(--dur-hover) var(--ease-out),
+    box-shadow var(--dur-hover) var(--ease-out);
+}
+.inquiry-option:hover, .sale-intent-option:hover, .transport-choice:hover, .courier-offer:hover { border-color: var(--gold-300); background: var(--gold-50); }
+.inquiry-option:active, .sale-intent-option:active, .transport-choice:active, .courier-offer:active { transform: scale(.985); transition-duration: var(--dur-press); }
+.inquiry-option.selected,
+.sale-intent-option:has(input:checked),
+.transport-choice:has(input:checked),
+.courier-offer:has(input:checked) {
+  background: var(--gold-50);
+  border-color: var(--gold);
+  box-shadow: inset 0 0 0 1px var(--gold);
+  outline: none;
+  /* Checked is functional feedback, often from the keyboard: it lands fast rather than at hover pace. */
+  transition-duration: 120ms;
+}
+.inquiry-group[open] { border-color: var(--gold-300); box-shadow: var(--shadow-sm); }
+.inquiry-group-icon { border-radius: var(--r-sm); background: var(--gold-100); }
+.inquiry-chevron { transition: transform var(--dur-hover) var(--ease-spring); }
+.inquiry-group[open] .inquiry-group-body { transition: opacity 400ms var(--ease-out), transform 400ms var(--ease-out); }
+@starting-style {
+  .inquiry-group[open] .inquiry-group-body { opacity: 0; transform: translateY(-6px); }
+}
+.inquiry-progress li span { transition: background-color var(--dur-hover) var(--ease-out), border-color var(--dur-hover) var(--ease-out), box-shadow var(--dur-hover) var(--ease-out), transform var(--dur-hover) var(--ease-spring); }
+.inquiry-progress li.current span { transform: scale(1.08); box-shadow: 0 0 0 5px var(--gold-100); }
+
+/* ---------- 10. Theme switch ---------- */
+/* theme.tsx crossfades two page snapshots with the View Transition API where available. This is the fallback: ease only
+   the page's own colours, never every node (that repainted shadows and re-blurred every glass surface for 400ms). */
+html.theme-transition, html.theme-transition body { transition: background-color 400ms var(--ease-out), color 400ms var(--ease-out); }
+
+/* ---------- 11. Preferences ---------- */
+@media (prefers-reduced-transparency: reduce) {
+  :root, :root[data-theme=light], :root[data-theme=dark] {
+    --glass: var(--surface);
+    --glass-strong: var(--surface);
+    --header: var(--surface);
+    --glass-dark: rgba(12, 13, 12, .9);
+  }
+  .site-header, .mobile-nav, .hero .action-secondary, .interior-intro .market-actions .action-secondary,
+  .home-band .content-card.has-media .content-card-top > *, .interior-page .content-card .card-index,
+  .interior-page .content-card-top svg, .interior-card-media span, .interior-image-label {
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+  }
+}
+@media (prefers-contrast: more) {
+  :root, :root[data-theme=light], :root[data-theme=dark] {
+    --line: color-mix(in srgb, var(--text) 50%, transparent);
+    --glass: var(--surface);
+    --glass-strong: var(--surface);
+    --header: var(--surface);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .content-card:hover, .category-link:hover img, a.contact-channel:hover, .action:hover { transform: none; }
+}

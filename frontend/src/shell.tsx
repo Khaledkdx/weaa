@@ -19,8 +19,12 @@ export function usePublicMotion() {
   useEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }); }, [pathname]);
   useEffect(() => {
     if (pathname === '/admin' || pathname.startsWith('/join-us/')) return;
+    // Heavier header glass once content scrolls underneath is a legibility state, not motion: it runs even under reduced-motion.
+    const headerState = ScrollTrigger.create({ start: 24, end: 'max', toggleClass: { targets: '.site-header', className: 'is-scrolled' } });
     const media = gsap.matchMedia();
-    media.add('(prefers-reduced-motion: no-preference)', () => {
+    // Motion is wired once per route after CMS content is in. Re-running on data arrival would revert every
+    // revealed element to hidden and replay it. The hero intro itself is CSS (glass.css) so it needs no setup here.
+    if (!loading) media.add('(prefers-reduced-motion: no-preference)', () => {
       const lenis = new Lenis({ autoRaf: false, duration: .85 });
       const tick = (time: number) => lenis.raf(time * 1000);
       lenis.on('scroll', ScrollTrigger.update);
@@ -29,13 +33,20 @@ export function usePublicMotion() {
       const refresh = () => { if (active) ScrollTrigger.refresh(); };
       document.fonts.ready.then(refresh).catch(() => {});
       window.addEventListener('load', refresh);
-      gsap.fromTo('.hero-animate', { y: 20, opacity: .6 }, { y: 0, opacity: 1, duration: .7, stagger: .1, ease: 'power3.out' });
+      // The hero image drifts and settles as the page scrolls past it.
+      if (document.querySelector('.hero-media')) {
+        gsap.fromTo('.hero-media', { scale: 1.08, yPercent: 0 }, { scale: 1, yPercent: 10, ease: 'none', scrollTrigger: { trigger: '.hero', start: 'top top', end: 'bottom top', scrub: true } });
+      }
       gsap.utils.toArray<HTMLElement>('[data-reveal]').forEach((element) => {
-        gsap.fromTo(element, { y: 20 }, { y: 0, duration: .55, ease: 'power2.out', scrollTrigger: { trigger: element, start: 'top 94%', once: true } });
+        // Siblings revealed in the same row cascade instead of landing at once. CSS transitions on the element stay off
+        // (glass.css keys on .is-revealed) until the tween is done, so per-frame transform writes are not themselves eased.
+        const siblings = Array.from(element.parentElement?.children || []).filter(child => child.hasAttribute('data-reveal'));
+        const delay = Math.min(Math.max(siblings.indexOf(element), 0), 5) * .06;
+        gsap.fromTo(element, { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: .7, delay, ease: 'expo.out', clearProps: 'transform,opacity', onComplete: () => element.classList.add('is-revealed'), scrollTrigger: { trigger: element, start: 'top 90%', once: true } });
       });
       return () => { active = false; gsap.ticker.remove(tick); lenis.destroy(); window.removeEventListener('load', refresh); };
     });
-    return () => media.revert();
+    return () => { headerState.kill(); media.revert(); };
   }, [pathname, loading]);
 }
 
@@ -80,7 +91,8 @@ export function Shell({ children, compact = false }: { children: ReactNode; comp
         <button className="icon-button theme-button" title={theme === 'dark' ? 'الوضع الفاتح' : 'الوضع الداكن'} aria-label={theme === 'dark' ? 'الوضع الفاتح' : 'الوضع الداكن'} onClick={toggle}><Icon icon={theme === 'dark' ? 'solar:sun-2-linear' : 'solar:moon-linear'} /></button>
         <button ref={menuButtonRef} type="button" className="icon-button menu-button" aria-label={menuOpen ? 'إغلاق القائمة' : 'فتح القائمة'} aria-controls="mobile-navigation" aria-expanded={menuOpen} onClick={() => setMenuOpen(previous => !previous)}><Icon icon={menuOpen ? 'solar:close-circle-linear' : 'solar:hamburger-menu-linear'} /></button>
       </div>
-      {menuOpen && <div id="mobile-navigation" className="mobile-nav" ref={menuRef} role="navigation" aria-label="قائمة الهاتف">{navigation.map(([to, label]) => <NavLink key={to} to={to} end={to === '/'} onClick={() => setMenuOpen(false)}>{label}<Icon icon="solar:arrow-left-linear" /></NavLink>)}</div>}
+      {/* Stays mounted so the sheet can ease out as well as in; [hidden] drives the exit transition in glass.css. */}
+      <div id="mobile-navigation" className="mobile-nav" ref={menuRef} role="navigation" aria-label="قائمة الهاتف" hidden={!menuOpen}>{navigation.map(([to, label]) => <NavLink key={to} to={to} end={to === '/'} onClick={() => setMenuOpen(false)}>{label}<Icon icon="solar:arrow-left-linear" /></NavLink>)}</div>
     </header>
     <div id="main-content" tabIndex={-1}>{children}</div>
     <footer className="site-footer">

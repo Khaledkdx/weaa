@@ -188,7 +188,9 @@ function Home() {
   }
   const heroActions = hero?.cards.filter(card => card.enabled && cardTarget(card, cms)) || [];
   return <Shell><main>
-    <section className="hero" style={{ backgroundImage: `linear-gradient(270deg,rgba(10,10,9,.87) 5%,rgba(10,10,9,.55) 54%,rgba(10,10,9,.08)),url(${heroImage})` }}>
+    <section className="hero">
+      <img className="hero-media" src={heroImage} alt="" aria-hidden="true" fetchPriority="high" />
+      <div className="hero-scrim" aria-hidden="true" />
       <div className="hero-inner"><span className="hero-rule hero-animate">وعاء للخدمات اللوجستية والإدارية</span><h1 className="hero-animate">{hero?.title || cms.pages.home?.title || 'اللوجستيات تبدأ من وعاء'}</h1><p className="hero-animate">{hero?.description || cms.pages.home?.body || 'خدمات لوجستية وإدارية تناسب احتياجاتك.'}</p><div className="hero-actions hero-animate">{heroActions.length ? heroActions.map((card, index) => <Action key={card.id} to={cardTarget(card, cms)!} secondary={index !== 0} icon={index === 0 ? 'solar:arrow-left-linear' : undefined}>{card.buttonLabel || card.title}</Action>) : <><Action to="/services" icon="solar:arrow-left-linear">استكشف الخدمات</Action><Action to="/join-us" secondary>سجل الآن</Action></>}</div></div>
       <div className="hero-bottom"><span>من جدة، نحو أعمال أكثر تنظيمًا</span><span>مرر لاكتشاف المزيد <Icon icon="solar:arrow-down-linear" /></span></div>
     </section>

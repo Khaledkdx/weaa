@@ -38,7 +38,22 @@ reference's spacious hierarchy and category-to-detail pacing, not its brand or U
 
 ## Site-wide UI polish
 
-- Keep the existing charcoal, gold, neutral light palette and Tajawal typography.
+- Palette: Apple-like neutrals (`#f5f5f7` / `#1d1d1f` in light, `#0d0d0f` /
+  `#f5f5f7` in dark) with WEAA gold as the sole accent (`#8f6a33` light,
+  `#d8b273` dark) plus `--gold-50/100/300` tints for chips, selected states and
+  ambient glow. Tokens, radii (`--r-sm/md/lg/pill`), shadows (`--shadow-sm/md/lg`)
+  and easing live in `src/glass.css`, the last stylesheet, which overrides the
+  older duplicated tokens in `styles.css` and `editorial.css`.
+- Materials: the header, mobile sheet, cards and image chips are frosted glass
+  (`backdrop-filter` over low-alpha ambient gradients behind each band). Forms
+  stay solid — never stack light glass on glass. `prefers-reduced-transparency`
+  and `prefers-contrast: more` fall back to solid surfaces.
+- Motion: GSAP `expo.out` intros and scroll reveals (hero copy blurs in, hero
+  image parallaxes, header gains heavier glass once scrolled); CSS hover, press
+  and selection states use a shared `linear()` spring (`--ease-spring`) with a
+  cubic-bezier fallback. Press feedback fires on `:active`, not on release.
+- Tajawal stays; Arabic letter-spacing remains 0 (connected script), only
+  line-height tightens on display sizes.
 - Display the homepage photographs in responsive grids, with stable image ratios
   and readable text below each image.
 - Use 44px minimum navigation targets and 48px primary actions; form inputs use
