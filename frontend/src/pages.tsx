@@ -28,12 +28,23 @@ function cardTarget(card: HomeCard, cms: CmsContent) {
   if (card.destinationType === 'contact') return card.id === 'sell' || /بيع.*شركة/.test(card.title) ? salePath : '/contact';
   return card.target.startsWith('/') && !card.target.startsWith('//') ? card.target : null;
 }
-function ContentCard({ title, description, to, index, media, actionLabel, illustrative = false, fallbackMedia }: { title: string; description?: string; to: string; index?: number; media?: string; actionLabel?: string; illustrative?: boolean; fallbackMedia?: string }) {
+// The label says what the destination does; "explore" on every card told the reader nothing.
+function defaultActionLabel(target: string) {
+  if (target === '/join-us/request-services') return 'اطلب الخدمة';
+  if (target === roadTransportPath) return 'افتح النموذج';
+  if (target.startsWith('/join-us/')) return 'سجّل الآن';
+  if (target.startsWith('/company-market')) return 'تصفح الفرص';
+  if (/^https?:\/\//.test(target)) return 'افتح الرابط';
+  return 'اعرف المزيد';
+}
+// `index` is still accepted so call sites compile; the numbered chip it fed is gone, numbering only means something in a sequence.
+function ContentCard({ title, description, to, media, actionLabel, illustrative = false, fallbackMedia }: { title: string; description?: string; to: string; index?: number; media?: string; actionLabel?: string; illustrative?: boolean; fallbackMedia?: string }) {
   const [fallbackUsed, setFallbackUsed] = React.useState(false);
-  return <Link to={to} className={`content-card${media ? ' has-media' : ''}`} data-reveal>
-    <div className="content-card-top"><span className="card-index">{String((index || 0) + 1).padStart(2, '0')}</span><Icon icon="solar:arrow-left-up-linear" /></div>
+  // A card without a description is a tile: the media carries it and the body is one line.
+  return <Link to={to} className={`content-card${media ? ' has-media' : ''}${description ? '' : ' is-tile'}`} data-reveal>
+    <div className="content-card-top"><Icon icon="solar:arrow-left-up-linear" /></div>
     {media && <div className="interior-card-media"><img src={media} alt="" loading="lazy" onError={event => { if (fallbackMedia && event.currentTarget.src !== new URL(fallbackMedia, location.href).href) { event.currentTarget.src = fallbackMedia; setFallbackUsed(true); } else event.currentTarget.hidden = true; }} />{(illustrative || fallbackUsed) && <span>صورة توضيحية</span>}</div>}
-    <div><h3>{title}</h3>{description && <p>{description}</p>}{actionLabel && <span className="card-action">{actionLabel}</span>}</div>
+    <div><h3>{title}</h3>{description && <p>{description}</p>}<span className="card-action">{actionLabel || defaultActionLabel(to)}</span></div>
   </Link>;
 }
 const interiorImage = (name: string) => `${import.meta.env.BASE_URL}images/interior-${name}.webp`;
@@ -51,10 +62,12 @@ function InteriorIntro({ eyebrow, title, body, image, fallbackImage, illustrativ
   const backup = fallbackImage || (path.includes('/company-market/') ? interiorImage('market-detail') : ({ '/company-market': interiorImage('market-index'), '/contact': interiorImage('contact'), '/initiatives': interiorImage('initiatives'), '/about': interiorImage('testimonials') } as Record<string, string>)[path.slice(path.lastIndexOf('/'))]);
   return <header className={`interior-intro${image ? ' with-image' : ''}`} data-reveal>{image && <img className="interior-intro-image" src={image} alt="" onError={event => { if (backup && event.currentTarget.src !== new URL(backup, location.href).href) { event.currentTarget.src = backup; setFallbackUsed(true); } else event.currentTarget.hidden = true; }} />}<div className="interior-intro-copy"><span className="eyebrow">{eyebrow}</span><h1>{title}</h1>{body && <p>{body}</p>}{children}</div>{(illustrative || fallbackUsed) && image && <span className="interior-image-label">صورة توضيحية</span>}</header>;
 }
-function HomeCardView({ card, cms, index, media }: { card: HomeCard; cms: CmsContent; index: number; media?: string }) {
+function HomeCardView({ card, cms, media }: { card: HomeCard; cms: CmsContent; media?: string }) {
   const target = cardTarget(card, cms); if (!card.enabled || !target) return null;
-  if (/^https?:\/\//.test(target)) return <a href={target} className={`content-card${media ? ' has-media' : ''}`} target="_blank" rel="noopener noreferrer" data-reveal><div className="content-card-top"><span className="card-index">{String(index + 1).padStart(2, '0')}</span><Icon icon="solar:arrow-left-up-linear" /></div>{media && <div className="interior-card-media"><img src={media} alt="" loading="lazy" /></div>}<div><h3>{card.title}</h3><p>{card.description}</p><span className="card-action">{card.buttonLabel || 'استكشف'}</span></div></a>;
-  return <ContentCard title={card.title} description={card.description} to={target} index={index} media={media} actionLabel={card.buttonLabel} />;
+  // The seed's generic "explore" counts as no label, so the destination-specific default takes over until an admin writes one.
+  const actionLabel = card.buttonLabel && card.buttonLabel !== 'استكشف' ? card.buttonLabel : defaultActionLabel(target);
+  if (/^https?:\/\//.test(target)) return <a href={target} className={`content-card${media ? ' has-media' : ''}${card.description ? '' : ' is-tile'}`} target="_blank" rel="noopener noreferrer" data-reveal><div className="content-card-top"><Icon icon="solar:arrow-left-up-linear" /></div>{media && <div className="interior-card-media"><img src={media} alt="" loading="lazy" /></div>}<div><h3>{card.title}</h3>{card.description && <p>{card.description}</p>}<span className="card-action">{actionLabel}</span></div></a>;
+  return <ContentCard title={card.title} description={card.description} to={target} media={media} actionLabel={actionLabel} />;
 }
 
 const editorialImages = {
@@ -192,7 +205,7 @@ function Home() {
       <img className="hero-media" src={heroImage} alt="" aria-hidden="true" fetchPriority="high" />
       <div className="hero-scrim" aria-hidden="true" />
       <div className="hero-inner"><span className="hero-rule hero-animate">وعاء للخدمات اللوجستية والإدارية</span><h1 className="hero-animate">{hero?.title || cms.pages.home?.title || 'اللوجستيات تبدأ من وعاء'}</h1><p className="hero-animate">{hero?.description || cms.pages.home?.body || 'خدمات لوجستية وإدارية تناسب احتياجاتك.'}</p><div className="hero-actions hero-animate">{heroActions.length ? heroActions.map((card, index) => <Action key={card.id} to={cardTarget(card, cms)!} secondary={index !== 0} icon={index === 0 ? 'solar:arrow-left-linear' : undefined}>{card.buttonLabel || card.title}</Action>) : <><Action to="/services" icon="solar:arrow-left-linear">استكشف الخدمات</Action><Action to="/join-us" secondary>سجل الآن</Action></>}</div></div>
-      <div className="hero-bottom"><span>من جدة، نحو أعمال أكثر تنظيمًا</span><span>مرر لاكتشاف المزيد <Icon icon="solar:arrow-down-linear" /></span></div>
+      <div className="hero-bottom"><span>من جدة، نحو أعمال أكثر تنظيمًا</span></div>
     </section>
     <CategoryRail images={categoryImages} />
     {sections.filter(section => section.id !== hero?.id).map((section, sectionIndex) => <HomeSectionView key={section.id} section={section} cms={cms} index={sectionIndex} cardMedia={cardMedia} listingMedia={listingMedia} bioMedia={bioMedia} />)}
@@ -200,12 +213,20 @@ function Home() {
 }
 function HomeSectionView({ section, cms, index, cardMedia, listingMedia, bioMedia }: { section: HomeSection; cms: CmsContent; index: number; cardMedia: Map<string, string>; listingMedia: Map<string, string>; bioMedia: Map<string, string> }) {
   if (section.type === 'bio' && !section.description.trim()) return null;
-  if (section.type === 'contact') return <section className="contact-band" data-reveal><div className="site-container"><span className="eyebrow">ابدأ من هنا</span><h2>{section.title}</h2><p>{section.description || 'فريق وعاء جاهز لسماع احتياجك.'}</p><Action to="/contact" icon="solar:arrow-left-linear">تواصل معنا</Action></div></section>;
+  // The last band before the footer carries the channels themselves, not only a link to them.
+  if (section.type === 'contact') return <section className="contact-band" data-reveal><div className="site-container contact-band-grid">
+    <div><span className="eyebrow">ابدأ من هنا</span><h2>{section.title}</h2><p>{section.description || 'فريق وعاء جاهز لسماع احتياجك.'}</p><Action to="/contact" icon="solar:arrow-left-linear">تواصل معنا</Action></div>
+    <div className="contact-band-channels">
+      <a href={`tel:${cms.company.phone.replace(/[^\d+]/g, '')}`}><Icon icon="solar:phone-calling-linear" /><span>الهاتف</span><b><bdi dir="ltr">{cms.company.phone}</bdi></b></a>
+      <a href={`mailto:${cms.company.email}`}><Icon icon="solar:letter-linear" /><span>البريد</span><b><bdi dir="ltr">{cms.company.email}</bdi></b></a>
+      <div><Icon icon="solar:map-point-linear" /><span>المقر</span><b>{cms.company.headquarters}</b></div>
+    </div>
+  </div></section>;
   const cards = section.cards.filter(card => card.enabled && cardTarget(card, cms));
   const isMarket = section.type === 'market';
   return <section className={`home-band home-band-${index % 2} home-band-${section.type}`}><div className="site-container">
-    <SectionHeading eyebrow={String(index + 1).padStart(2, '0')} title={section.title} body={section.description} to={isMarket ? '/company-market' : undefined} />
-    {section.type === 'bio' ? <div className="bio-layout" data-reveal><p>{section.description}</p>{bioMedia.has(section.id) && <img src={bioMedia.get(section.id)} alt="" loading="lazy" />}</div> : <div className="card-grid">{cards.map((card, i) => <HomeCardView key={card.id} card={card} cms={cms} index={i} media={cardMedia.get(`${section.id}:${card.id}`)} />)}{isMarket && cms.companyListings.filter(item => item.enabled).slice(0, 2).map((listing, i) => <ContentCard key={listing.slug} title={listing.name} description={`${listing.sector} · ${listing.city}`} to={`/company-market/${listing.slug}`} index={cards.length + i} media={listingMedia.get(listing.slug)} />)}</div>}
+    <SectionHeading title={section.title} body={section.description} to={isMarket ? '/company-market' : undefined} />
+    {section.type === 'bio' ? <div className="bio-layout" data-reveal><p>{section.description}</p>{bioMedia.has(section.id) && <img src={bioMedia.get(section.id)} alt="" loading="lazy" />}</div> : <div className="card-grid">{cards.map(card => <HomeCardView key={card.id} card={card} cms={cms} media={cardMedia.get(`${section.id}:${card.id}`)} />)}{isMarket && cms.companyListings.filter(item => item.enabled).slice(0, 2).map((listing, i) => <ContentCard key={listing.slug} title={listing.name} description={`${listing.sector} · ${listing.city}`} to={`/company-market/${listing.slug}`} index={cards.length + i} media={listingMedia.get(listing.slug)} />)}</div>}
   </div></section>;
 }
 
@@ -279,7 +300,9 @@ function Contact() {
       <a className="contact-channel" href={`mailto:${cms.company.email}`}>
         <Icon icon="solar:letter-linear" /><span>البريد الإلكتروني</span><strong><bdi dir="ltr">{cms.company.email}</bdi></strong><span className="channel-action">راسلنا <Icon icon="solar:arrow-left-up-linear" /></span>
       </a>
-      <div className="contact-channel"><Icon icon="solar:map-point-linear" /><span>المقر</span><strong>{cms.company.headquarters}</strong></div>
+      <a className="contact-channel" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cms.company.headquarters)}`} target="_blank" rel="noopener noreferrer">
+        <Icon icon="solar:map-point-linear" /><span>المقر</span><strong>{cms.company.headquarters}</strong><span className="channel-action">افتح في الخرائط <Icon icon="solar:arrow-left-up-linear" /></span>
+      </a>
     </section>
   </main></Shell>;
 }
@@ -295,11 +318,13 @@ function Join() {
           : form.slug === 'join-accountant' ? 'join-career'
           : i === 0 ? 'join-operations'
           : i === 1 ? 'join-investor' : undefined;
-        return <ContentCard key={form.id || form.slug} title={form.title} description={form.audience} to={`/join-us/${form.slug}`} index={i} media={imageFor(form.imageUrl, fallback)} fallbackMedia={fallback ? interiorImage(fallback) : undefined} illustrative={!form.imageUrl && Boolean(fallback)} actionLabel="اضغط هنا" />;
+        return <ContentCard key={form.id || form.slug} title={form.title} description={form.audience} to={`/join-us/${form.slug}`} index={i} media={imageFor(form.imageUrl, fallback)} fallbackMedia={fallback ? interiorImage(fallback) : undefined} actionLabel="سجّل الآن" />;
       })}
-      <ContentCard title="طلب الخدمات اللوجستية" description="اختر الخدمات المناسبة لعملك" to="/join-us/request-services" index={forms.length} media={interiorImage('join-service-inquiry')} illustrative actionLabel="اضغط هنا" />
-      <ContentCard title="النقل البري" description="مزود خدمة نقل أو طالب خدمة نقل" to={roadTransportPath} index={forms.length + 1} media={editorialImages.freight} illustrative actionLabel="اضغط هنا" />
+      <ContentCard title="طلب الخدمات اللوجستية" description="اختر الخدمات المناسبة لعملك" to="/join-us/request-services" index={forms.length} media={interiorImage('join-service-inquiry')} actionLabel="اطلب الخدمة" />
+      <ContentCard title="النقل البري" description="مزود خدمة نقل أو طالب خدمة نقل" to={roadTransportPath} index={forms.length + 1} media={editorialImages.freight} actionLabel="افتح النموذج" />
     </div>
+    {/* One note for the grid instead of a chip on every card. */}
+    <p className="grid-note">الصور توضيحية.</p>
   </main></Shell>;
 }
 function JoinDetail() { const { slug } = useParams(); const { cms } = useCms(); const form = cms.joinForms.find(item => item.slug === slug && item.enabled); if (!form) return <NotFound />; return <Shell><main className="site-container page-body narrow-page interior-page interior-form-page"><Link className="back-link" to="/join-us"><Icon icon="solar:arrow-right-linear" /> العودة إلى الفئات</Link><InteriorIntro eyebrow="انضم إلينا" title={form.title} body={form.description} />{form.submissionType.startsWith('courier-') ? <CourierForm form={form} /> : <DynamicForm form={form} />}</main></Shell>; }

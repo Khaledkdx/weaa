@@ -54,6 +54,21 @@ reference's spacious hierarchy and category-to-detail pacing, not its brand or U
   cubic-bezier fallback. Press feedback fires on `:active`, not on release.
 - Tajawal stays; Arabic letter-spacing remains 0 (connected script), only
   line-height tightens on display sizes.
+- Buttons, one rule: the primary action is ink (`--text` on `--bg`) and turns
+  gold on hover; on imagery it is white; gold fill is reserved for the floating
+  call button and the final submit of a form. The secondary action is a quiet
+  surface with a hairline.
+- Cards carry no index chips and no numbered sections; numbering only means
+  something in a sequence. Every card action names its destination ("اطلب
+  الخدمة", "سجّل الآن", "تصفح الفرص"); a card without a description renders as
+  a tile (shorter media, one-line body). Card hover is a single movement, the
+  lift, gated to fine pointers; images do not zoom.
+- The four category tiles are the home page's primary navigation: tall images
+  (4:5) with the label inside on a scrim, read as one object.
+- The header shows the short wordmark "وعاء" at every width; the legal name,
+  headquarters, CR and VAT numbers live in the footer.
+- The final contact band carries the channels themselves (phone, email,
+  headquarters) beside the copy, not only a link to the contact page.
 - Display the homepage photographs in responsive grids, with stable image ratios
   and readable text below each image.
 - Use 44px minimum navigation targets and 48px primary actions; form inputs use

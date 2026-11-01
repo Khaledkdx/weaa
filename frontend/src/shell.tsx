@@ -84,7 +84,8 @@ export function Shell({ children, compact = false }: { children: ReactNode; comp
     <header className="site-header">
       <Link className="brand" to="/" aria-label="وعاء - الرئيسية">
         <img src={`${import.meta.env.BASE_URL}images/weaa-logo.jpeg`} alt="شعار وعاء" />
-        <span><strong>{cms.company.nameAr}</strong><b className="brand-short" aria-hidden="true">وعاء</b><small>{cms.company.taglineAr}</small></span>
+        {/* The short wordmark at every width; the legal name sits in the footer, where it is never truncated. */}
+        <span><b className="brand-short">وعاء</b><small>{cms.company.taglineAr}</small></span>
       </Link>
       <nav className="desktop-nav" aria-label="التنقل الرئيسي">{navigation.map(([to, label]) => <NavLink key={to} to={to} end={to === '/'}>{label}</NavLink>)}</nav>
       <div className="header-actions">
@@ -96,12 +97,14 @@ export function Shell({ children, compact = false }: { children: ReactNode; comp
     </header>
     <div id="main-content" tabIndex={-1}>{children}</div>
     <footer className="site-footer">
-      <div><strong>وعاء</strong><p>حلول لوجستية وإدارية تبدأ من احتياجك.</p></div>
+      {/* The legal name and registration numbers live here, not in the header. */}
+      <div className="footer-brand"><strong>وعاء</strong><p>{cms.company.nameAr}</p><p>حلول لوجستية وإدارية تبدأ من احتياجك.</p></div>
       <div className="footer-links"><Link to="/services">الخدمات</Link><Link to="/join-us">انضم إلينا</Link><Link to="/contact">تواصل</Link></div>
-      <div className="footer-contact"><a href={`tel:${cms.company.phone.replace(/[^\d+]/g, '')}`}><bdi dir="ltr">{cms.company.phone}</bdi></a><a href={`mailto:${cms.company.email}`}><bdi dir="ltr">{cms.company.email}</bdi></a></div>
+      <div className="footer-contact"><a href={`tel:${cms.company.phone.replace(/[^\d+]/g, '')}`}><bdi dir="ltr">{cms.company.phone}</bdi></a><a href={`mailto:${cms.company.email}`}><bdi dir="ltr">{cms.company.email}</bdi></a><span>{cms.company.headquarters}</span>{(cms.company.cr || cms.company.vat) && <span className="footer-legal">{cms.company.cr && `س.ت ${cms.company.cr}`}{cms.company.cr && cms.company.vat && ' · '}{cms.company.vat && `الرقم الضريبي ${cms.company.vat}`}</span>}</div>
       <small>© {new Date().getFullYear()} وعاء للخدمات اللوجستية والإدارية</small>
     </footer>
-    {!compact && <CallButton phone={cms.company.phone} />}
+    {/* Not on form pages: at phone width it would sit on the full-width submit button, and the form is already the call to action. */}
+    {!compact && !pathname.startsWith('/join-us/') && <CallButton phone={cms.company.phone} />}
   </div>;
 }
 

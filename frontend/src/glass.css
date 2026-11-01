@@ -19,6 +19,7 @@
   --gold-50: #faf5ea;
   --gold-100: #f1e5cc;
   --gold-300: #d9b77c;
+  --glow: #faf5ea;
   --glass: rgba(255, 255, 255, .72);
   --glass-strong: rgba(255, 255, 255, .86);
   --glass-border: rgba(255, 255, 255, .9);
@@ -55,6 +56,7 @@
   --gold-50: rgba(216, 178, 115, .08);
   --gold-100: rgba(216, 178, 115, .14);
   --gold-300: rgba(216, 178, 115, .35);
+  --glow: rgba(216, 178, 115, .13); /* band light; gold-50 at .08 was invisible on the dark base */
   --glass: rgba(28, 28, 30, .6);
   --glass-strong: rgba(28, 28, 30, .82);
   --glass-border: rgba(255, 255, 255, .08);
@@ -79,9 +81,11 @@
 /* ---------- 2. Base ---------- */
 body { background: var(--bg); color: var(--text); }
 /* Arabic is a connected script: tracking stays at 0, only leading tightens on display sizes. */
-.hero h1 { line-height: 1.15; }
+.hero h1 { line-height: 1.15; text-wrap: balance; }
 .interior-intro h1, .service-detail-intro h1, .page-heading h1 { line-height: 1.2; }
-:focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; border-radius: 4px; }
+.hero p { font-size: clamp(17px, 1.6vw, 20px); line-height: 1.7; }
+/* The outline follows each element's own radius; forcing one here would square pill corners on keyboard focus. */
+:focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; }
 
 /* ---------- 3. Header: floating frosted bar ---------- */
 .site-header {
@@ -93,6 +97,8 @@ body { background: var(--bg); color: var(--text); }
 }
 .site-header.is-scrolled { background: var(--glass-strong); box-shadow: 0 1px 0 var(--line), var(--shadow-sm); }
 .brand img { border-radius: var(--r-sm); border-color: var(--line); }
+.brand-short { display: block; font-size: 20px; font-weight: 900; line-height: 1.2; }
+.brand small { font-size: 11px; }
 .desktop-nav a {
   padding: 8px 14px;
   border-radius: var(--r-pill);
@@ -179,12 +185,12 @@ body { background: var(--bg); color: var(--text); }
   position: absolute; inset: 0; z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(60% 55% at 18% 8%, var(--gold-50), transparent 70%),
+    radial-gradient(60% 55% at 18% 8%, var(--glow), transparent 70%),
     radial-gradient(45% 50% at 88% 92%, color-mix(in srgb, var(--surface-2) 75%, transparent), transparent 70%);
 }
 .home-band:nth-of-type(even)::before {
   background:
-    radial-gradient(55% 50% at 85% 10%, var(--gold-50), transparent 70%),
+    radial-gradient(55% 50% at 85% 10%, var(--glow), transparent 70%),
     radial-gradient(50% 55% at 12% 95%, color-mix(in srgb, var(--surface-2) 75%, transparent), transparent 70%);
 }
 .home-band-1 { background: var(--bg); }
@@ -207,30 +213,60 @@ body { background: var(--bg); color: var(--text); }
     border-color var(--dur-hover) var(--ease-out),
     background-color var(--dur-hover) var(--ease-out);
 }
+/* Hover is one movement, the lift, with its shadow and a gold edge. The base sheets also recolour the card and lift
+   it on touch (where a tap sticks as hover); both are switched off here. */
 .content-card:hover,
 .home-band .content-card:hover,
 .page-body .content-card:hover,
-.interior-page .content-card:hover {
-  background: var(--glass-strong);
-  border: 1px solid var(--gold-300);
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-md), inset 0 1px 0 var(--glass-border);
+.interior-page .content-card:hover { background: var(--glass); }
+@media (hover: hover) and (pointer: fine) {
+  .content-card:hover,
+  .home-band .content-card:hover,
+  .page-body .content-card:hover,
+  .interior-page .content-card:hover {
+    border-color: var(--gold-300);
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-md), inset 0 1px 0 var(--glass-border);
+  }
+}
+@media (hover: none) {
+  .content-card:hover,
+  .home-band .content-card:hover,
+  .page-body .content-card:hover,
+  .interior-page .content-card:hover { transform: none; border-color: var(--line); box-shadow: var(--shadow-sm), inset 0 1px 0 var(--glass-border); }
 }
 /* While GSAP is writing a reveal frame by frame, the element's own transitions stay off; otherwise each frame is eased again. */
 [data-reveal]:not(.is-revealed) { transition: none; }
 .content-card:active,
 .home-band .content-card:active,
 .interior-page .content-card:active { transform: translateY(-2px) scale(.995); transition-duration: var(--dur-press); }
+/* The base sheets zoom the image on hover; that second motion is off. */
 .home-band .content-card.has-media img,
-.interior-card-media img { transition: transform 600ms var(--ease-out); }
+.interior-card-media img { transition: none; }
 .home-band .content-card.has-media:hover img,
-.interior-page .content-card:hover .interior-card-media img { transform: scale(1.04); }
-.interior-page .content-card:not(.has-media) .content-card-top :is(.card-index, svg) { border-radius: var(--r-sm); background: var(--gold-100); color: var(--gold); }
+.interior-page .content-card:hover .interior-card-media img { transform: none; }
+.interior-page .content-card:not(.has-media) .content-card-top svg { border-radius: var(--r-sm); background: var(--gold-100); color: var(--gold); }
+/* Media is 16:10, no taller than the text it serves; a tile (no description) goes a step shorter. */
+.interior-card-media, .interior-category-grid .interior-card-media { aspect-ratio: 16 / 10; }
+.content-card.is-tile .interior-card-media { aspect-ratio: 16 / 9; }
+/* One chip size. */
+.content-card-top { font-size: 20px; }
+.content-card-top > *,
+.interior-page .content-card-top > *,
+.interior-page .content-card-top svg { width: 32px; height: 32px; min-width: 32px; min-height: 32px; padding: 0; }
+/* Four cards read as 2×2, not four narrow columns; three category cards share one row instead of leaving an orphan. */
+@media (min-width: 701px) {
+  .home-band .card-grid:has(> .content-card:nth-child(4):last-child) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .interior-category-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  .home-band .card-grid:has(> .content-card:nth-child(4):last-child) { grid-template-columns: 1fr; }
+}
+.grid-note { margin: 16px 0 0; color: var(--muted); font-size: 13px; }
 .card-action, .interior-page .content-card .card-action, .text-link { color: var(--gold); }
 
 /* Chips floating over imagery: small dark glass pills with white text. */
 .home-band .content-card.has-media .content-card-top > *,
-.interior-page .content-card .card-index,
 .interior-page .content-card-top svg,
 .interior-card-media span,
 .interior-image-label {
@@ -243,10 +279,30 @@ body { background: var(--bg); color: var(--text); }
 }
 .interior-page .content-card-top svg { border-radius: var(--r-pill); }
 
-/* Category tiles and contact channels follow the card rules. */
-.category-link img { border-radius: var(--r-lg); box-shadow: var(--shadow-sm); transition: transform var(--dur-hover) var(--ease-spring), box-shadow var(--dur-hover) var(--ease-out), filter var(--dur-hover) var(--ease-out); }
-.category-link:hover img { transform: translateY(-4px); box-shadow: var(--shadow-md); filter: brightness(.96); }
-.category-link svg { color: var(--gold); transition: transform var(--dur-hover) var(--ease-spring); }
+/* Category tiles are the home page's primary navigation, so they outweigh the cards below them: a tall image with
+   the label inside on a scrim, read as one object. The whole tile lifts; the base sheet's image-only lift is off. */
+.category-link {
+  position: relative;
+  display: block;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--dur-hover) var(--ease-spring), box-shadow var(--dur-hover) var(--ease-out);
+}
+.category-link img { aspect-ratio: 4 / 5; border-radius: 0; transition: none; }
+.category-link:hover img { transform: none; filter: none; }
+.category-link span {
+  position: absolute; inset: auto 0 0 0;
+  padding: 64px 18px 18px;
+  color: #fff; font-size: 19px; font-weight: 800;
+  background: linear-gradient(to top, rgba(10, 10, 9, .8), rgba(10, 10, 9, 0));
+}
+.category-link svg { color: #fff; transition: transform var(--dur-hover) var(--ease-spring); }
+.category-link:active { transform: scale(.985); transition-duration: var(--dur-press); }
+@media (hover: hover) and (pointer: fine) {
+  .category-link:hover { transform: translateY(-4px); box-shadow: var(--shadow-md); }
+}
+@media (max-width: 700px) { .category-link span { padding: 48px 14px 14px; font-size: 16px; } }
 .contact-channel, .market-detail-layout aside, .quote-card, .inquiry-review, .inquiry-result {
   background: var(--glass);
   border: 1px solid var(--line);
@@ -254,7 +310,9 @@ body { background: var(--bg); color: var(--text); }
   box-shadow: var(--shadow-sm), inset 0 1px 0 var(--glass-border);
   transition: transform var(--dur-hover) var(--ease-spring), box-shadow var(--dur-hover) var(--ease-out), border-color var(--dur-hover) var(--ease-out);
 }
-a.contact-channel:hover { transform: translateY(-4px); border-color: var(--gold-300); box-shadow: var(--shadow-md), inset 0 1px 0 var(--glass-border); }
+@media (hover: hover) and (pointer: fine) {
+  a.contact-channel:hover { transform: translateY(-4px); border-color: var(--gold-300); box-shadow: var(--shadow-md), inset 0 1px 0 var(--glass-border); }
+}
 
 /* Interior hero image block */
 .interior-intro.with-image { border-radius: var(--r-lg); box-shadow: var(--shadow-md); background: #15161a; }
@@ -271,8 +329,27 @@ a.contact-channel:hover { transform: translateY(-4px); border-color: var(--gold-
 .contact-band p { color: var(--muted); }
 .contact-band .action-primary { background: var(--text); color: var(--bg); border-color: var(--text); }
 .contact-band .action-primary:hover { background: var(--gold); color: var(--gold-text); border-color: var(--gold); }
+/* Copy on one side, the channels themselves on the other. */
+.contact-band-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); gap: 48px; align-items: center; }
+.contact-band-channels { display: grid; gap: 12px; }
+.contact-band-channels > * {
+  display: flex; align-items: center; gap: 14px;
+  margin: 0; padding: 16px 18px;
+  background: var(--glass); border: 1px solid var(--line); border-radius: var(--r-md);
+  color: var(--text); font-weight: 700;
+  transition: border-color var(--dur-hover) var(--ease-out), transform var(--dur-hover) var(--ease-spring);
+}
+.contact-band-channels svg { font-size: 22px; color: var(--gold); flex: none; }
+.contact-band-channels span { color: var(--muted); font-size: 13px; }
+.contact-band-channels b { margin-inline-start: auto; font-weight: 800; text-align: end; }
+.contact-band-channels a:active { transform: scale(.985); transition-duration: var(--dur-press); }
+@media (hover: hover) and (pointer: fine) { .contact-band-channels a:hover { border-color: var(--gold-300); } }
+@media (max-width: 900px) { .contact-band-grid { grid-template-columns: 1fr; gap: 32px; } }
 .site-footer { background: var(--bg); border-top: 1px solid var(--line); }
 .site-footer a:hover { color: var(--gold); }
+.footer-brand p { margin: 6px 0 0; }
+.footer-brand p:first-of-type { color: var(--text); font-weight: 700; margin-top: 10px; }
+.footer-legal { color: var(--muted); font-weight: 500; font-size: 12px; margin-top: 6px; }
 
 /* ---------- 8. Buttons: instant press, soft hover ---------- */
 .action {
@@ -413,7 +490,7 @@ html.theme-transition, html.theme-transition body { transition: background-color
     --glass-dark: rgba(12, 13, 12, .9);
   }
   .site-header, .mobile-nav, .hero .action-secondary, .interior-intro .market-actions .action-secondary,
-  .home-band .content-card.has-media .content-card-top > *, .interior-page .content-card .card-index,
+  .home-band .content-card.has-media .content-card-top > *,
   .interior-page .content-card-top svg, .interior-card-media span, .interior-image-label {
     -webkit-backdrop-filter: none; backdrop-filter: none;
   }
@@ -427,5 +504,5 @@ html.theme-transition, html.theme-transition body { transition: background-color
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .content-card:hover, .category-link:hover img, a.contact-channel:hover, .action:hover { transform: none; }
+  .content-card:hover, .category-link:hover, a.contact-channel:hover, .action:hover { transform: none; }
 }
