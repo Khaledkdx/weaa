@@ -101,7 +101,15 @@ export function Shell({ children, compact = false }: { children: ReactNode; comp
       <div className="footer-contact"><a href={`tel:${cms.company.phone.replace(/[^\d+]/g, '')}`}><bdi dir="ltr">{cms.company.phone}</bdi></a><a href={`mailto:${cms.company.email}`}><bdi dir="ltr">{cms.company.email}</bdi></a></div>
       <small>© {new Date().getFullYear()} وعاء للخدمات اللوجستية والإدارية</small>
     </footer>
+    {!compact && <CallButton phone={cms.company.phone} />}
   </div>;
+}
+
+function CallButton({ phone }: { phone: string }) {
+  // The button is on every public page, so its entrance plays once per session rather than on every navigation.
+  const [settled] = useState(() => { try { return sessionStorage.getItem('weaa-call-fab') === '1'; } catch { return false; } });
+  useEffect(() => { try { sessionStorage.setItem('weaa-call-fab', '1'); } catch { /* The button still shows when browser storage is unavailable. */ } }, []);
+  return <a className={settled ? 'call-fab is-settled' : 'call-fab'} href={`tel:${phone.replace(/[^\d+]/g, '')}`} aria-label={`اتصل بنا ${phone}`}><Icon icon="solar:phone-calling-linear" /><span>اتصل بنا</span></a>;
 }
 
 export function Action({ to, children, secondary = false, icon }: { to: string; children: ReactNode; secondary?: boolean; icon?: string }) {
