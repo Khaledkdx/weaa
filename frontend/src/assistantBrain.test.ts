@@ -26,6 +26,32 @@ describe('arabic normalisation', () => {
 });
 
 describe('local answers', () => {
+  it('understands obvious speech and typing mistakes without asking to repeat', () => {
+    expect(answer('عاوز فورم مناذيب الداهل').navigateTo).toBe('/join-us/courier-internal');
+    expect(answer('عايز اسجل مناديب الخارح').navigateTo).toBe('/join-us/courier-external');
+    expect(answer('انا محاصب عاوز اشتغل').navigateTo).toBe('/join-us/join-accountant');
+  });
+  it('uses the previous courier question to understand a short answer', () => {
+    const first = answer('عاوز اسجل مندوب');
+    expect(first.navigateTo).toBeUndefined();
+    expect(first.text).toContain('داخل المملكة ولا خارج المملكة');
+    const reply = localAnswer('الداخل', index, cms.company, { history: [{ role: 'user', text: 'عاوز اسجل مندوب' }, { role: 'assistant', text: first.text }] });
+    expect(reply.navigateTo).toBe('/join-us/courier-internal');
+    expect(localAnswer('الخارج', index, cms.company, { history: [{ role: 'user', text: 'عاوز اسجل مندوب' }] }).navigateTo).toBe('/join-us/courier-external');
+  });
+  it('uses a clear previous request for open it, without guessing when context is absent', () => {
+    expect(localAnswer('افتحه', index, cms.company, { history: [{ role: 'user', text: 'ابي اسجل مندوب داخل المملكة' }] }).navigateTo).toBe('/join-us/courier-internal');
+    expect(answer('افتحه').navigateTo).toBeUndefined();
+    expect(answer('الداخل').navigateTo).toBeUndefined();
+  });
+  it('respects a negative request and asks when both regions are mentioned', () => {
+    expect(answer('مش عاوز افتح فورم مناديب الداخل').navigateTo).toBeUndefined();
+    expect(answer('مناديب داخل ولا خارج المملكة').navigateTo).toBeUndefined();
+  });
+  it('does not turn a delivery customer into a courier applicant', () => {
+    expect(answer('عاوز اطلب توصيل طرود').navigateTo).not.toContain('courier-');
+    expect(answer('مرحبا عاوز شاحنة تنقل بضاعة').navigateTo).toBe(roadTransportPath);
+  });
   it('takes a courier inside the kingdom to the internal courier form', () => {
     expect(answer('ابي اسجل مندوب داخل المملكة').navigateTo).toBe('/join-us/courier-internal');
   });

@@ -1,9 +1,10 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { handleAssistant } = require('./assistant-server.cjs');
 
 const port = Number(process.env.PORT || 3000);
-const reactDir = path.join(__dirname, 'site');
+const reactDir = process.env.WEAA_PREVIEW === '1' ? path.join(__dirname, 'frontend', 'dist') : path.join(__dirname, 'site');
 const buildDir = path.join(__dirname, 'build', 'web');
 const rootDir = fs.existsSync(path.join(reactDir, 'index.html'))
   ? reactDir
@@ -133,6 +134,10 @@ function serveFile(response, filePath) {
 }
 
 const server = http.createServer((request, response) => {
+  if (['/api/assistant', '/api/assistant/speech', '/api/assistant/transcribe'].includes((request.url || '').split('?')[0])) {
+    void handleAssistant(request, response, request.url.split('?')[0]);
+    return;
+  }
   const route = new URL(request.url || '/', 'http://localhost').pathname.replace(/^\/weaa(?=\/)/, '').replace(/\/+$/, '');
   if (route === '/join-us/company-sale-executive') {
     response.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');

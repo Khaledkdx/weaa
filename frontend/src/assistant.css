@@ -1,28 +1,58 @@
-/* assistant.css — the robot pet and its chat panel. Loaded after glass.css and built on its tokens.
-   Motion is transform and opacity only; the idle loop is slow and small, so the robot reads as alive, not busy. */
+/* assistant.css — the orb (a glowing circle with two hands, as the site's assistant), its chat panel, and the live voice
+   bar. Loaded after glass.css and built on its tokens. Motion is transform and opacity only, apart from the clip-path
+   that folds the paper corner; the idle loop is slow and small, so the orb reads as alive, not busy. */
 
-.assistant { position: fixed; inset-inline-start: 20px; bottom: max(20px, env(safe-area-inset-bottom)); z-index: 12; }
+/* Above the sticky header (z 40): on a voice navigation the orb flies up to the page's top corner. */
+.assistant { position: fixed; inset-inline-start: 20px; bottom: max(20px, env(safe-area-inset-bottom)); z-index: 45; }
 
-/* ---------- Pet ---------- */
-.pet { position: relative; width: 64px; height: 64px; transition: transform 1.4s var(--ease-spring); }
-.pet-button {
-  position: relative;
-  display: grid; place-items: center;
-  width: 64px; height: 64px; padding: 0;
-  border: 0; background: transparent; border-radius: var(--r-pill);
-  cursor: pointer;
+/* ---------- The orb ---------- */
+.orb {
+  --orb: 64px;
+  --orb-hi: #fff1d2; --orb-mid: #e8c586; --orb-deep: #b4813e; --orb-dark: #5c3f16; --orb-ink: #3a2810;
+  position: relative; width: var(--orb); height: var(--orb);
+  transition: transform 1.4s var(--ease-spring);
+}
+.orb-button {
+  position: relative; display: block; width: 100%; height: 100%; padding: 0;
+  border: 0; background: transparent; border-radius: 50%; cursor: pointer;
   transition: transform var(--dur-hover) var(--ease-spring);
 }
-.pet-button:active { transform: scale(.94); transition-duration: var(--dur-press); }
-.robot { width: 58px; height: 58px; overflow: visible; filter: drop-shadow(0 6px 14px rgba(0, 0, 0, .22)); animation: robot-float 3.4s ease-in-out infinite; }
-.robot-head { fill: var(--text); }
-.robot-face { fill: var(--bg); }
-.robot-ear { fill: var(--text); opacity: .8; }
-.robot-eyes { transition: transform 120ms ease-out; }
-.robot-eyes circle { fill: var(--gold); transform-box: fill-box; transform-origin: center; animation: robot-blink 4.6s ease-in-out infinite; }
-.robot-mouth { fill: var(--gold); transform-box: fill-box; transform-origin: center; }
-.robot-antenna { stroke: var(--text); stroke-width: 2.4; stroke-linecap: round; }
-.robot-antenna-tip { fill: var(--gold); animation: robot-glow 2.8s ease-in-out infinite; }
+.orb-button:active { transform: scale(.94); transition-duration: var(--dur-press); }
+.orb-button:focus-visible { outline: 2px solid var(--gold); outline-offset: 6px; }
+.orb-aura {
+  position: absolute; inset: -32%; border-radius: 50%;
+  background: radial-gradient(circle, rgba(232, 197, 134, .6) 0%, rgba(232, 197, 134, .2) 42%, transparent 70%);
+  opacity: .7; pointer-events: none;
+  animation: aura-breathe 3.4s ease-in-out infinite;
+  transition: transform 90ms linear, opacity 300ms var(--ease-out);
+}
+.orb-core {
+  position: absolute; inset: 7%; border-radius: 50%;
+  background: radial-gradient(circle at 34% 28%, var(--orb-hi) 0%, var(--orb-mid) 30%, var(--orb-deep) 72%, var(--orb-dark) 100%);
+  box-shadow: inset -5px -7px 14px rgba(0, 0, 0, .22), inset 3px 4px 8px rgba(255, 255, 255, .25), 0 10px 24px rgba(0, 0, 0, .28);
+  animation: core-breathe 3.4s ease-in-out infinite;
+  transition: transform 260ms var(--ease-spring), filter 400ms var(--ease-out);
+}
+.orb-eyes { position: absolute; inset: 0; transition: transform 120ms ease-out; }
+.orb-eye {
+  position: absolute; top: 38%; width: 10%; height: 15%; border-radius: 50%;
+  background: var(--orb-ink); transform-origin: center;
+  animation: orb-blink 4.6s ease-in-out infinite;
+  transition: transform 220ms var(--ease-out), height 220ms var(--ease-out), border-radius 220ms var(--ease-out);
+}
+.orb-eye.is-left { left: 31%; }
+.orb-eye.is-right { right: 31%; }
+/* The hands float beside the body. Their idle bob and gestures animate the `translate`/`rotate` properties, so the
+   poses set with `transform` below compose with them instead of fighting them. */
+.orb-hand {
+  position: absolute; top: 46%; width: 27%; height: 27%; border-radius: 50%;
+  background: radial-gradient(circle at 36% 30%, var(--orb-hi) 0%, var(--orb-mid) 45%, var(--orb-deep) 100%);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, .28); pointer-events: none;
+  animation: hand-idle 3.4s ease-in-out infinite;
+  transition: transform 260ms var(--ease-spring);
+}
+.orb-hand.is-left { left: -14%; }
+.orb-hand.is-right { right: -14%; animation-delay: -1.7s; }
 .pet-hint {
   position: absolute; inset-inline-start: calc(100% + 4px); bottom: 20px;
   padding: 6px 10px; border-radius: var(--r-pill);
@@ -31,26 +61,49 @@
   font-size: 12px; font-weight: 700; white-space: nowrap;
   opacity: 0; transition: opacity var(--dur-hover) var(--ease-out); pointer-events: none;
 }
-.pet:hover .pet-hint, .pet:focus-within .pet-hint { opacity: 1; }
+.orb:hover .pet-hint, .orb:focus-within .pet-hint { opacity: 1; }
 
-/* States: the robot shows what it is doing without a word. */
-.pet[data-state="listening"] .robot { animation-duration: 1.6s; }
-.pet[data-state="listening"] .pet-button::before {
-  content: ""; position: absolute; inset: 6px; border-radius: 50%;
-  border: 2px solid var(--gold); animation: robot-pulse 1.4s ease-out infinite;
-}
-.pet[data-state="listening"] .robot-antenna-tip { animation-duration: .9s; }
-.pet[data-state="thinking"] .robot { animation: robot-think .9s ease-in-out infinite; }
-.pet[data-state="speaking"] .robot-mouth { animation: robot-talk .32s ease-in-out infinite alternate; }
-.pet.is-walking .robot { animation: robot-walk .45s ease-in-out 3; }
+/* States: the orb shows what it is doing without a word. */
+.orb[data-state="listening"] .orb-core { animation: core-listen 1.6s ease-in-out infinite; }
+.orb[data-state="listening"] .orb-aura { animation-duration: 2s; opacity: .95; }
+.orb[data-state="listening"] .orb-eye { transform: scaleY(1.15); }
+.orb[data-state="listening"] .orb-hand.is-left { transform: translateX(-12%) rotate(-12deg); }
+.orb[data-state="listening"] .orb-hand.is-right { transform: translateX(12%) rotate(12deg); }
+/* Live level from the microphone writes the aura's transform directly; the breathing stops while it does. */
+.orb[data-meter] .orb-aura { animation: none; }
+.orb[data-state="thinking"] .orb-core { animation: core-think 1.2s ease-in-out infinite; }
+.orb[data-state="thinking"] .orb-eye { transform: translate(14%, -30%); }
+.orb[data-state="thinking"] .orb-hand.is-right { transform: translate(-70%, -70%); animation: hand-tap .6s ease-in-out infinite alternate; }
+.orb[data-state="speaking"] .orb-core { animation: core-talk .46s ease-in-out infinite alternate; }
+.orb[data-state="speaking"] .orb-aura { animation: aura-talk .46s ease-in-out infinite alternate; opacity: .95; }
+.orb[data-state="speaking"] .orb-hand { animation: hand-talk .52s ease-in-out infinite alternate; }
+.orb[data-state="speaking"] .orb-hand.is-right { animation-delay: -.26s; }
+.orb.is-walking .orb-core { animation: core-walk .45s ease-in-out 3; }
+/* Moods: a few seconds of a face and a gesture, then back to neutral. */
+.orb[data-mood="happy"] .orb-eye { height: 8%; border-radius: 50% 50% 0 0 / 100% 100% 0 0; }
+.orb[data-mood="happy"] .orb-core { animation: core-happy .55s var(--ease-spring) 2; }
+.orb[data-mood="happy"] .orb-hand { animation: hand-happy .55s var(--ease-spring) 2; }
+.orb[data-mood="happy"] .orb-hand.is-left { transform: translateY(-75%) rotate(-20deg); }
+.orb[data-mood="happy"] .orb-hand.is-right { transform: translateY(-75%) rotate(20deg); }
+.orb[data-mood="sad"] .orb-core { animation: none; transform: translateY(5%); filter: saturate(.7) brightness(.9); }
+.orb[data-mood="sad"] .orb-eye.is-left { transform: translateY(18%) rotate(-16deg); }
+.orb[data-mood="sad"] .orb-eye.is-right { transform: translateY(18%) rotate(16deg); }
+.orb[data-mood="sad"] .orb-hand.is-left { transform: translateY(34%) rotate(-8deg); animation: none; }
+.orb[data-mood="sad"] .orb-hand.is-right { transform: translateY(34%) rotate(8deg); animation: none; }
 
-@keyframes robot-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
-@keyframes robot-blink { 0%, 91%, 100% { transform: scaleY(1); } 94% { transform: scaleY(.1); } }
-@keyframes robot-glow { 0%, 100% { opacity: .5; } 50% { opacity: 1; } }
-@keyframes robot-pulse { from { transform: scale(.9); opacity: .9; } to { transform: scale(1.55); opacity: 0; } }
-@keyframes robot-think { 0%, 100% { transform: rotate(-6deg); } 50% { transform: rotate(6deg); } }
-@keyframes robot-talk { from { transform: scaleY(1); } to { transform: scaleY(2.8); } }
-@keyframes robot-walk { 0%, 100% { transform: translateY(0) rotate(0); } 25% { transform: translateY(-5px) rotate(-4deg); } 75% { transform: translateY(-5px) rotate(4deg); } }
+@keyframes aura-breathe { 0%, 100% { transform: scale(.92); } 50% { transform: scale(1.06); } }
+@keyframes aura-talk { from { transform: scale(.95); } to { transform: scale(1.2); } }
+@keyframes core-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.025); } }
+@keyframes core-listen { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+@keyframes core-think { 0%, 100% { transform: rotate(-5deg); } 50% { transform: rotate(5deg); } }
+@keyframes core-talk { from { transform: scale(1, 1); } to { transform: scale(1.08, .95); } }
+@keyframes core-happy { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10%); } }
+@keyframes core-walk { 0%, 100% { transform: translateY(0) rotate(0); } 25% { transform: translateY(-8%) rotate(-5deg); } 75% { transform: translateY(-8%) rotate(5deg); } }
+@keyframes orb-blink { 0%, 91%, 100% { scale: 1 1; } 94% { scale: 1 .1; } }
+@keyframes hand-idle { 0%, 100% { translate: 0 0; } 50% { translate: 0 -10%; } }
+@keyframes hand-talk { from { rotate: -12deg; translate: 0 -6%; } to { rotate: 12deg; translate: 0 6%; } }
+@keyframes hand-happy { 0%, 100% { translate: 0 0; } 50% { translate: 0 -30%; } }
+@keyframes hand-tap { from { rotate: 0deg; } to { rotate: -16deg; } }
 
 /* ---------- Panel ---------- */
 .assistant-panel {
@@ -108,26 +161,111 @@
   background: var(--surface); color: var(--text); font-size: 20px; cursor: pointer;
   transition: background-color var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out), transform var(--dur-hover) var(--ease-spring);
 }
-.assistant-mic.is-live { background: var(--gold); color: var(--gold-text); border-color: var(--gold); }
 .assistant-send { background: var(--text); color: var(--bg); border-color: var(--text); }
 .assistant-send:disabled { opacity: .4; cursor: default; }
 .assistant-mic:active, .assistant-send:active:not(:disabled) { transform: scale(.94); transition-duration: var(--dur-press); }
-.assistant-voice { display: flex; align-items: center; gap: 8px; padding: 0 16px 12px; font-size: 12px; font-weight: 700; color: var(--muted); }
+.assistant-voice { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 0 16px 12px; font-size: 12px; font-weight: 700; color: var(--muted); }
 .assistant-voice input { accent-color: var(--gold); width: 16px; height: 16px; }
+.assistant-voice label { display: flex; align-items: center; gap: 8px; }
+.assistant-voice-test { min-height: 44px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--text); cursor: pointer; font: inherit; }
 
-/* ---------- Phones: the panel becomes a sheet, the pet steps aside ---------- */
+/* ---------- Voice mode: a bar at the foot of the screen, the page stays usable ----------
+   Pressing the mic swaps the panel for a pill with the orb at its start, the live caption in the middle and two round
+   controls (mute, end) at its end. Nothing covers the page: the visitor can scroll, read and fill things in while the
+   orb listens and answers. The page's last stretch is kept clear of the bar, and the call button steps aside. */
+.assistant-live {
+  position: fixed; inset-inline: 0; bottom: max(14px, env(safe-area-inset-bottom)); margin-inline: auto;
+  width: min(640px, calc(100vw - 28px)); min-height: 64px;
+  display: flex; align-items: center; gap: 12px; padding: 4px 8px;
+  border-radius: var(--r-pill);
+  background: var(--glass-strong); -webkit-backdrop-filter: blur(24px) saturate(180%); backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--line); box-shadow: var(--shadow-lg); color: var(--text);
+  transition: opacity 240ms var(--ease-out), transform 240ms var(--ease-out);
+}
+@starting-style { .assistant-live { opacity: 0; transform: translateY(10px); } }
+html.has-voice-bar .site-shell { padding-bottom: 96px; }
+html.has-voice-bar .call-fab { opacity: 0; pointer-events: none; transition: opacity 200ms var(--ease-out); }
+.orb.is-live { --orb: 72px; flex: none; margin: -8px 0; transition: none; will-change: transform; }
+.assistant-live-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.assistant-live-status { font-size: 11px; font-weight: 700; color: var(--gold); }
+.assistant-live-caption { margin: 0; font-size: 14px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.assistant-live-hint { margin: 0; font-size: 12px; font-weight: 700; color: var(--gold); }
+.assistant-live-controls { display: flex; align-items: center; gap: 6px; }
+.assistant-live-controls button {
+  width: 44px; height: 44px; display: grid; place-items: center;
+  border-radius: 50%; border: 1px solid var(--line);
+  background: var(--surface); color: var(--text); font-size: 20px; cursor: pointer;
+  transition: transform var(--dur-hover) var(--ease-spring), background-color var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out);
+}
+.assistant-live-controls button:active { transform: scale(.94); transition-duration: var(--dur-press); }
+.assistant-live-controls button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+/* Muted reads as a filled button, the way a mute toggle does in a call. */
+.assistant-live-mic[aria-pressed="true"] { background: var(--text); color: var(--bg); border-color: var(--text); }
+.assistant-live-finish { width: auto !important; padding: 0 12px; border-radius: var(--r-pill) !important; font: inherit; font-size: 13px !important; font-weight: 700; color: var(--gold) !important; white-space: nowrap; }
+.assistant-highlight { outline: 3px solid var(--gold) !important; outline-offset: 5px; scroll-margin-block: 110px 300px; }
+.assistant-pointer { position: fixed; top: 0; left: 0; width: 40px; height: 40px; color: var(--gold); font-size: 32px; pointer-events: none; }
+
+/* The performance, act by act (assistant.tsx moves the orb and the sheet): the hand on the sheet's side reaches for the
+   corner on the way, closes on it, keeps hold through the lift and the drag while the body leans into the work, and the
+   hands come down on the way home. The reaching hand's centre lands at the `hand` fractions in assistant.tsx. */
+.orb[data-act] .orb-core, .orb[data-act] .orb-hand { animation: none; }
+.orb[data-side="left"][data-act="go"] .orb-hand.is-left { transform: translate(calc(var(--orb) * -.28), calc(var(--orb) * -.36)); }
+.orb[data-side="left"][data-act="grab"] .orb-hand.is-left, .orb[data-side="left"][data-act="lift"] .orb-hand.is-left, .orb[data-side="left"][data-act="pull"] .orb-hand.is-left { transform: translate(calc(var(--orb) * -.28), calc(var(--orb) * -.36)) scale(.84); }
+.orb[data-side="right"][data-act="go"] .orb-hand.is-right { transform: translate(calc(var(--orb) * .28), calc(var(--orb) * -.36)); }
+.orb[data-side="right"][data-act="grab"] .orb-hand.is-right, .orb[data-side="right"][data-act="lift"] .orb-hand.is-right, .orb[data-side="right"][data-act="pull"] .orb-hand.is-right { transform: translate(calc(var(--orb) * .28), calc(var(--orb) * -.36)) scale(.84); }
+.orb[data-side="left"][data-act="pull"] .orb-hand.is-right { transform: translate(25%, -25%) rotate(25deg); }
+.orb[data-side="right"][data-act="pull"] .orb-hand.is-left { transform: translate(-25%, -25%) rotate(-25deg); }
+.orb[data-act="go"] .orb-core { transform: rotate(-8deg) scale(.98); }
+.orb[data-act="grab"] .orb-core { transform: scale(1.03, .96); }
+.orb[data-act="lift"] .orb-core { transform: scale(1.04, .95); }
+.orb[data-act="pull"] .orb-core { transform: scale(1.08, .93); }
+.orb[data-act="return"] .orb-core { transform: scale(.98); }
+.orb[data-act="return"] .orb-hand { animation: hand-happy .4s var(--ease-spring) 1; }
+
+/* The sheet: a still copy of the page, pinned where the page is on screen, that the orb carries away. Its corner is cut
+   by a clip-path as the paper's back (the flap) folds over it, so the next page shows through the fold. */
+.assistant-sheet {
+  position: fixed; z-index: 44; pointer-events: none; will-change: transform;
+  box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+  transition: box-shadow 160ms var(--ease-out);
+}
+.assistant-sheet.is-held { box-shadow: 0 30px 70px rgba(0, 0, 0, .42), 0 2px 8px rgba(0, 0, 0, .25); }
+.assistant-sheet-clip { position: absolute; inset: 0; overflow: hidden; background: var(--bg); }
+.assistant-sheet-flap { position: absolute; top: 0; transform: scale(0); pointer-events: none; }
+.assistant-sheet[data-grip="left"] .assistant-sheet-flap { left: 0; transform-origin: 0 0; filter: drop-shadow(-8px 10px 12px rgba(0, 0, 0, .35)); }
+.assistant-sheet[data-grip="right"] .assistant-sheet-flap { right: 0; transform-origin: 100% 0; filter: drop-shadow(8px 10px 12px rgba(0, 0, 0, .35)); }
+.assistant-sheet-flap i { display: block; width: 100%; height: 100%; }
+.assistant-sheet[data-grip="left"] .assistant-sheet-flap i {
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+  background: linear-gradient(to top left, color-mix(in srgb, var(--surface) 72%, white) 0%, var(--surface) 46%, color-mix(in srgb, var(--surface) 68%, black) 100%);
+}
+.assistant-sheet[data-grip="right"] .assistant-sheet-flap i {
+  clip-path: polygon(0 0, 100% 100%, 0 100%);
+  background: linear-gradient(to top right, color-mix(in srgb, var(--surface) 72%, white) 0%, var(--surface) 46%, color-mix(in srgb, var(--surface) 68%, black) 100%);
+}
+/* The fold is never still while the sheet is on the move. The flutter animates `scale`, so it composes with the lift. */
+.assistant-sheet-flap.is-fluttering { animation: flap-flutter 170ms ease-in-out infinite alternate; }
+@keyframes flap-flutter { from { scale: 1; } to { scale: .95; } }
+
+/* ---------- Phones: the panel becomes a sheet, the orb steps aside ---------- */
 @media (max-width: 700px) {
   .assistant-panel { position: fixed; inset-inline: 12px; bottom: 12px; width: auto; max-height: 74vh; }
-  .assistant.is-open .pet { display: none; }
-  /* Forms end in a full-width submit button at the bottom; the pet keeps clear of it. */
+  .assistant.is-open > .orb { display: none; }
+  /* Forms end in a full-width submit button at the bottom; the orb keeps clear of it. */
   .assistant.on-form { bottom: calc(max(20px, env(safe-area-inset-bottom)) + 64px); }
+  .assistant-live { width: calc(100vw - 20px); gap: 8px; padding: 4px 6px; }
+  .orb.is-live { --orb: 64px; margin: -6px 0; }
+  .assistant-live-caption { font-size: 13px; }
+  .assistant-live-controls button { width: 40px; height: 40px; font-size: 18px; }
+  html.has-voice-bar .site-shell { padding-bottom: 88px; }
 }
 
 /* ---------- Preferences ---------- */
 @media (prefers-reduced-motion: reduce) {
-  .robot, .robot-eyes circle, .robot-antenna-tip, .pet[data-state] .robot, .pet[data-state="speaking"] .robot-mouth, .pet-button::before, .assistant-msg.is-typing span { animation: none !important; }
-  .pet { transition: none; }
+  .orb-aura, .orb-core, .orb-eye, .orb-hand, .orb[data-state] .orb-core, .orb[data-state] .orb-aura, .orb[data-state] .orb-hand, .orb[data-mood] .orb-core, .orb[data-mood] .orb-hand, .orb[data-act] .orb-hand, .assistant-msg.is-typing span, .assistant-sheet-flap.is-fluttering { animation: none !important; }
+  .orb, .orb-core, .orb-eye, .orb-hand, .assistant-live, .assistant-sheet { transition: none; }
+  .orb-core, .orb-hand { transform: none !important; }
 }
 @media (prefers-reduced-transparency: reduce) {
-  .assistant-panel, .pet-hint { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--surface); }
+  .assistant-panel, .assistant-live, .pet-hint { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--surface); }
 }

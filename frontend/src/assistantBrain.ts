@@ -1,5 +1,4 @@
 import type { CmsContent, Company } from './types';
-import { supabase } from './data';
 import { roadTransportPath } from './roadTransport';
 
 export type SiteEntry = { id: string; title: string; description: string; path: string; kind: 'page' | 'service' | 'form' | 'listing'; keywords: string[] };
@@ -68,11 +67,32 @@ function stem(token: string) {
   return s;
 }
 const bare = (token: string) => token.replace(/^(وال|بال|فال|كال|ال|لل)(?=.{3})/, '');
+// Correct a small domain vocabulary, not arbitrary customer names or company data.
+const heardWords: Record<string, string> = {
+  مناديبب: 'مناديب', مناذيب: 'مناديب', منديب: 'مندوب', مندوبين: 'مناديب',
+  داهل: 'داخل', الداهل: 'الداخل', الدخل: 'الداخل', خارح: 'خارج', الخارح: 'الخارج',
+  محاصب: 'محاسب', لوجيستيه: 'لوجستيه', لوجيستيات: 'لوجستيات',
+};
+function understoodQuery(raw: string) {
+  return normalizeArabic(raw).split(' ').map(token => heardWords[token] || token).join(' ');
+}
+function oneMistake(a: string, b: string) {
+  if (a.length < 5 || b.length < 5) return false;
+  if (a.length === b.length) {
+    const different = [...a].flatMap((letter, i) => letter === b[i] ? [] : [i]);
+    return different.length === 1 || (different.length === 2 && different[1] === different[0] + 1 && a[different[0]] === b[different[1]] && a[different[1]] === b[different[0]]);
+  }
+  if (Math.min(a.length, b.length) < 6 || Math.abs(a.length - b.length) !== 1) return false;
+  const [long, short] = a.length > b.length ? [a, b] : [b, a];
+  let i = 0; while (i < short.length && long[i] === short[i]) i++;
+  return long.slice(i + 1) === short.slice(i);
+}
 function similarity(a: string, b: string) {
   if (a === b || bare(a) === bare(b)) return 1;
   const sa = stem(a), sb = stem(b);
   if (sa === sb) return .9;
   if (a.length >= 4 && b.length >= 4 && (a.includes(b) || b.includes(a) || sa.includes(sb) || sb.includes(sa))) return .7;
+  if (oneMistake(bare(a), bare(b))) return .8;
   return 0;
 }
 const tokensOf = (text: string) => normalizeArabic(text).split(' ').filter(Boolean);
@@ -109,28 +129,54 @@ function describe(entry: SiteEntry) {
   if (entry.kind === 'service') return entry.path === '/join-us/request-services' ? `${entry.title}: ${description} تقدر تطلبها من هذا النموذج.` : `${entry.title}: ${description}`;
   if (entry.kind === 'form') return `هذا نموذج ${entry.title}. ${description}`;
   if (entry.kind === 'listing') return `فرصة ${entry.title} (${description}). تفاصيلها هنا.`;
-  return `أخذتك إلى ${entry.title}.${description ? ` ${description}` : ''}`;
+  return `أبشر، أفتح لك ${entry.title}.${description ? ` ${description}` : ''}`;
 }
 
-export function localAnswer(rawQuery: string, index: SiteEntry[], company: Company): AssistantReply {
-  const query = normalizeArabic(rawQuery);
+export function localAnswer(rawQuery: string, index: SiteEntry[], company: Company, context: { history?: AssistantTurn[]; pathname?: string } = {}): AssistantReply {
+  const query = understoodQuery(rawQuery);
   const local = (text: string, navigateTo?: string, suggestions?: string[]): AssistantReply => ({ text, navigateTo, suggestions, source: 'local' });
-  if (!query) return local('اكتب أو قل لي وش تحتاج، وأدلّك على المكان الصحيح.', undefined, defaultSuggestions);
+  if (!query) return local('قل لي وش تحتاج، وأدلّك عليه.', undefined, defaultSuggestions);
+  if (/^(لا تفتح|متفتحش|ما تفتح|مش عايز|مش عاوز|ما ابغي|ما ابغى)/.test(query)) return local('تم، ما راح أفتح أي صفحة. وش تبي أساعدك فيه بدلها؟', undefined, defaultSuggestions);
+  const previous = [...(context.history || [])].reverse().find(turn => turn.role === 'user');
+  const mentionsCourier = (text: string) => queryTokens(understoodQuery(text)).some(token => ['مندوب', 'مناديب', 'سائق', 'سواق'].some(word => similarity(token, word) >= .9));
+  const courierQuery = mentionsCourier(query);
+  const regionOnly = /^(?:لا |اقصد |قصدي |انا |من |جوه |بره |ال)?(?:داخل|خارج|الداخل|الخارج)(?: المملكه| السعوديه)?$/.test(query);
+  if (courierQuery || (regionOnly && previous && mentionsCourier(previous.text))) {
+    const inside = /(?:^|\s)(?:ال)?داخل(?:\s|$)|جوه/.test(query);
+    const outside = /(?:^|\s)(?:ال)?خارج(?:\s|$)|بره/.test(query);
+    if (inside !== outside) {
+      const destination = index.find(entry => entry.id === `form:courier-${inside ? 'internal' : 'external'}`);
+      if (destination) return local(`أبشر، أفتح لك نموذج ${destination.title} عشان تسجّل بياناتك.`, destination.path);
+    }
+    return local('تحب تسجّل كمندوب داخل المملكة ولا خارج المملكة؟', undefined, index.filter(entry => ['form:courier-internal', 'form:courier-external'].includes(entry.id)).map(entry => entry.title));
+  }
+  if (regionOnly) return local('تقصد نموذج مناديب داخل المملكة ولا خارج المملكة؟', undefined, index.filter(entry => ['form:courier-internal', 'form:courier-external'].includes(entry.id)).map(entry => entry.title));
+  if (/^(افتحه|افتحها|افتح ده|افتح دا|وديني هناك|نفسه|نفسها|ايوه افتحه|اه افتحه)$/.test(query)) {
+    const lastIntent = previous ? localAnswer(previous.text, index, company) : null;
+    const destination = lastIntent?.navigateTo || (context.pathname && index.some(entry => entry.path === context.pathname) ? context.pathname : undefined);
+    if (destination) return local('أبشر، أفتح لك الصفحة المطلوبة.', destination);
+    if (lastIntent?.suggestions?.length) return local(lastIntent.text, undefined, lastIntent.suggestions);
+    return local('تقصد أفتح لك أي نموذج؟ طلب خدمة ولا تسجيل مندوب؟', undefined, ['اطلب خدمة', 'سجّل كمندوب']);
+  }
   // `\b` only knows ASCII word characters, so Arabic greetings are bounded by whitespace or the end of the text instead.
-  if (/^(هلا|مرحبا|اهلا|اهلين|السلام عليكم|سلام|صباح الخير|مساء الخير|هاي|hi|hello|hey)(?=\s|$)/.test(query)) return local('أهلاً وسهلاً! قل لي وش تحتاج: خدمة، تسجيل، نقل، أو تواصل؟', undefined, defaultSuggestions);
+  const greeting = query.match(/^(هلا|مرحبا|اهلا|اهلين|السلام عليكم|سلام|صباح الخير|مساء الخير|هاي|hi|hello|hey)(?=\s|$)/);
+  if (greeting && (!queryTokens(query.slice(greeting[0].length)).length)) return local('أهلاً وسهلاً! تبي خدمة، تسجّل كمندوب، ولا تتواصل مع الفريق؟', undefined, defaultSuggestions);
   if (/(شكرا|مشكور|يعطيك العافيه|تسلم|thanks|thank you)/.test(query)) return local('العفو! لو احتجت شي ثاني أنا هنا.');
-  if (/(وش تقدر|ايش تقدر|ماذا تستطيع|كيف تساعد|مساعده|وش تسوي|help)/.test(query)) return local('أعرف كل أقسام موقع وعاء. اسألني عن خدمة أو نموذج تسجيل أو النقل أو بيع وشراء الشركات، وأخذك له مباشرة.', undefined, defaultSuggestions);
-  const tokens = queryTokens(rawQuery);
+  if (/(وش تقدر|ايش تقدر|ماذا تستطيع|كيف تساعد|مساعده|وش تسوي|بتعمل ايه|تساعدني ازاي|help)/.test(query)) return local('أقدر أساعدك تلقى الخدمة أو نموذج التسجيل المناسب في وعاء. تبي تطلب خدمة، تسجّل كمندوب، تطلب نقل، ولا تبيع وتشتري شركة؟', undefined, defaultSuggestions);
+  const tokens = queryTokens(query);
   if (tokens.some(token => /^(رقم|هاتف|جوال|اتصل|اتصال|اتواصل|تواصل|ايميل|بريد|عنوان|مقر|واتس|خريطه|contact)$/.test(token))) {
     return local(`تقدر تتصل على ${company.phone} أو تراسل ${company.email}. مقرنا: ${company.headquarters}.`, '/contact', ['اطلب خدمة', 'الرئيسية']);
   }
-  if (tokens.length === 0) return local('ما لقيت اللي تقصده بالضبط. اختر من هذه الأقسام أو اكتب اسم الخدمة.', undefined, defaultSuggestions);
+  if (tokens.length === 0) return local('تبي تطلب خدمة ولا تسجّل للعمل مع وعاء؟', undefined, ['اطلب خدمة', 'سجّل كمندوب']);
   // Specific destinations (a form, a service) outrank hub pages at equal score: "محاسب" means the accountant form, not the join hub.
   const specific = (entry: SiteEntry) => entry.kind === 'page' ? 0 : 1;
   const ranked = index.map(prepare).map(item => ({ item, ...score(item, tokens, query) }))
     .sort((a, b) => b.value - a.value || specific(b.item.entry) - specific(a.item.entry));
   const top = ranked[0], second = ranked.find(candidate => candidate.item.entry.path !== top.item.entry.path);
-  if (!top || top.value < 3 || !top.strong) return local(`ما لقيت اللي تقصده بالضبط. اختر من هذه الأقسام، أو اتصل بنا على ${company.phone}.`, undefined, defaultSuggestions);
+  if (!top || top.value < 3 || !top.strong) {
+    if (top?.value >= 3 && tokens.some(token => top.item.title.some(word => oneMistake(bare(token), bare(word)))) && (!second || top.value > second.value + 1)) return local(`ممكن تقصد ${top.item.entry.title}؟`, undefined, [top.item.entry.title, 'تواصل معنا']);
+    return local(`أساعدك في خدمات وعاء أو التسجيل للعمل؟ ولو سؤالك خارج تفاصيل الموقع، تقدر تتواصل مع الفريق على ${company.phone}.`, undefined, defaultSuggestions);
+  }
   if (second && second.strong && second.value >= top.value - 1 && specific(second.item.entry) >= specific(top.item.entry)) {
     return local(`تقصد ${top.item.entry.title} أو ${second.item.entry.title}؟`, undefined, [top.item.entry.title, second.item.entry.title]);
   }
@@ -145,12 +191,18 @@ const compact = (entries: SiteEntry[]) => entries.map(({ id, title, description,
 export async function askAssistant(query: string, history: AssistantTurn[], cms: CmsContent, pathname: string): Promise<AssistantReply> {
   const index = buildSiteIndex(cms);
   const trimmed = query.trim().slice(0, 500);
-  if (supabase && !remoteUnavailable) {
+  if (!remoteUnavailable) {
     try {
       const { phone, email, headquarters } = cms.company;
       // A slow or unreachable function must never leave the panel "thinking": after 8s the local matcher answers instead.
-      const { data, error } = await supabase.functions.invoke('assistant', { body: { query: trimmed, history: history.slice(-8), index: compact(index), pathname, company: { phone, email, headquarters } }, signal: AbortSignal.timeout(8000) });
+      const body = { query: trimmed, history: history.slice(-8), index: compact(index), pathname, company: { phone, email, headquarters } };
+      const response = await fetch('/api/assistant', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) });
+      const data = response.ok ? await response.json() : null;
+      const error = response.ok ? null : { context: { status: response.status } };
       if (!error && data && typeof data.text === 'string') {
+        const unhelpful = /لم افهم|مش فاهم|مفهمتش|ما فهمت|اعد صياغه|اعد كتابه/.test(normalizeArabic(data.text));
+        const wrongLanguage = /[\u0600-\u06ff]/.test(trimmed) && !/[\u0600-\u06ff]/.test(data.text);
+        if (!data.text.trim() || unhelpful || wrongLanguage) return localAnswer(trimmed, index, cms.company, { history: history.slice(-8), pathname });
         const navigateTo = typeof data.navigateTo === 'string' && index.some(entry => entry.path === data.navigateTo) ? data.navigateTo : undefined;
         return { text: data.text, navigateTo, suggestions: Array.isArray(data.suggestions) ? data.suggestions.filter((item: unknown) => typeof item === 'string').slice(0, 5) : undefined, source: 'remote' };
       }
@@ -161,5 +213,5 @@ export async function askAssistant(query: string, history: AssistantTurn[], cms:
       // Network failure: the local matcher answers this one, the next message tries again.
     }
   }
-  return localAnswer(trimmed, index, cms.company);
+  return localAnswer(trimmed, index, cms.company, { history: history.slice(-8), pathname });
 }
