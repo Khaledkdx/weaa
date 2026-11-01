@@ -6,6 +6,7 @@ import { courierCities, prepareInternalCourierFields, validIdentityExpiry } from
 import { courierForms } from './seed';
 import type { FormDefinition, FormField } from './types';
 import { externalReceipt, type DeliveryReceipt } from './requestDelivery';
+import { CourierOffers, courierOfferDetails } from './courierOffers';
 
 export { FormControl, validateFiles };
 
@@ -110,9 +111,11 @@ async function validateFiles(files: File[]) {
 
 export function CourierForm({ form }: { form: FormDefinition }) {
   const internal = form.submissionType === 'courier-internal'; const canonical = courierForms[internal ? 0 : 1];
-  const fields = useMemo(() => canonical.fields.map(field => ({ ...field, label: form.fields.find(item => item.key === field.key)?.label || field.label })), [form, canonical]);
+  const fields = useMemo(() => canonical.fields.map(field => ({ ...field, required: internal || field.required, label: form.fields.find(item => item.key === field.key)?.label || field.label })), [form, canonical, internal]);
   const [values, setValues] = useState<Record<string, string>>({}); const [files, setFiles] = useState<Record<string, File[]>>({});
   const [selectedCities, setSelectedCities] = useState<string[]>([]);
+  const [step, setStep] = useState<'details' | 'offers' | 'complete'>('details');
+  const [selectedOffers, setSelectedOffers] = useState<string[]>([]);
   const [pending, setPending] = useState(false); const [error, setError] = useState(''); const [success, setSuccess] = useState(''); const [code, setCode] = useState('');
   const delivery = useRef<DeliveryReceipt | null>(null);
   const uploads = useRef(new Map<File, string>());
@@ -123,6 +126,11 @@ export function CourierForm({ form }: { form: FormDefinition }) {
     let normalized = Object.fromEntries(Object.entries(values).map(([key, value]) => [key, normalizeDigits(value.trim())]));
     let submissionFiles = files;
     if (internal) {
+      const missing = fields.find(field => field.key !== 'city' && (!['car_model', 'car_year'].includes(field.key) || values.owns_car === '1') && !normalized[field.key]);
+      if (missing) { setError(`أدخل ${missing.label}.`); setStep('details'); return; }
+      const requiredSections = values.owns_car === '1' ? { ...sections, registration_files: 'استمارة السيارة' } : sections;
+      const missingAttachment = Object.entries(requiredSections).find(([key]) => !files[key]?.length);
+      if (missingAttachment) { setError(`أرفق ${missingAttachment[1]}.`); setStep('details'); return; }
       try {
         normalized = prepareInternalCourierFields(normalized, selectedCities);
         const prepared = prepareInternalCarSubmission(normalized, files);
@@ -135,6 +143,12 @@ export function CourierForm({ form }: { form: FormDefinition }) {
       if (normalized.identity_number && !/^\d{10}$/.test(normalized.identity_number)) { setError('رقم الهوية يجب أن يكون 10 أرقام.'); return; }
       const date = normalized.identity_expires_on || '';
       if (!validIdentityExpiry(date)) { setError('اختر تاريخ انتهاء هوية ميلاديًا صحيحًا بين 1900 و2200.'); return; }
+      if (step === 'details') {
+        try { await validateFiles(Object.values(submissionFiles).flat()); setStep('offers'); }
+        catch (cause) { setError(cause instanceof Error ? cause.message : 'تحقق من المرفقات.'); }
+        return;
+      }
+      if (!selectedOffers.length) { setError('اختر عرضًا واحدًا على الأقل.'); return; }
     } else {
       const digits = (normalized.phone || '').replace(/\D/g, '');
       if (digits.length < 8 || digits.length > 15) { setError('أدخل رقم تواصل صحيحًا من 8 إلى 15 رقمًا.'); return; }
@@ -161,6 +175,7 @@ export function CourierForm({ form }: { form: FormDefinition }) {
         const field = fields.find(field => field.key === key);
         return [field?.label || key, courierOptions[key]?.[value] || value];
       }));
+      if (internal) Object.assign(details, courierOfferDetails(selectedOffers));
       details['الربط الخارجي'] = receipt.error ? 'يحتاج متابعة' : 'تم الإرسال';
       if (receipt.error) details['سبب تعذر الربط الخارجي'] = receipt.error;
       if (receipt.result) details['رد النظام الخارجي'] = JSON.stringify(receipt.result);
@@ -168,18 +183,22 @@ export function CourierForm({ form }: { form: FormDefinition }) {
       const documents = Object.entries(submissionFiles).flatMap(([key, list]) => list.map((file, i) => ({ key: `${key}_${i + 1}`, label: `${sectionNames[key] || key} (${i + 1})`, file })));
       await createJoinRequest({ form_slug: internal ? 'courier-internal' : 'courier-external', form_title: form.title, name: normalized.name || '', phone: normalized.phone || '', email: normalized.email || '', fields: details, status: 'طلب جديد' }, documents, uploads.current);
       setSuccess('تم إرسال طلبك إلى فريق وعاء بنجاح.'); setCode(String(receipt.result?.application_code || '')); setValues({}); setFiles({}); setSelectedCities([]); uploads.current.clear(); delivery.current = null;
+      if (internal) setStep('complete');
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'تعذر الاتصال بنظام المناديب. قد يحتاج الخادم إلى تفعيل CORS لهذا النطاق.'); }
     finally { setPending(false); }
   };
   const visibleFields = fields.filter(field => !internal || !['car_model', 'car_year'].includes(field.key) || values.owns_car === '1');
   const visibleSections = internal && values.owns_car === '1' ? { ...sections, registration_files: 'استمارة السيارة' } : sections;
-  return <form className="form-grid" onSubmit={event => void submit(event)}>{visibleFields.map(field => field.key === 'city' && internal ? <CourierCityPicker key={field.key} label={field.label} selected={selectedCities} onChange={setSelectedCities} /> : <div key={field.key} className="courier-field"><FormControl field={field} value={values[field.key] || ''} onChange={value => {
+  if (internal && step === 'complete') return <SubmitState pending={false} error="" success={success} code={code} />;
+  return <form className="form-grid" onSubmit={event => void submit(event)}><fieldset className="courier-details-fields" disabled={pending || (internal && step === 'offers')} hidden={internal && step === 'offers'}>{visibleFields.map(field => field.key === 'city' && internal ? <CourierCityPicker key={field.key} label={field.label} selected={selectedCities} onChange={setSelectedCities} /> : <div key={field.key} className="courier-field"><FormControl field={field} value={values[field.key] || ''} onChange={value => {
       if (field.key === 'owns_car') {
         setValues(previous => ({ ...previous, owns_car: value, car_model: '', car_year: '' }));
         setFiles(previous => { const next = { ...previous }; delete next.registration_files; return next; });
       } else setValues(previous => ({ ...previous, [field.key]: field.key === 'phone' && internal ? saudiMobile(value).slice(0, 9) : value }));
     }} />{field.key === 'phone' && internal && <span className="field-hint">رمز المملكة +966 · {saudiMobile(values.phone || '').length} من 9 أرقام</span>}</div>)}
-    <div className="attachments"><h2>المرفقات <small>اختيارية، PDF أو JPEG أو PNG</small></h2><div className="attachments-grid">{Object.entries(visibleSections).map(([key, label]) => <div className="attachment-control" key={key}><strong>{label}</strong><FilePicker label={label} multiple onFiles={selected => setFiles(previous => ({ ...previous, [key]: [...(previous[key] || []), ...selected] }))} />{(files[key] || []).map((file, index) => <div className="file-row" key={`${file.name}-${index}`}><span>{file.name}</span><button type="button" aria-label={`إزالة ${file.name}`} onClick={() => setFiles(previous => ({ ...previous, [key]: previous[key].filter((_, i) => i !== index) }))}>إزالة</button></div>)}</div>)}</div><p className="field-hint">حتى 10 ملفات، 5 ميجابايت للملف و20 ميجابايت إجمالًا.</p></div>
-    <div className="form-footer"><button className="action action-primary" disabled={pending}>{pending ? 'جاري الإرسال...' : 'إرسال الطلب'}</button><SubmitState pending={pending} error={error} success={success} code={code} /></div>
+    <div className="attachments"><h2>المرفقات <small>{internal ? 'إلزامية، PDF أو JPEG أو PNG' : 'اختيارية، PDF أو JPEG أو PNG'}</small></h2><div className="attachments-grid">{Object.entries(visibleSections).map(([key, label]) => <div className="attachment-control" key={key}><strong>{label}{internal && ' *'}</strong><FilePicker label={label} multiple required={internal && !files[key]?.length} onFiles={selected => setFiles(previous => ({ ...previous, [key]: [...(previous[key] || []), ...selected] }))} />{(files[key] || []).map((file, index) => <div className="file-row" key={`${file.name}-${index}`}><span>{file.name}</span><button type="button" aria-label={`إزالة ${file.name}`} onClick={() => setFiles(previous => ({ ...previous, [key]: previous[key].filter((_, i) => i !== index) }))}>إزالة</button></div>)}</div>)}</div><p className="field-hint">حتى 10 ملفات، 5 ميجابايت للملف و20 ميجابايت إجمالًا.</p></div>
+    </fieldset>
+    {internal && step === 'offers' && <fieldset className="courier-details-fields" disabled={pending}><CourierOffers selected={selectedOffers} onChange={setSelectedOffers} /></fieldset>}
+    <div className="form-footer">{internal && step === 'offers' && <button type="button" className="action action-secondary" disabled={pending} onClick={() => { setStep('details'); setError(''); }}>رجوع</button>}<button className="action action-primary" disabled={pending}>{pending ? 'جاري الإرسال...' : internal && step === 'details' ? 'التالي' : 'إرسال الطلب'}</button><SubmitState pending={pending} error={error} success={success} code={code} /></div>
   </form>;
 }
