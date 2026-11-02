@@ -183,6 +183,18 @@ export function localAnswer(rawQuery: string, index: SiteEntry[], company: Compa
   return local(describe(top.item.entry), top.item.entry.path);
 }
 
+// Links are never shown or spoken: the orb takes the visitor to the page instead of reading out its address.
+export function plainText(text: string) {
+  return text
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/https?:\/\/\S+|www\.\S+/gi, ' ')
+    .replace(/(^|[\s(،:])\/[a-z0-9][a-z0-9\-/]*(?=[\s).,،:؛!؟]|$)/gi, '$1')
+    .replace(/(^|\s)(?:http|https|اتش تي تي بي)(?=\s|$)/gi, '$1')
+    .replace(/\(\s*\)/g, '').replace(/\s+([.،؛!؟:])/g, '$1').replace(/[ \t]{2,}/g, ' ').trim();
+}
+// «تبي أفتح لك صفحة النقل البري؟»: an offer to open a page instead of opening it.
+const offersToOpen = (text: string) => /[؟?]/.test(text) && /(افتح|تفتح|نفتح|اوديك|اوصلك|اخذك|افتحلك)/.test(normalizeArabic(text));
+
 // ---------- Remote brain (Supabase edge function calling Claude), with the local matcher as the fallback ----------
 
 let remoteUnavailable = false;
@@ -204,7 +216,16 @@ export async function askAssistant(query: string, history: AssistantTurn[], cms:
         const wrongLanguage = /[\u0600-\u06ff]/.test(trimmed) && !/[\u0600-\u06ff]/.test(data.text);
         if (!data.text.trim() || unhelpful || wrongLanguage) return localAnswer(trimmed, index, cms.company, { history: history.slice(-8), pathname });
         const navigateTo = typeof data.navigateTo === 'string' && index.some(entry => entry.path === data.navigateTo) ? data.navigateTo : undefined;
-        return { text: data.text, navigateTo, suggestions: Array.isArray(data.suggestions) ? data.suggestions.filter((item: unknown) => typeof item === 'string').slice(0, 5) : undefined, source: 'remote' };
+        const suggestions = Array.isArray(data.suggestions) ? data.suggestions.filter((item: unknown) => typeof item === 'string').slice(0, 5) : undefined;
+        const text = plainText(data.text);
+        // A model that only offers to open the page is overruled: the visitor's own words say where to go, so go.
+        if (!navigateTo && offersToOpen(text)) {
+          const guess = localAnswer(trimmed, index, cms.company, { history: history.slice(-8), pathname });
+          const title = index.find(entry => entry.path === guess.navigateTo)?.title || 'الصفحة المطلوبة';
+          if (guess.navigateTo && guess.navigateTo === pathname) return { text: `أنت الحين في ${title}. وش تحتاج فيها؟`, suggestions, source: 'remote' };
+          if (guess.navigateTo) return { text: `أبشر، فتحت لك ${title}.`, navigateTo: guess.navigateTo, suggestions, source: 'remote' };
+        }
+        return { text: text || 'أبشر.', navigateTo, suggestions, source: 'remote' };
       }
       // 503 means the function has no API key; stop asking for the rest of the session instead of paying a round trip per message.
       const status = (error as { context?: { status?: number } } | null)?.context?.status;

@@ -81,10 +81,31 @@ supabase secrets set ASSISTANT_MODEL=claude-haiku-5-5
 - https://learn.chatgpt.com/docs/auth
 - https://developers.openai.com/siwc
 
+## التعبئة بالصوت (لمن لا يقرأ ولا يكتب)
+
+الكرة تقرأ النموذج وتكتب فيه من خلال الصفحة نفسها، بلا تعديل في ملفات النماذج: نفس الحقول والأزرار، فيعمل تحقق النموذج وإرساله كما هو.
+
+| الطبقة | الملف | الدور |
+| --- | --- | --- |
+| قراءة النموذج والكتابة فيه | `frontend/src/assistantForm.ts` | `discoverFields` يجد الحقول بترتيب القراءة (نص، جوال، بريد، رقم، تاريخ، قائمة، اختيار واحد، اختيارات متعددة، مرفق) مع أسمائها وخياراتها. `writeField` يكتب كما يكتب الزائر (المُعيّن الأصلي + حدث `input`/`change` حتى يراه React). `formButtons`/`formErrors`/`formSuccess` تقرأ أزرار النموذج ورسائله، و`describePage` تقرأ الصفحة بصوت الكرة. |
+| فهم الإجابة | `frontend/src/assistantFill.ts` | قواعد محلية بلا خادم: الأرقام المنطوقة («صفر خمسة واحد…»، «خمسة وعشرين»، «ألفين وثلاثين»)، التواريخ، البريد المنطوق، مطابقة الخيارات («نقل خفيف»، «الثالث»، «ما عندي رخصة» → «لا توجد رخصة»)، تنظيف النص («اسمي خالد» → «خالد»)، والأوامر: وقف، تخطي، ارجع، عيد، اقرأ، تم. |
+| المحادثة | `frontend/src/assistantFillFlow.ts` | حقلاً حقلاً بلا توقف: تسأل بصوتها، تكتب، تقول «تم» وتنتقل للحقل التالي من دون إعادة قراءة ولا «صح؟». تضغط «التالي» بنفسها بين الخطوات، وفي نهاية النموذج تقرأ كل القيم مرة واحدة: «كله مظبوط؟ قل نعم وأرسل الطلب، أو قل لي أي خانة أعدّلها»، ولا تُرسل إلا بـ«نعم» صريحة. من يسمّي خانة بعد المراجعة (ومعها القيمة الجديدة في الجملة نفسها إن شاء) تُعدَّل ويُعاد قراءة النموذج مرة أخرى؛ ولو كانت الخانة في خطوة سابقة ترجع لها بزر «رجوع» ثم تتقدم بزر «التالي» إلى المراجعة من جديد. قبل كل ضغطة زر تنتظر لحظة حتى تلتقط الصفحة ما كُتب، ولا تكرر ضغطة لم تغيّر شيئاً. تقرأ أخطاء النموذج وترجع للحقل المعني. المرفقات لا تُرفع بالصوت: تشير للزر وتنتظر «تم». |
+
+تبدأ بقول «عبّي لي النموذج» (كتابة أو صوتاً)، أو بـ«نعم» بعد عرضها لما تفتح نموذجاً في وضع الصوت. «اقرأ لي الصفحة» يقرأ أي صفحة، و«أرسل» يعرض الملخص ويطلب التأكيد.
+
+## التنقل المباشر وبلا روابط
+
+عقل المساعد يأخذ الزائر إلى الصفحة بدل أن يسأله «تبي أفتحها؟» أو يقرأ له عنوانها. موجّه الخادم (`assistant-server.cjs`) يطلب وضع المسار في `navigateTo` في الرد نفسه متى كان الطلب يخص صفحة من الفهرس، حتى لو فُتحت من قبل في المحادثة، ويمنع كتابة أي رابط أو مسار أو http في النص. وفي الواجهة (`assistantBrain.ts`): `plainText` يحذف العناوين والمسارات من أي رد قادم من النموذج قبل عرضه أو نطقه، والرد الذي يكتفي بعرض فتح الصفحة يتحوّل إلى التنقل نفسه اعتماداً على المطابق المحلي لكلمات الزائر.
+
+## ذاكرة الزائر على جهازه
+
+`frontend/src/assistantMemory.ts`: بعد إرسال ناجح تسأل الكرة «أحفظ بياناتك على هذا الجهاز؟». عند «نعم» تُحفظ القيم باسم حقولها في `localStorage` (مفتاح `weaa-assistant-profile`) على هذا الجهاز والمتصفح فقط، بلا خادم. لا تُحفظ أرقام الهوية والإقامة والجواز والحسابات والتواريخ ولا أي مستند. في الزيارة التالية ترحّب بالاسم، وتكتب القيمة المحفوظة في حقلها وتقولها بدل أن تسأل عنها («حطيت رقم الجوال من المرة الماضية: …»)، وتظهر في المراجعة الأخيرة حيث يمكن تعديلها، و«انسَ بياناتي» يمسح كل شيء.
+
 ## الاختبارات
 
 - `frontend/src/assistantBrain.test.ts`: الفهرس، التطبيع، وأسئلة عربية حقيقية ومسارها المتوقع.
-- `frontend/src/assistant.test.tsx`: فتح اللوحة، إرسال سؤال، الانتقال للصفحة، شرائح الاقتراح، والإخفاء في صفحات النماذج.
+- `frontend/src/assistant.test.tsx`: فتح اللوحة، إرسال سؤال، الانتقال للصفحة، شرائح الاقتراح، وضع الصوت وشدّ الورقة، تعبئة نموذج كامل بالإجابات والتأكيد والإرسال والحفظ، والإخفاء في لوحة الإدارة.
+- `frontend/src/assistantFill.test.ts` و`assistantForm.test.ts` و`assistantMemory.test.ts`: الأرقام والتواريخ والخيارات المنطوقة، قراءة النماذج والكتابة فيها، والذاكرة المحلية.
 # OpenRouter server integration
 
 The Node host now serves `/api/assistant` (Gemini 2.5 Flash Lite text) and
@@ -133,6 +154,17 @@ with, neutral again after 3.6 s) move the core, the eyes and the hands; the
 hands' idle bob and gestures animate the `translate`/`rotate` properties so
 poses compose with them. The aura follows the microphone level while the
 server recorder meters it.
+
+What the orb is doing is shown on its body and said on a badge beside it
+(`StateBadge` in `assistant.tsx`): a thought bubble with bouncing dots while
+it thinks (eyes glance up, one narrows, a hand taps the chin), a mic badge
+with sonar rings rippling from the body while it listens, sound bars and a
+moving mouth while it talks, and a pen while it writes into a field
+(`data-doing="writing"`, raised for 1.4 s by the fill flow's `acting`
+option). The mouth otherwise appears only as a smile or a frown with a mood.
+In the voice bar the badge floats above the orb without its words, since the
+bar already says the status; on phones, where the open panel hides the orb, a
+small orb in the panel header (`.orb.is-mini`) shows the same state.
 
 The microphone opens a voice bar at the foot of the screen, not a modal: a
 pill with the orb at its start, the live caption (status, the last reply or

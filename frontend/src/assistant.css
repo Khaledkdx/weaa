@@ -38,7 +38,7 @@
   position: absolute; top: 38%; width: 10%; height: 15%; border-radius: 50%;
   background: var(--orb-ink); transform-origin: center;
   animation: orb-blink 4.6s ease-in-out infinite;
-  transition: transform 220ms var(--ease-out), height 220ms var(--ease-out), border-radius 220ms var(--ease-out);
+  transition: transform 220ms var(--ease-out), translate 220ms var(--ease-out), height 220ms var(--ease-out), border-radius 220ms var(--ease-out);
 }
 .orb-eye.is-left { left: 31%; }
 .orb-eye.is-right { right: 31%; }
@@ -63,21 +63,27 @@
 }
 .orb:hover .pet-hint, .orb:focus-within .pet-hint { opacity: 1; }
 
-/* States: the orb shows what it is doing without a word. */
+/* States: the orb shows what it is doing on its own body, and says it on the badge beside it. */
 .orb[data-state="listening"] .orb-core { animation: core-listen 1.6s ease-in-out infinite; }
 .orb[data-state="listening"] .orb-aura { animation-duration: 2s; opacity: .95; }
 .orb[data-state="listening"] .orb-eye { transform: scaleY(1.15); }
 .orb[data-state="listening"] .orb-hand.is-left { transform: translateX(-12%) rotate(-12deg); }
 .orb[data-state="listening"] .orb-hand.is-right { transform: translateX(12%) rotate(12deg); }
+.orb[data-state="listening"] .orb-ring { display: block; }
 /* Live level from the microphone writes the aura's transform directly; the breathing stops while it does. */
 .orb[data-meter] .orb-aura { animation: none; }
+/* Thinking: a glance up and to the side with one eye narrowed, a hand tapping the chin, and a slow tilt. The glance is
+   on the eyes themselves (`translate`), since the eye group's transform belongs to the pointer-following. */
 .orb[data-state="thinking"] .orb-core { animation: core-think 1.2s ease-in-out infinite; }
-.orb[data-state="thinking"] .orb-eye { transform: translate(14%, -30%); }
+.orb[data-state="thinking"] .orb-eye { translate: calc(var(--orb) * .05) calc(var(--orb) * -.07); }
+.orb[data-state="thinking"] .orb-eye.is-left { height: 9%; }
 .orb[data-state="thinking"] .orb-hand.is-right { transform: translate(-70%, -70%); animation: hand-tap .6s ease-in-out infinite alternate; }
 .orb[data-state="speaking"] .orb-core { animation: core-talk .46s ease-in-out infinite alternate; }
 .orb[data-state="speaking"] .orb-aura { animation: aura-talk .46s ease-in-out infinite alternate; opacity: .95; }
 .orb[data-state="speaking"] .orb-hand { animation: hand-talk .52s ease-in-out infinite alternate; }
 .orb[data-state="speaking"] .orb-hand.is-right { animation-delay: -.26s; }
+/* Writing into a field: the hand scribbles. */
+.orb[data-doing="writing"] .orb-hand.is-right { transform: translate(-30%, 10%) rotate(20deg); animation: hand-write .22s ease-in-out infinite alternate; }
 .orb.is-walking .orb-core { animation: core-walk .45s ease-in-out 3; }
 /* Moods: a few seconds of a face and a gesture, then back to neutral. */
 .orb[data-mood="happy"] .orb-eye { height: 8%; border-radius: 50% 50% 0 0 / 100% 100% 0 0; }
@@ -90,6 +96,43 @@
 .orb[data-mood="sad"] .orb-eye.is-right { transform: translateY(18%) rotate(16deg); }
 .orb[data-mood="sad"] .orb-hand.is-left { transform: translateY(34%) rotate(-8deg); animation: none; }
 .orb[data-mood="sad"] .orb-hand.is-right { transform: translateY(34%) rotate(8deg); animation: none; }
+/* The mouth shows only when there is something to say with it: a smile or a frown with a mood, open while talking. */
+.orb-mouth {
+  position: absolute; left: 50%; top: 60%; width: 16%; height: 7%;
+  translate: -50% 0; transform-origin: 50% 50%; border-radius: 50%;
+  background: var(--orb-ink); opacity: 0; transform: scaleY(.2);
+  transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out), width 200ms var(--ease-out), height 200ms var(--ease-out), border-radius 200ms var(--ease-out);
+}
+.orb[data-mood="happy"] .orb-mouth { opacity: 1; transform: none; width: 24%; height: 10%; background: transparent; border-bottom: 2px solid var(--orb-ink); border-radius: 0 0 50% 50% / 0 0 100% 100%; }
+.orb[data-mood="sad"] .orb-mouth { opacity: 1; transform: none; top: 63%; width: 20%; height: 9%; background: transparent; border-top: 2px solid var(--orb-ink); border-radius: 50% 50% 0 0 / 100% 100% 0 0; }
+.orb[data-state="speaking"] .orb-mouth { opacity: 1; width: 16%; height: 8%; background: var(--orb-ink); border: 0; border-radius: 45% 45% 50% 50% / 40% 40% 60% 60%; animation: mouth-talk .28s ease-in-out infinite alternate; }
+/* Sonar rings ripple out from the body while it listens. */
+.orb-ring { position: absolute; inset: 4%; display: none; border-radius: 50%; border: 2px solid var(--gold-300); opacity: 0; pointer-events: none; animation: ring-ripple 1.8s ease-out infinite; }
+.orb-ring + .orb-ring { animation-delay: .9s; }
+/* The badge: what the orb is doing, in a word and a small animation. The corner orb carries it at its side, with two
+   small circles pointing back at the head the way a thought bubble does; in the voice bar it floats above the orb. */
+.orb-badge {
+  position: absolute; bottom: 62%; inset-inline-start: calc(100% + 12px);
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 5px 10px; border-radius: var(--r-pill);
+  background: var(--glass-strong); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+  border: 1px solid var(--line); color: var(--text); box-shadow: 0 6px 18px rgba(0, 0, 0, .22);
+  font-size: 12px; font-weight: 700; line-height: 1; white-space: nowrap; pointer-events: none;
+  animation: badge-in 280ms var(--ease-spring);
+}
+.orb-badge::before, .orb-badge::after { content: ''; position: absolute; border-radius: 50%; background: var(--glass-strong); border: 1px solid var(--line); }
+.orb-badge::before { width: 7px; height: 7px; inset-inline-start: -9px; bottom: 1px; }
+.orb-badge::after { width: 4px; height: 4px; inset-inline-start: -14px; bottom: -4px; }
+.orb-badge-icon { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 3px; min-width: 16px; height: 14px; color: var(--gold); font-size: 14px; }
+.orb-badge.is-thinking i { width: 5px; height: 5px; border-radius: 50%; background: var(--gold); animation: badge-dot 1.1s ease-in-out infinite; }
+.orb-badge.is-thinking i:nth-child(2) { animation-delay: .18s; }
+.orb-badge.is-thinking i:nth-child(3) { animation-delay: .36s; }
+.orb-badge.is-speaking i { width: 3px; height: 12px; border-radius: 2px; background: var(--gold); animation: badge-bar .5s ease-in-out infinite alternate; }
+.orb-badge.is-speaking i:nth-child(2) { animation-delay: -.15s; }
+.orb-badge.is-speaking i:nth-child(3) { animation-delay: -.3s; }
+.orb-badge.is-speaking i:nth-child(4) { animation-delay: -.45s; }
+.orb-badge.is-listening .orb-badge-icon::after { content: ''; position: absolute; inset: -4px; border-radius: 50%; border: 1.5px solid var(--gold); animation: badge-ring 1.4s ease-out infinite; }
+.orb-badge.is-writing svg { animation: badge-pen .35s ease-in-out infinite alternate; }
 
 @keyframes aura-breathe { 0%, 100% { transform: scale(.92); } 50% { transform: scale(1.06); } }
 @keyframes aura-talk { from { transform: scale(.95); } to { transform: scale(1.2); } }
@@ -104,6 +147,14 @@
 @keyframes hand-talk { from { rotate: -12deg; translate: 0 -6%; } to { rotate: 12deg; translate: 0 6%; } }
 @keyframes hand-happy { 0%, 100% { translate: 0 0; } 50% { translate: 0 -30%; } }
 @keyframes hand-tap { from { rotate: 0deg; } to { rotate: -16deg; } }
+@keyframes hand-write { from { translate: -6% 0; rotate: 14deg; } to { translate: 6% 4%; rotate: 26deg; } }
+@keyframes mouth-talk { from { transform: scaleY(.35) scaleX(.9); } to { transform: scaleY(1.2) scaleX(1.05); } }
+@keyframes ring-ripple { from { transform: scale(.85); opacity: .75; } to { transform: scale(1.75); opacity: 0; } }
+@keyframes badge-in { from { opacity: 0; transform: translateY(6px) scale(.9); } to { opacity: 1; transform: none; } }
+@keyframes badge-dot { 0%, 100% { transform: translateY(0); opacity: .45; } 50% { transform: translateY(-4px); opacity: 1; } }
+@keyframes badge-bar { from { transform: scaleY(.3); } to { transform: scaleY(1); } }
+@keyframes badge-ring { from { transform: scale(.6); opacity: .9; } to { transform: scale(1.5); opacity: 0; } }
+@keyframes badge-pen { from { transform: translate(-1px, 1px) rotate(-8deg); } to { transform: translate(1px, -1px) rotate(6deg); } }
 
 /* ---------- Panel ---------- */
 .assistant-panel {
@@ -122,8 +173,13 @@
 .assistant-panel[hidden] { display: none; opacity: 0; transform: translateY(10px); transition-duration: 200ms; transition-timing-function: var(--ease-out); }
 @starting-style { .assistant-panel { opacity: 0; transform: translateY(10px); } }
 .assistant-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 12px 12px 16px; border-bottom: 1px solid var(--line); }
-.assistant-header strong { display: block; font-size: 15px; }
-.assistant-header span { display: block; font-size: 12px; color: var(--muted); }
+.assistant-title { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.assistant-title-text strong { display: block; font-size: 15px; }
+.assistant-title-text span { display: block; font-size: 12px; color: var(--muted); }
+/* On a phone the open panel hides the big orb, so a small one in the header shows the state instead. */
+.orb.is-mini { --orb: 38px; flex: none; display: none; transition: none; }
+.orb.is-mini .orb-aura { inset: -22%; }
+.orb.is-mini .orb-hand { box-shadow: 0 2px 5px rgba(0, 0, 0, .25); }
 .assistant-header .icon-button { width: 38px; height: 38px; font-size: 20px; }
 .assistant-log { flex: 1; min-height: 180px; overflow: auto; overscroll-behavior: contain; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
 .assistant-msg { max-width: 88%; }
@@ -186,6 +242,11 @@
 html.has-voice-bar .site-shell { padding-bottom: 96px; }
 html.has-voice-bar .call-fab { opacity: 0; pointer-events: none; transition: opacity 200ms var(--ease-out); }
 .orb.is-live { --orb: 72px; flex: none; margin: -8px 0; transition: none; will-change: transform; }
+/* In the bar the badge floats above the orb, pointing down at it, and keeps only its animation: the bar says the words. */
+.orb.is-live .orb-badge { bottom: calc(100% + 10px); inset-inline-start: auto; left: 50%; translate: -50% 0; padding: 6px 9px; }
+.orb.is-live .orb-badge::before { inset-inline-start: auto; left: 50%; bottom: -9px; translate: -50% 0; }
+.orb.is-live .orb-badge::after { inset-inline-start: auto; left: 50%; bottom: -15px; translate: -50% 0; }
+.orb.is-live .orb-badge-text { display: none; }
 .assistant-live-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
 .assistant-live-status { font-size: 11px; font-weight: 700; color: var(--gold); }
 .assistant-live-caption { margin: 0; font-size: 14px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
@@ -255,6 +316,8 @@ html.has-voice-bar .call-fab { opacity: 0; pointer-events: none; transition: opa
   .assistant.on-form { bottom: calc(max(20px, env(safe-area-inset-bottom)) + 64px); }
   .assistant-live { width: calc(100vw - 20px); gap: 8px; padding: 4px 6px; }
   .orb.is-live { --orb: 64px; margin: -6px 0; }
+  .orb.is-mini { display: block; }
+  .orb-badge { font-size: 11px; }
   .assistant-live-caption { font-size: 13px; }
   .assistant-live-controls button { width: 40px; height: 40px; font-size: 18px; }
   html.has-voice-bar .site-shell { padding-bottom: 88px; }
@@ -262,9 +325,11 @@ html.has-voice-bar .call-fab { opacity: 0; pointer-events: none; transition: opa
 
 /* ---------- Preferences ---------- */
 @media (prefers-reduced-motion: reduce) {
-  .orb-aura, .orb-core, .orb-eye, .orb-hand, .orb[data-state] .orb-core, .orb[data-state] .orb-aura, .orb[data-state] .orb-hand, .orb[data-mood] .orb-core, .orb[data-mood] .orb-hand, .orb[data-act] .orb-hand, .assistant-msg.is-typing span, .assistant-sheet-flap.is-fluttering { animation: none !important; }
-  .orb, .orb-core, .orb-eye, .orb-hand, .assistant-live, .assistant-sheet { transition: none; }
-  .orb-core, .orb-hand { transform: none !important; }
+  .orb-aura, .orb-core, .orb-eye, .orb-hand, .orb-mouth, .orb-ring, .orb-badge, .orb-badge i, .orb-badge svg, .orb-badge-icon::after, .orb[data-state] .orb-core, .orb[data-state] .orb-aura, .orb[data-state] .orb-hand, .orb[data-state] .orb-mouth, .orb[data-mood] .orb-core, .orb[data-mood] .orb-hand, .orb[data-act] .orb-hand, .orb[data-doing] .orb-hand, .assistant-msg.is-typing span, .assistant-sheet-flap.is-fluttering { animation: none !important; }
+  .orb, .orb-core, .orb-eye, .orb-hand, .orb-mouth, .assistant-live, .assistant-sheet { transition: none; }
+  .orb-core, .orb-hand, .orb-mouth { transform: none !important; }
+  /* Without the ripple the rings would sit as still circles; the badge still says the state. */
+  .orb-ring { display: none !important; }
 }
 @media (prefers-reduced-transparency: reduce) {
   .assistant-panel, .assistant-live, .pet-hint { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--surface); }

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useState } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { CmsProvider } from './data';
@@ -51,6 +52,8 @@ describe('site assistant', () => {
     fireEvent.click(screen.getByRole('button', { name: 'مساعد وعاء' }));
     const dialog = screen.getByRole('dialog', { name: 'مساعد وعاء' });
     expect(dialog.hidden).toBe(false);
+    // The header carries a small orb for phones, where the open panel hides the big one.
+    expect(dialog.querySelector('.orb.is-mini')).toBeTruthy();
     fireEvent.change(screen.getByRole('textbox', { name: 'اسأل مساعد وعاء' }), { target: { value: 'ابغى شاحنة تنقل بضاعة' } });
     fireEvent.click(screen.getByRole('button', { name: 'إرسال' }));
     await screen.findByText(/نموذج لطلب نقل بضائع/);
@@ -66,6 +69,8 @@ describe('site assistant', () => {
     expect(voice.querySelector('.orb.is-live')).toBeTruthy();
     expect(voice.querySelector('.orb')?.getAttribute('data-mood')).toBe('happy');
     expect(voice.textContent).toContain('أسمعك…');
+    // The orb says so on its own body too: a mic badge beside it, with its rings rippling.
+    expect(voice.querySelector('.orb-badge.is-listening')).toBeTruthy();
     expect(screen.queryByRole('dialog', { name: 'مساعد وعاء' })).toBeNull();
     // Mute keeps the conversation on screen; the robot just stops listening until the mic is pressed again.
     fireEvent.click(screen.getByRole('button', { name: 'كتم المايك' }));
@@ -90,6 +95,8 @@ describe('site assistant', () => {
       fireEvent.click(screen.getByRole('button', { name: 'تحدث' }));
       const actor = document.querySelector('.orb.is-live')!;
       act(() => Recognition.last!.hear('ابغى شاحنة تنقل بضاعة'));
+      // The thought bubble is up while the answer is on its way.
+      expect(actor.querySelector('.orb-badge.is-thinking')?.textContent).toContain('يفكر');
       await waitFor(() => expect(screen.getByTestId('location').textContent).toBe(roadTransportPath));
       // Out to the corner, the lift, the drag, and the way home. The corner is cut away as the paper's back folds over
       // it, the sheet turns a little about the held tip as it goes, and then it is gone.
@@ -142,6 +149,98 @@ describe('site assistant', () => {
     fireEvent.click(screen.getByRole('button', { name: 'تحدث' }));
     await waitFor(() => expect(screen.getByRole('region', { name: 'المحادثة الصوتية' }).textContent).toMatch(/ما قدرت أوصل للمايكروفون/));
     expect(screen.getByRole('button', { name: 'تشغيل المايك' }).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('fills a form straight through, reads it back once, changes a named field, sends on a yes and remembers the visitor on a yes', async () => {
+    localStorage.setItem('weaa-assistant-voice', 'off');
+    // The shapes the site's forms use, with the form's own submit handler and success message.
+    function FakeForm() {
+      const [sent, setSent] = useState(false);
+      return <main><h1>نموذج تجريبي</h1><form onSubmit={event => { event.preventDefault(); setSent(true); }}>
+        <label className="form-control"><span>الاسم *</span><input required /></label>
+        <label className="form-control"><span>رقم الجوال *</span><input type="tel" required /></label>
+        <label className="form-control"><span>المدينة</span><select defaultValue=""><option value="">اختر</option><option value="riyadh">الرياض</option><option value="jeddah">جدة</option></select></label>
+        <div className="form-footer"><button type="submit">إرسال الطلب</button>{sent && <p role="status">تم الإرسال بنجاح</p>}</div>
+      </form></main>;
+    }
+    render(<MemoryRouter initialEntries={['/join-us/test']}><CmsProvider><div id="main-content"><FakeForm /></div><SiteAssistant /><Location /></CmsProvider></MemoryRouter>);
+    fireEvent.click(screen.getByRole('button', { name: 'مساعد وعاء' }));
+    const ask = (text: string) => {
+      fireEvent.change(screen.getByRole('textbox', { name: 'اسأل مساعد وعاء' }), { target: { value: text } });
+      fireEvent.click(screen.getByRole('button', { name: 'إرسال' }));
+    };
+    const name = screen.getByLabelText(/^الاسم/) as HTMLInputElement, phone = screen.getByLabelText(/رقم الجوال/) as HTMLInputElement, city = screen.getByLabelText('المدينة') as HTMLSelectElement;
+    ask('عبي لي النموذج');
+    await screen.findByText(/بنعبي نموذج تجريبي سوا.*وش اسمك؟/);
+    ask('اسمي خالد محمد');
+    // Written and straight on to the next field: nothing read back, no «صح؟».
+    await screen.findByText('تم. قل لي رقم الجوال رقم رقم.');
+    expect(name.value).toBe('خالد محمد');
+    // The pen shows on the orb the moment it writes.
+    expect(document.querySelector('.orb .orb-badge.is-writing')?.textContent).toContain('يكتب');
+    ask('صفر خمسة واحد اثنين ثلاثة أربعة خمسة ستة سبعة ثمانية');
+    await screen.findByText(/^تم. المدينة: اختر من: الرياض، جدة/);
+    expect(phone.value).toBe('0512345678');
+    ask('جدة');
+    // The one read-back, with the send folded into its yes; nothing has been sent yet.
+    await screen.findByText('تم، خلصنا. راجع معي: الاسم: خالد محمد، رقم الجوال: 0512345678، المدينة: جدة. كله مظبوط؟ قل نعم وأرسل الطلب، أو قل لي أي خانة أعدّلها.');
+    expect(city.value).toBe('jeddah');
+    expect(document.querySelector('main [role="status"]')).toBeNull();
+    // A field named after the read-back is changed, its new value in the same breath, and the form is read back again.
+    ask('رقم الجوال صفر خمسة واحد واحد واحد واحد واحد واحد واحد واحد');
+    await screen.findByText(/^تم. راجع معي: الاسم: خالد محمد، رقم الجوال: 0511111111، المدينة: جدة. كله مظبوط؟/);
+    expect(phone.value).toBe('0511111111');
+    ask('نعم');
+    await screen.findByText(/أحفظ بياناتك على هذا الجهاز للمرة الجاية؟/, {}, { timeout: 3000 });
+    expect(document.querySelector('main [role="status"]')?.textContent).toBe('تم الإرسال بنجاح');
+    ask('نعم');
+    await screen.findByText(/حفظت بياناتك على هذا الجهاز/);
+    expect(JSON.parse(localStorage.getItem('weaa-assistant-profile')!)).toMatchObject({ name: 'خالد', values: { 'الاسم': 'خالد محمد', 'رقم الجوال': '0511111111' } });
+  });
+
+  it('steps back to change a field from an earlier step after the read-back, then comes forward again', async () => {
+    localStorage.setItem('weaa-assistant-voice', 'off');
+    // A two-step form the way the site builds them: the first step's fields leave the page on the next step.
+    function FakeSteps() {
+      const [step, setStep] = useState(0); const [name, setName] = useState(''); const [city, setCity] = useState(''); const [sent, setSent] = useState(false);
+      return <main><h1>نموذج خطوتين</h1><form onSubmit={event => { event.preventDefault(); setSent(true); }}>
+        {step === 0 && <label className="form-control"><span>الاسم *</span><input required value={name} onChange={event => setName(event.target.value)} /></label>}
+        {step === 1 && <label className="form-control"><span>المدينة</span><select value={city} onChange={event => setCity(event.target.value)}><option value="">اختر</option><option value="riyadh">الرياض</option><option value="jeddah">جدة</option></select></label>}
+        <div className="form-footer">{step === 1 && <button type="button" onClick={() => setStep(0)}>رجوع</button>}{step === 0 ? <button type="button" onClick={() => setStep(1)}>التالي</button> : <button type="submit">إرسال الطلب</button>}{sent && <p role="status">تم الإرسال</p>}</div>
+      </form></main>;
+    }
+    render(<MemoryRouter initialEntries={['/join-us/test']}><CmsProvider><div id="main-content"><FakeSteps /></div><SiteAssistant /><Location /></CmsProvider></MemoryRouter>);
+    fireEvent.click(screen.getByRole('button', { name: 'مساعد وعاء' }));
+    const ask = (text: string) => {
+      fireEvent.change(screen.getByRole('textbox', { name: 'اسأل مساعد وعاء' }), { target: { value: text } });
+      fireEvent.click(screen.getByRole('button', { name: 'إرسال' }));
+    };
+    ask('عبي لي النموذج');
+    await screen.findByText(/وش اسمك؟/);
+    ask('اسمي خالد');
+    // The step's last field written: the next button is pressed without asking, and the new step's field comes up.
+    await screen.findByText('تم. خلصنا خانات هذي الخطوة، ننتقل للي بعدها.');
+    await screen.findByText('المدينة: اختر من: الرياض، جدة.', {}, { timeout: 4000 });
+    ask('جدة');
+    await screen.findByText(/^تم، خلصنا. راجع معي: الاسم: خالد، المدينة: جدة. كله مظبوط؟/);
+    // The name lives on the first step: back to it, changed, forward again, and read back once more.
+    ask('الاسم خالد العلي');
+    await screen.findByText(/^تم. راجع معي: الاسم: خالد العلي، المدينة: جدة. كله مظبوط؟/, {}, { timeout: 5000 });
+    expect(document.querySelector('main [role="status"]')).toBeNull();
+    ask('وقف');
+    await screen.findByText(/وقفت التعبئة/);
+    expect(document.querySelector('main [role="status"]')).toBeNull();
+  });
+
+  it('greets a remembered visitor by name and forgets them on request', async () => {
+    localStorage.setItem('weaa-assistant-voice', 'off');
+    localStorage.setItem('weaa-assistant-profile', JSON.stringify({ name: 'خالد', values: { 'الاسم': 'خالد محمد' }, savedAt: 1 }));
+    renderAt('/');
+    fireEvent.click(screen.getByRole('button', { name: 'مساعد وعاء' }));
+    expect(screen.getByText(/هلا والله يا خالد/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'انسَ بياناتي' }));
+    await screen.findByText('مسحت بياناتك من هذا الجهاز.');
+    expect(localStorage.getItem('weaa-assistant-profile')).toBeNull();
   });
 
   it('stays off the admin pages but follows the visitor into a form', () => {

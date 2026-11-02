@@ -2,18 +2,34 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { Icon } from '@iconify/react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useCms } from './data';
-import { askAssistant, defaultSuggestions, type AssistantTurn } from './assistantBrain';
+import { askAssistant, defaultSuggestions, normalizeArabic, type AssistantTurn } from './assistantBrain';
 import { listen, releaseMicrophone, speak, speechSupport, stopSpeaking, type Listener, type ListenStatus, type SpeechProblem } from './assistantSpeech';
 import { AssistantGuide } from './assistantGuide';
+import { FillFlow } from './assistantFillFlow';
+import { describePage } from './assistantForm';
+import { forgetProfile, loadProfile, type Profile } from './assistantMemory';
 
 type Message = AssistantTurn & { id: number; suggestions?: string[] };
 type PetState = 'idle' | 'listening' | 'thinking' | 'speaking';
 type Mood = 'neutral' | 'happy' | 'sad';
+// A momentary action on the page, shown on top of the state: the orb writing into a field.
+type Doing = 'writing';
+type BadgeKind = Exclude<PetState, 'idle'> | Doing;
 // The orb's part in a voice-mode navigation: fly to the far corner of the page, take the corner, lift it so the paper
 // folds back, drag the sheet off toward its own corner, and come back.
 type Act = 'go' | 'grab' | 'lift' | 'pull' | 'return';
 type Side = 'left' | 'right';
-const welcome: Message = { id: 0, role: 'assistant', text: 'هلا والله! أنا مساعد وعاء بالذكاء الاصطناعي، وصوتي مولّد آليًا. قل لي وش تحتاج، كتابة أو بالصوت، وأدلّك على المكان المناسب.', suggestions: defaultSuggestions };
+// A visitor the orb remembers (their say-so, on their own device) is greeted by name and can ask to be forgotten.
+const welcomeFor = (profile: Profile | null): Message => ({
+  id: 0, role: 'assistant',
+  text: `هلا والله${profile?.name ? ` يا ${profile.name}` : ''}! أنا مساعد وعاء بالذكاء الاصطناعي، وصوتي مولّد آليًا. قل لي وش تحتاج، كتابة أو بالصوت، وأدلّك على المكان المناسب، وأقدر أعبي معك أي نموذج.`,
+  suggestions: profile ? [...defaultSuggestions, 'انسَ بياناتي'] : defaultSuggestions,
+});
+// Things the visitor can ask the orb to do on the page itself, before any question goes to the brain.
+const asksToFill = (words: string) => /(عبي|عبئ|املا|املأ|املي|تعبئه|نعبي|اعبي|اعبى|تعبي|ساعدني)/.test(words);
+const asksToRead = (words: string) => /^(اقرا|اقرأ|اقرالي|اقرا لي)/.test(words) || /^(وش|ايش|ماذا) (في|مكتوب)/.test(words);
+const asksToSend = (words: string) => /^(ارسل|ارسال|ارسله|ارسلها|ارسل الطلب|ابعت|ابعته)/.test(words);
+const asksToForget = (words: string) => /^(انسى|انس|امسح|احذف)\s*(بياناتي|معلوماتي|اسمي|كل شي)/.test(words);
 const prefersReducedMotion = () => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const hasFinePointer = () => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 // WAAPI cannot read custom properties, so the glass.css curves are repeated here by value.
@@ -31,14 +47,29 @@ const moodOf = (text: string, navigated: boolean): Mood => {
   return 'neutral';
 };
 
-// The assistant's body: a glowing circle with two hands and a pair of eyes. States and moods move it from assistant.css.
-function Orb({ eyesRef, auraRef }: { eyesRef: RefObject<HTMLSpanElement | null>; auraRef: RefObject<HTMLSpanElement | null> }) {
+// The assistant's body: a glowing circle with two hands, a pair of eyes and a mouth that shows only when it talks or
+// feels something. States and moods move it from assistant.css; the rings ripple out while it listens.
+function Orb({ eyesRef, auraRef }: { eyesRef?: RefObject<HTMLSpanElement | null>; auraRef?: RefObject<HTMLSpanElement | null> }) {
   return <>
+    <span className="orb-ring" aria-hidden="true" /><span className="orb-ring" aria-hidden="true" />
     <span ref={auraRef} className="orb-aura" aria-hidden="true" />
-    <span className="orb-core" aria-hidden="true"><span ref={eyesRef} className="orb-eyes"><span className="orb-eye is-left" /><span className="orb-eye is-right" /></span></span>
+    <span className="orb-core" aria-hidden="true"><span ref={eyesRef} className="orb-eyes"><span className="orb-eye is-left" /><span className="orb-eye is-right" /></span><span className="orb-mouth" /></span>
     <span className="orb-hand is-left" aria-hidden="true" />
     <span className="orb-hand is-right" aria-hidden="true" />
   </>;
+}
+// What the orb is doing, said beside it: a thought bubble while it thinks, a mic while it listens, sound bars while it
+// talks, a pen while it writes into a field.
+function StateBadge({ kind, text }: { kind: BadgeKind; text: string }) {
+  return <span className={`orb-badge is-${kind}`} aria-hidden="true">
+    <span className="orb-badge-icon">
+      {kind === 'thinking' && <><i /><i /><i /></>}
+      {kind === 'speaking' && <><i /><i /><i /><i /></>}
+      {kind === 'listening' && <Icon icon="solar:microphone-linear" />}
+      {kind === 'writing' && <Icon icon="solar:pen-linear" />}
+    </span>
+    <span className="orb-badge-text">{text}</span>
+  </span>;
 }
 
 // The site assistant: an orb that lives on the public pages and takes visitors to the service or page they ask for,
@@ -48,7 +79,8 @@ export function SiteAssistant() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([welcome]);
+  const [profile, setProfile] = useState<Profile | null>(loadProfile);
+  const [messages, setMessages] = useState<Message[]>(() => [welcomeFor(profile)]);
   const [draft, setDraft] = useState('');
   const [interim, setInterim] = useState('');
   const [busy, setBusy] = useState(false);
@@ -57,6 +89,7 @@ export function SiteAssistant() {
   const [voiceReplies, setVoiceReplies] = useState(() => { try { return localStorage.getItem('weaa-assistant-voice') !== 'off'; } catch { return true; } });
   const [pet, setPet] = useState<PetState>('idle');
   const [mood, setMood] = useState<Mood>('neutral');
+  const [doing, setDoing] = useState<Doing | null>(null);
   const [offset, setOffset] = useState(0);
   const [walking, setWalking] = useState(false);
   // Voice mode: the panel gives way to a bar at the foot of the screen, with the orb in it, talking and listening until
@@ -72,6 +105,7 @@ export function SiteAssistant() {
   const sheetRef = useRef<HTMLElement | null>(null);
   const flipFrom = useRef<DOMRect | null>(null);
   const moodTimer = useRef(0);
+  const doingTimer = useRef(0);
   const support = useMemo(speechSupport, []);
   const listenerRef = useRef<Listener | null>(null);
   const liveRef = useRef(false);
@@ -81,6 +115,11 @@ export function SiteAssistant() {
   const messagesRef = useRef(messages);
   const sendRef = useRef<(text: string, viaVoice?: boolean) => void>(() => {});
   const sayRef = useRef<(text: string) => void>(() => {});
+  const tellRef = useRef<(text: string) => void>(() => {});
+  const profileRef = useRef(profile);
+  // The form-filling conversation. It speaks through tellRef so it never holds a stale callback.
+  const doingRef = useRef<(what: Doing) => void>(() => {});
+  const fill = useMemo(() => new FillFlow({ tell: text => tellRef.current(text), profile: () => profileRef.current, remembered: next => { profileRef.current = next; setProfile(next); }, acting: what => doingRef.current(what) }), []);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const petRef = useRef<HTMLDivElement>(null);
   const actorRef = useRef<HTMLDivElement>(null);
@@ -108,6 +147,13 @@ export function SiteAssistant() {
     setMood(next);
     if (next !== 'neutral') moodTimer.current = window.setTimeout(() => setMood('neutral'), 3600);
   }, []);
+  // A momentary action shows on the badge for a moment on top of the state, then the state shows again.
+  const showDoing = useCallback((what: Doing) => {
+    window.clearTimeout(doingTimer.current);
+    setDoing(what);
+    doingTimer.current = window.setTimeout(() => setDoing(null), 1400);
+  }, []);
+  doingRef.current = showDoing;
 
   // The aura follows the microphone level while it is metered; otherwise the stylesheet breathes it.
   const meter = useCallback((level: number | null) => {
@@ -251,6 +297,12 @@ export function SiteAssistant() {
     }, () => setPet('speaking')).then(started => { if (!started) finish(); }).catch(() => { speechProblem('failed'); finish(); });
   }, [beginListening, meter, speechProblem, stopListening]);
   sayRef.current = say;
+  // A line from the orb itself (not an answer from the brain): written into the conversation and, when voice is on, spoken.
+  const tell = useCallback((text: string) => {
+    push({ role: 'assistant', text });
+    if (voiceRef.current || liveRef.current) say(text);
+  }, [push, say]);
+  tellRef.current = tell;
 
   // A voice-mode navigation is a small performance. The page becomes a sheet of paper: a still copy pinned where the page
   // is on screen, with the next page already underneath. The orb flies from the bar to the sheet's far top corner, takes
@@ -354,14 +406,34 @@ export function SiteAssistant() {
     setPet('thinking');
     const history = messagesRef.current.map(({ role, text: content }) => ({ role, text: content }));
     push({ role: 'user', text: query });
+    // The turn is over: the orb listens again unless it is still talking, in which case it listens when it finishes.
+    const settleTurn = () => {
+      busyRef.current = false; setBusy(false);
+      if (speakingRef.current) return;
+      setPet(liveRef.current ? 'listening' : 'idle');
+      if (liveRef.current && !listenerRef.current) listenerRef.current = beginListening();
+    };
+    // Words for the page itself come first: an answer in a form being filled, or a request to read, fill, send or forget.
+    const words = normalizeArabic(query);
+    const form = !!document.querySelector('main form');
+    if (fill.active && await fill.handle(query)) { settleTurn(); return; }
+    if (epoch !== conversationEpoch.current) return;
+    if (asksToForget(words)) { forgetProfile(); profileRef.current = null; setProfile(null); tell('مسحت بياناتك من هذا الجهاز.'); settleTurn(); return; }
+    if (asksToRead(words)) { tell(describePage()); settleTurn(); return; }
+    if (form && asksToFill(words)) { feel('happy'); fill.start(); settleTurn(); return; }
+    if (form && asksToSend(words)) { fill.offerSubmit(); settleTurn(); return; }
     const reply = await askAssistant(query, history, cms, pathname);
     if (epoch !== conversationEpoch.current) return;
     push({ role: 'assistant', text: reply.text, suggestions: reply.suggestions });
     const destination = reply.navigateTo && reply.navigateTo !== pathname ? reply.navigateTo : undefined;
     feel(moodOf(reply.text, !!destination));
     const spoken = viaVoice || voiceRef.current;
+    // Arriving at a form in voice mode, the orb offers to fill it; one "yes" starts that.
+    const toForm = !!destination && voiceModeRef.current && destination.startsWith('/join-us/');
     // The orb talks while it works: a spoken «أفتح لك…» and the page pull happen together.
-    if (spoken) say(reply.text + (voiceModeRef.current && destination ? ' تقدر تبدأ من المكان المحدد قدامك.' : ''));
+    if (spoken) say(reply.text + (toForm ? ' وصلنا للنموذج. تبيني أعبيه معك؟ قل نعم.' : ''));
+    else if (toForm) push({ role: 'assistant', text: 'وصلنا للنموذج. تبيني أعبيه معك؟ قل نعم.' });
+    if (toForm) fill.offer();
     if (destination) {
       if (voiceModeRef.current) await pullPageTo(destination, epoch);
       else navigate(destination);
@@ -373,12 +445,8 @@ export function SiteAssistant() {
         window.setTimeout(() => { if (!liveRef.current && !speakingRef.current && interactedAt.current < navigatedAt) setOpen(false); }, 4000);
       }
     }
-    busyRef.current = false; setBusy(false);
-    // Still talking: the orb listens again on its own when it finishes.
-    if (speakingRef.current) return;
-    setPet(liveRef.current ? 'listening' : 'idle');
-    if (liveRef.current && !listenerRef.current) listenerRef.current = beginListening();
-  }, [cms, feel, meter, navigate, pathname, push, say, beginListening, pullPageTo]);
+    settleTurn();
+  }, [cms, feel, fill, meter, navigate, pathname, push, say, tell, beginListening, pullPageTo]);
   sendRef.current = send;
 
   // Leaving voice mode returns to the written conversation, which kept every line of it.
@@ -396,10 +464,11 @@ export function SiteAssistant() {
   useEffect(() => {
     if (open) { setOffset(0); inputRef.current?.focus(); return; }
     exitVoice();
+    fill.cancel();
     if (restoreFocus.current) { restoreFocus.current = false; buttonRef.current?.focus(); }
-  }, [open, exitVoice]);
+  }, [open, exitVoice, fill]);
   useEffect(() => { if (hidden) { setOpen(false); stopListening(); stopSpeaking(); } }, [hidden, stopListening]);
-  useEffect(() => () => { conversationEpoch.current++; listenerRef.current?.stop(); releaseMicrophone(); stopSpeaking(); motions.current.forEach(animation => animation.cancel()); sheetRef.current?.remove(); window.clearTimeout(moodTimer.current); }, []);
+  useEffect(() => () => { conversationEpoch.current++; listenerRef.current?.stop(); releaseMicrophone(); stopSpeaking(); motions.current.forEach(animation => animation.cancel()); sheetRef.current?.remove(); window.clearTimeout(moodTimer.current); window.clearTimeout(doingTimer.current); }, []);
   // The page keeps its last stretch clear of the voice bar, and the call button steps aside (assistant.css).
   useEffect(() => {
     document.documentElement.classList.toggle('has-voice-bar', voiceMode);
@@ -478,10 +547,20 @@ export function SiteAssistant() {
   if (hidden) return null;
   const status = busy || listenStatus === 'transcribing' ? 'يفكر…' : pet === 'speaking' ? 'يتحدث…' : live ? (listenStatus === 'opening' ? 'يفتح المايك…' : 'أسمعك…') : voiceMode ? 'المايك مكتوم' : 'جاهز للمساعدة';
   const lastReply = [...messages].reverse().find(message => message.role === 'assistant')?.text;
+  // What the orb says about itself beside its body. Idle says nothing; the corner orb's «اسألني» hint takes the spot then.
+  const badge: { kind: BadgeKind; text: string } | null = doing ? { kind: doing, text: 'يكتب…' }
+    : pet === 'thinking' ? { kind: 'thinking', text: 'يفكر…' }
+    : pet === 'speaking' ? { kind: 'speaking', text: 'يتحدث…' }
+    : pet === 'listening' ? { kind: 'listening', text: listenStatus === 'opening' ? 'يفتح المايك…' : 'أسمعك…' }
+    : null;
   return <div className={`assistant${open ? ' is-open' : ''}${onForm ? ' on-form' : ''}${voiceMode ? ' is-voice' : ''}${pulling ? ' is-pulling' : ''}`}>
     <section id="site-assistant" className="assistant-panel" role="dialog" aria-label="مساعد وعاء" hidden={!open || voiceMode} onPointerDownCapture={() => { interactedAt.current = Date.now(); }} onKeyDownCapture={() => { interactedAt.current = Date.now(); }}>
       <header className="assistant-header">
-        <div><strong>مساعد وعاء</strong><span>{status}</span></div>
+        <div className="assistant-title">
+          {/* Phones hide the big orb behind the open panel; this small one shows the same state in the header. */}
+          <span className="orb is-mini" data-state={pet} data-mood={mood} data-doing={doing ?? undefined} aria-hidden="true"><Orb /></span>
+          <div className="assistant-title-text"><strong>مساعد وعاء</strong><span>{status}</span></div>
+        </div>
         <button type="button" className="icon-button" aria-label="إغلاق المساعد" onClick={() => { restoreFocus.current = true; setOpen(false); }}><Icon icon="solar:close-circle-linear" /></button>
       </header>
       <div className="assistant-log" ref={logRef} aria-live="polite">
@@ -500,7 +579,7 @@ export function SiteAssistant() {
       {support.speak && <div className="assistant-voice"><label><input type="checkbox" checked={voiceReplies} onChange={event => enableVoiceReplies(event.target.checked)} /> ردود صوتية</label><button type="button" className="assistant-voice-test" onClick={() => { enableVoiceReplies(true); say('هلا والله، أنا مساعد وعاء. قل لي وش تحتاج وأبشر بالمساعدة.'); }}>تجربة الصوت</button></div>}
     </section>
     {voiceMode ? <section className="assistant-live" role="region" aria-label="المحادثة الصوتية">
-      <div ref={actorRef} className="orb is-live" data-state={pet} data-mood={mood} data-act={act ?? undefined} data-side={side} aria-hidden="true"><Orb eyesRef={eyesRef} auraRef={auraRef} /></div>
+      <div ref={actorRef} className="orb is-live" data-state={pet} data-mood={mood} data-doing={doing ?? undefined} data-act={act ?? undefined} data-side={side} aria-hidden="true"><Orb eyesRef={eyesRef} auraRef={auraRef} />{badge && <StateBadge {...badge} />}</div>
       <div className="assistant-live-text">
         <span className="assistant-live-status" aria-live="polite">{status}</span>
         {(interim || lastReply) && <p className="assistant-live-caption">{interim || lastReply}</p>}
@@ -513,9 +592,9 @@ export function SiteAssistant() {
         <button type="button" className="assistant-live-end" aria-label="إنهاء المحادثة الصوتية" onClick={exitVoice}><Icon icon="solar:close-circle-linear" /></button>
       </div>
     </section>
-    : <div ref={petRef} className={walking ? 'orb is-walking' : 'orb'} data-state={pet} data-mood={mood} style={{ transform: `translateX(${offset}px)` }} onPointerEnter={() => { hoverRef.current = true; }} onPointerLeave={() => { hoverRef.current = false; }}>
+    : <div ref={petRef} className={walking ? 'orb is-walking' : 'orb'} data-state={pet} data-mood={mood} data-doing={doing ?? undefined} style={{ transform: `translateX(${offset}px)` }} onPointerEnter={() => { hoverRef.current = true; }} onPointerLeave={() => { hoverRef.current = false; }}>
       <button ref={buttonRef} type="button" className="orb-button" aria-label={open ? 'إغلاق مساعد وعاء' : 'مساعد وعاء'} aria-expanded={open} aria-controls="site-assistant" onClick={() => setOpen(current => !current)}><Orb eyesRef={eyesRef} auraRef={auraRef} /></button>
-      {!open && <span className="pet-hint" aria-hidden="true">اسألني</span>}
+      {badge ? <StateBadge {...badge} /> : !open && <span className="pet-hint" aria-hidden="true">اسألني</span>}
     </div>}
   </div>;
 }
