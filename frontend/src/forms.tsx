@@ -149,6 +149,8 @@ export function CourierForm({ form }: { form: FormDefinition }) {
         return;
       }
       if (!selectedOffers.length) { setError('اختر عرضًا واحدًا على الأقل.'); return; }
+      try { courierOfferDetails(selectedOffers); }
+      catch (cause) { setError(cause instanceof Error ? cause.message : 'تحقق من اختيار العرض.'); return; }
     } else {
       const digits = (normalized.phone || '').replace(/\D/g, '');
       if (digits.length < 8 || digits.length > 15) { setError('أدخل رقم تواصل صحيحًا من 8 إلى 15 رقمًا.'); return; }
@@ -182,7 +184,7 @@ export function CourierForm({ form }: { form: FormDefinition }) {
       const sectionNames: Record<string, string> = { ...sections, registration_files: 'استمارة السيارة' };
       const documents = Object.entries(submissionFiles).flatMap(([key, list]) => list.map((file, i) => ({ key: `${key}_${i + 1}`, label: `${sectionNames[key] || key} (${i + 1})`, file })));
       await createJoinRequest({ form_slug: internal ? 'courier-internal' : 'courier-external', form_title: form.title, name: normalized.name || '', phone: normalized.phone || '', email: normalized.email || '', fields: details, status: 'طلب جديد' }, documents, uploads.current);
-      setSuccess('تم إرسال طلبك إلى فريق وعاء بنجاح.'); setCode(String(receipt.result?.application_code || '')); setValues({}); setFiles({}); setSelectedCities([]); uploads.current.clear(); delivery.current = null;
+      setSuccess(internal ? 'شكرًا لتسجيلك. تم إرسال طلبك بنجاح، وسيتم التواصل معك من فريق عمل وعاء.' : 'تم إرسال طلبك إلى فريق وعاء بنجاح.'); setCode(String(receipt.result?.application_code || '')); setValues({}); setFiles({}); setSelectedCities([]); uploads.current.clear(); delivery.current = null;
       if (internal) setStep('complete');
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'تعذر الاتصال بنظام المناديب. قد يحتاج الخادم إلى تفعيل CORS لهذا النطاق.'); }
     finally { setPending(false); }

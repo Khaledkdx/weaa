@@ -107,6 +107,27 @@ describe('internal courier request payload', () => {
     expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'اختر عرضًا واحدًا على الأقل.');
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it('allows waiting instead of either offer, preserves the choice on failure, and thanks the applicant', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 201, json: async () => ({ success: true }) }));
+    const { container } = render(<CourierForm form={courierForms[0]} />);
+    fillBaseForm();
+    await chooseOffers(container);
+    const waiting = screen.getByRole('checkbox', { name: 'لم يعجبني أي من العروض، في انتظار عرض آخر' });
+    fireEvent.click(waiting);
+    expect(screen.getByRole('checkbox', { name: /العرض الأول: العمل في جدة/ })).toHaveProperty('checked', false);
+    expect(screen.getByRole('checkbox', { name: /العرض الثاني: العمل في الرياض/ })).toHaveProperty('checked', false);
+    fireEvent.click(screen.getByRole('checkbox', { name: /العرض الأول: العمل في جدة/ }));
+    expect(waiting).toHaveProperty('checked', false);
+    fireEvent.click(waiting);
+    vi.mocked(createJoinRequest).mockRejectedValueOnce(new Error('تعذر الحفظ'));
+    fireEvent.submit(container.querySelector('form')!);
+    await screen.findByRole('alert');
+    expect(waiting).toHaveProperty('checked', true);
+    fireEvent.submit(container.querySelector('form')!);
+    expect(await screen.findByRole('status')).toHaveProperty('textContent', 'شكرًا لتسجيلك. تم إرسال طلبك بنجاح، وسيتم التواصل معك من فريق عمل وعاء.');
+    expect(vi.mocked(createJoinRequest).mock.calls[1][0].fields['العروض المختارة']).toBe('لم يعجبني أي من العروض، في انتظار عرض آخر');
+  });
 });
 
 describe('external courier request payload', () => {

@@ -9,7 +9,7 @@ import { FillFlow } from './assistantFillFlow';
 import { describePage } from './assistantForm';
 import { forgetProfile, loadProfile, type Profile } from './assistantMemory';
 
-type Message = AssistantTurn & { id: number; suggestions?: string[] };
+type Message = AssistantTurn & { id: number; suggestions?: string[]; call?: string };
 type PetState = 'idle' | 'listening' | 'thinking' | 'speaking';
 type Mood = 'neutral' | 'happy' | 'sad';
 // A momentary action on the page, shown on top of the state: the orb writing into a field.
@@ -30,6 +30,16 @@ const asksToFill = (words: string) => /(عبي|عبئ|املا|املأ|املي
 const asksToRead = (words: string) => /^(اقرا|اقرأ|اقرالي|اقرا لي)/.test(words) || /^(وش|ايش|ماذا) (في|مكتوب)/.test(words);
 const asksToSend = (words: string) => /^(ارسل|ارسال|ارسله|ارسلها|ارسل الطلب|ابعت|ابعته)/.test(words);
 const asksToForget = (words: string) => /^(انسى|انس|امسح|احذف)\s*(بياناتي|معلوماتي|اسمي|كل شي)/.test(words);
+// «ابغى اتصل بالشركة»: the phone dials the company. Asking how to call, or for the number, is a question for the brain.
+const asksToCall = (words: string) => /(^|\s)(اتصل|اتصال|اتصلي|كلم|كلمني|كلمهم|اكلم|اكلمهم|اتكلم|رن|ارن|دق|ادق)(\s|$)/.test(words)
+  && !/(^|\s)(كيف|ازاي|وش|ايش|ما هو|متى|رقم|الرقم)(\s|$)/.test(words) && !/(اتصل|كلم)\S*\s+(فيني|بي|عليي|لي)(\s|$)/.test(words) && !/(اتصل|كلم)\S*\s+علي$/.test(words);
+// («اتصل على الشركة» and «اتصلوا عليّ» normalize alike; only the second ends there.)
+const telHref = (phone: string) => `tel:${phone.replace(/[^\d+]/g, '')}`;
+// A hidden link is clicked for the call, as a tap on the call button would do it. A browser that wants a fresh tap keeps
+// the dialer closed, and the call button in the reply is that tap.
+function placeCall(href: string) {
+  try { const link = document.createElement('a'); link.href = href; link.style.display = 'none'; document.body.appendChild(link); link.click(); link.remove(); } catch { /* the button in the reply remains */ }
+}
 const prefersReducedMotion = () => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const hasFinePointer = () => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 // WAAPI cannot read custom properties, so the glass.css curves are repeated here by value.
@@ -420,9 +430,18 @@ export function SiteAssistant() {
     if (epoch !== conversationEpoch.current) return;
     if (asksToForget(words)) { forgetProfile(); profileRef.current = null; setProfile(null); tell('مسحت بياناتك من هذا الجهاز.'); settleTurn(); return; }
     if (asksToRead(words)) { tell(describePage()); settleTurn(); return; }
+    if (asksToCall(words)) {
+      const phone = cms.company.phone, href = telHref(phone);
+      placeCall(href);
+      push({ role: 'assistant', text: `جاري الاتصال على ${phone}. لو ما بدأ الاتصال، اضغط زر الاتصال.`, call: href });
+      if (voiceRef.current || liveRef.current) say('جاري الاتصال على الشركة.');
+      feel('happy');
+      settleTurn();
+      return;
+    }
     if (form && asksToFill(words)) { feel('happy'); fill.start(); settleTurn(); return; }
     if (form && asksToSend(words)) { fill.offerSubmit(); settleTurn(); return; }
-    const reply = await askAssistant(query, history, cms, pathname);
+    const reply = await askAssistant(query, history, cms, pathname, describePage());
     if (epoch !== conversationEpoch.current) return;
     push({ role: 'assistant', text: reply.text, suggestions: reply.suggestions });
     const destination = reply.navigateTo && reply.navigateTo !== pathname ? reply.navigateTo : undefined;
@@ -546,7 +565,8 @@ export function SiteAssistant() {
 
   if (hidden) return null;
   const status = busy || listenStatus === 'transcribing' ? 'يفكر…' : pet === 'speaking' ? 'يتحدث…' : live ? (listenStatus === 'opening' ? 'يفتح المايك…' : 'أسمعك…') : voiceMode ? 'المايك مكتوم' : 'جاهز للمساعدة';
-  const lastReply = [...messages].reverse().find(message => message.role === 'assistant')?.text;
+  const lastMessage = [...messages].reverse().find(message => message.role === 'assistant');
+  const lastReply = lastMessage?.text;
   // What the orb says about itself beside its body. Idle says nothing; the corner orb's «اسألني» hint takes the spot then.
   const badge: { kind: BadgeKind; text: string } | null = doing ? { kind: doing, text: 'يكتب…' }
     : pet === 'thinking' ? { kind: 'thinking', text: 'يفكر…' }
@@ -566,6 +586,7 @@ export function SiteAssistant() {
       <div className="assistant-log" ref={logRef} aria-live="polite">
         {messages.map(message => <div key={message.id} className={`assistant-msg is-${message.role}`}>
           <p>{message.text}</p>
+          {message.call && <a className="assistant-call" href={message.call}><Icon icon="solar:phone-calling-linear" /> اتصل الآن</a>}
           {message.suggestions && message.suggestions.length > 0 && <div className="assistant-chips">{message.suggestions.map(suggestion => <button key={suggestion} type="button" onClick={() => void send(suggestion)}>{suggestion}</button>)}</div>}
         </div>)}
         {interim && <div className="assistant-msg is-user is-interim"><p>{interim}</p></div>}
@@ -583,6 +604,7 @@ export function SiteAssistant() {
       <div className="assistant-live-text">
         <span className="assistant-live-status" aria-live="polite">{status}</span>
         {(interim || lastReply) && <p className="assistant-live-caption">{interim || lastReply}</p>}
+        {!interim && lastMessage?.call && <a className="assistant-call is-small" href={lastMessage.call}><Icon icon="solar:phone-calling-linear" /> اتصل الآن</a>}
         {onForm && <AssistantGuide pathname={pathname} />}
       </div>
       <div className="assistant-live-controls">

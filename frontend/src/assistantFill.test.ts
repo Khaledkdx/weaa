@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cleanText, commandOf, interpret, pickOption, pickOptions, question, spokenDate, spokenDigits, spokenEmail, spokenNumber } from './assistantFill';
+import { cleanText, commandOf, interpret, parseDate, pickOption, pickOptions, question, spokenDate, spokenDigits, spokenEmail, spokenNumber } from './assistantFill';
 
 const license = { kind: 'select' as const, label: 'نوع الرخصة', required: true, options: [{ label: 'خصوصي', value: 'private' }, { label: 'عمومي', value: 'public' }, { label: 'نقل خفيف', value: 'light' }, { label: 'نقل ثقيل', value: 'heavy' }, { label: 'لا توجد رخصة', value: 'none' }] };
 const yesNo = { kind: 'select' as const, label: 'هل تملك سيارة', required: true, options: [{ label: 'نعم', value: '1' }, { label: 'لا', value: '0' }] };
@@ -22,12 +22,28 @@ describe('numbers said in Arabic', () => {
     expect(spokenNumber('12 مندوب')).toBe(12);
     expect(spokenNumber('ما أدري')).toBeNull();
   });
-  it('turns a spoken or written date into a date input value', () => {
+  it('reads a date however it is said: numerals, month names in any dialect, ordinals, two-digit years', () => {
     expect(spokenDate('عشرين خمسة ألفين وثلاثين')).toBe('2030-05-20');
     expect(spokenDate('20/5/2030')).toBe('2030-05-20');
+    expect(spokenDate('19/5/1999')).toBe('1999-05-19');
+    expect(spokenDate('١٩/٥/١٩٩٩')).toBe('1999-05-19');
     expect(spokenDate('2031-01-07')).toBe('2031-01-07');
+    expect(spokenDate('19 فبراير 1999')).toBe('1999-02-19');
+    expect(spokenDate('التاسع عشر من فبراير 1999')).toBe('1999-02-19');
+    expect(spokenDate('الخامس والعشرين من شباط 2030')).toBe('2030-02-25');
+    expect(spokenDate('19 5 99')).toBe('1999-05-19');
+    expect(spokenDate('1 يناير 30')).toBe('2030-01-01');
     expect(spokenDate('خمسة عشر مايو ألفين وتسعة وعشرين')).toBe('2029-05-15');
+    expect(spokenDate('20 من الشهر الخامس 2030')).toBe('2030-05-20');
+    expect(parseDate('19 فبراير 1999')?.spoken).toBe('19 فبراير 1999');
     expect(spokenDate('بكرة')).toBeNull();
+    expect(spokenDate('19 فبراير')).toBeNull();
+  });
+  it('converts a Hijri date (the tabular calendar, within a day of the official one) and says it both ways', () => {
+    expect(spokenDate('1 محرم 1447')).toBe('2025-06-27');
+    expect(spokenDate('15/9/1450')).toBe('2029-01-30');
+    expect(spokenDate('15 رمضان 50')).toBe('2029-01-30');
+    expect(parseDate('خمسة عشر رمضان ألف وأربعمية وخمسين')?.spoken).toBe('15 رمضان 1450 هجري، يعني 30 يناير 2029 ميلادي تقريباً');
   });
   it('spells an email address from the way people say it', () => {
     expect(spokenEmail('khalid at gmail dot com')).toBe('khalid@gmail.com');
@@ -83,12 +99,16 @@ describe('interpreting an answer for a field', () => {
     expect(interpret({ kind: 'checkbox', label: 'أوافق على الشروط', required: true }, 'موافق')).toMatchObject({ value: 'yes' });
     expect(interpret({ kind: 'text', label: 'الاسم الكامل', required: true }, 'اسمي خالد محمد')).toMatchObject({ value: 'خالد محمد' });
     expect(interpret({ kind: 'text', label: 'الاسم', required: true }, 'تخطي')).toEqual({ command: 'skip' });
+    expect(interpret({ kind: 'text', label: 'الاسم', required: true }, 'خالد محمد ورقمي 0512345678')).toMatchObject({ value: 'خالد محمد' });
+    expect(interpret({ kind: 'date', label: 'تاريخ انتهاء الهوية', required: true }, '19 فبراير 1999')).toMatchObject({ value: '1999-02-19', spoken: '19 فبراير 1999' });
     expect(interpret({ kind: 'file', label: 'الهوية', required: true }, 'تم')).toEqual({ command: 'done' });
   });
   it('asks for each kind of field in its own words', () => {
     expect(question({ kind: 'text', label: 'الاسم الكامل', required: true })).toBe('قل لي اسمك الكامل.');
     expect(question({ kind: 'tel', label: 'رقم الجوال', required: true })).toContain('رقم رقم');
     expect(question(license)).toContain('خصوصي، عمومي');
-    expect(question({ kind: 'file', label: 'الهوية', required: true })).toContain('قل تم');
+    expect(question({ kind: 'select', label: 'هل تملك سيارة؟', required: true, options: [{ label: 'نعم', value: '1' }, { label: 'لا', value: '0' }] })).toBe('هل تملك سيارة؟ قل نعم أو لا.');
+    expect(question({ kind: 'file', label: 'الهوية', required: true })).toContain('مطلوب منك مرفق الهوية');
+    expect(question({ kind: 'file', label: 'مستندات إضافية', required: false })).toContain('قل: تخطي');
   });
 });

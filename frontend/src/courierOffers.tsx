@@ -43,7 +43,15 @@ export const internalCourierConditions = `📋 شروط التقديم على ا
 3️⃣ أن تكون المهنة المسجلة في الإقامة: سائق أو مندوب.
 4️⃣ وجود رخصة قيادة نقل خفيف، وهو شرط أساسي للتقديم.`;
 
+export const waitingOfferId = 'waiting';
+export const waitingOfferLabel = 'لم يعجبني أي من العروض، في انتظار عرض آخر';
+
 export function courierOfferDetails(selected: string[]) {
+  if (selected.length === 1 && selected[0] === waitingOfferId) return {
+    'العروض المختارة': waitingOfferLabel,
+    'تفاصيل العروض المختارة': waitingOfferLabel,
+    'شروط التقديم على العرضين': internalCourierConditions,
+  };
   const offers = internalCourierOffers.filter(offer => selected.includes(offer.id));
   if (!offers.length || selected.some(id => !internalCourierOffers.some(offer => offer.id === id))) throw new Error('اختر عرضًا واحدًا على الأقل.');
   return {
@@ -58,9 +66,10 @@ export function CourierOffers({ selected, onChange }: { selected: string[]; onCh
     <h2 id="courier-offers-title">🇸🇦 تفاصيل عروض العمل المتاحة في المملكة العربية السعودية</h2>
     <p>متاح حاليًا فرص عمل لمندوبي توصيل الطعام في جدة والرياض، مع توفير السيارة ومميزات أخرى حسب العرض. إليك التفاصيل 👇</p>
     <div className="courier-offer-grid">{internalCourierOffers.map(offer => <label className="courier-offer" key={offer.id}>
-      <span className="courier-offer-heading"><input type="checkbox" checked={selected.includes(offer.id)} onChange={() => onChange(selected.includes(offer.id) ? selected.filter(id => id !== offer.id) : [...selected, offer.id])} /><strong>{offer.title}</strong></span>
+      <span className="courier-offer-heading"><input type="checkbox" checked={selected.includes(offer.id)} onChange={() => onChange(selected.includes(offer.id) ? selected.filter(id => id !== offer.id) : [...selected.filter(id => id !== waitingOfferId), offer.id])} /><strong>{offer.title}</strong></span>
       <span className="courier-offer-copy">{offer.details}</span>
     </label>)}</div>
+    <label className="courier-offer"><span className="courier-offer-heading"><input type="checkbox" checked={selected.includes(waitingOfferId)} onChange={() => onChange(selected.includes(waitingOfferId) ? [] : [waitingOfferId])} /><strong>{waitingOfferLabel}</strong></span></label>
     <p className="courier-offer-copy">{internalCourierConditions}</p>
     <h3>📩 أي العرضين أنسب لحضرتك؟</h3>
     <p className="courier-offer-copy">{`🔹 جدة: راتب ثابت أقل، مع حوافز مرتبطة بعدد الطلبات.

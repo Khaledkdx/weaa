@@ -1,10 +1,12 @@
 // The conversation that fills a form: one field at a time, asked aloud and written into the page at once, with no stop
-// to confirm each one. The form's own next buttons are pressed on the way, the whole form is read back once at the end,
-// and nothing is sent without an explicit yes. Files are only ever pointed at. The visitor can say stop, skip, back,
-// repeat or read at any moment, and after the read-back can name a field to change, even one from an earlier step.
-import { commandOf, interpret, pickOption, pickOptions, question, topic, type Interpretation } from './assistantFill';
+// to confirm each one; one sentence can answer several fields. The form's own next buttons are pressed on the way, a
+// required attachment is waited for until it arrives, the whole form is read back once at the end, and nothing is sent
+// without an explicit yes. The visitor can say stop, skip, back, repeat or read at any moment, and after the read-back
+// can name a field to change, even one from an earlier step.
+import { commandOf, describeDate, interpret, pickOption, pickOptions, question, topic, type Interpretation } from './assistantFill';
 import { awaitOutcome, clearTarget, describePage, discoverFields, formButtons, readField, revealField, writeField, type FormField } from './assistantForm';
 import { recall, rememberValues, type Profile } from './assistantMemory';
+import { carriesMore, extractLocally, extractValues } from './assistantExtract';
 import { normalizeArabic } from './assistantBrain';
 
 type Stage = 'offer' | 'ask' | 'file' | 'review' | 'fix' | 'save';
@@ -14,14 +16,15 @@ type Written = { value: string; spoken: string; values?: string[] };
 // step counts the form's next buttons pressed so far; steps remembers at which step each field was written, and
 // finalStep is the step the read-back happens on, so a change to an earlier field can travel back and forward again.
 // pressing: one of the form's buttons has been pressed and its answer is awaited; words said meanwhile wait.
-type Session = { fields: FormField[]; index: number; stage: Stage; filled: Record<string, string>; title: string; reviewing: boolean; forceAsk: boolean; step: number; finalStep: number; steps: Record<string, number>; pressing: boolean };
+// watch: the timer that looks out for an attachment to arrive.
+type Session = { fields: FormField[]; index: number; stage: Stage; filled: Record<string, string>; title: string; reviewing: boolean; forceAsk: boolean; step: number; finalStep: number; steps: Record<string, number>; pressing: boolean; watch: number };
 // acting is told the moment the orb writes into a field, so its body can show the pen.
 export type FillFlowOptions = { tell(text: string): void; profile(): Profile | null; remembered?(profile: Profile | null): void; acting?(what: 'writing'): void };
 
 const formTitle = () => (document.querySelector('main h1')?.textContent || 'النموذج').replace(/\s+/g, ' ').trim();
 const stepTitle = () => (document.querySelector('main form h2')?.textContent || '').replace(/\s+/g, ' ').trim();
 const wait = (ms: number) => new Promise<void>(resolve => window.setTimeout(resolve, ms));
-const fresh = (): Session => ({ fields: [], index: 0, stage: 'ask', filled: {}, title: '', reviewing: false, forceAsk: false, step: 0, finalStep: 0, steps: {}, pressing: false });
+const fresh = (): Session => ({ fields: [], index: 0, stage: 'ask', filled: {}, title: '', reviewing: false, forceAsk: false, step: 0, finalStep: 0, steps: {}, pressing: false, watch: 0 });
 // The field some words name: the longest field name the words contain, else the closest one.
 function nameField<T extends { label: string }>(candidates: T[], said: string): T | null {
   const words = normalizeArabic(said);
@@ -33,8 +36,8 @@ function indexOf(fields: FormField[], element: Element) {
   const exact = fields.findIndex(field => field.element === element);
   return exact >= 0 ? exact : fields.findIndex(field => field.element.contains(element) || element.contains(field.element));
 }
-// What is kept for next time: the value as written for typed fields, the words for chosen ones.
-const kept = (field: FormField, written: Written) => ['text', 'tel', 'email', 'textarea', 'number', 'date'].includes(field.kind) ? written.value : written.spoken;
+// What is kept for next time and for the read-back: the value as written for typed fields, the words for the rest.
+const kept = (field: FormField, written: Written) => ['text', 'tel', 'email', 'textarea', 'number'].includes(field.kind) ? written.value : written.spoken;
 // The words said after a field's name: «رقم الجوال صفر خمسة…» carries the new value along with the name.
 function afterLabel(said: string, label: string) {
   const raw = said.trim().split(/\s+/), plain = raw.map(normalizeArabic), target = normalizeArabic(label).split(' ').filter(Boolean);
@@ -52,24 +55,26 @@ export class FillFlow {
   get stage() { return this.session?.stage ?? null; }
 
   // After the orb has opened a form: one "yes" starts the filling, anything else is an ordinary question.
-  offer() { this.session = { ...fresh(), stage: 'offer' }; }
+  offer() { this.cancel(); this.session = { ...fresh(), stage: 'offer' }; }
 
   // «أرسل»: the form is read back once and the yes is asked for.
   offerSubmit() {
     const fields = discoverFields();
     if (!formButtons().submit) { this.say('ما لقيت زر الإرسال في هذه الصفحة.'); return; }
+    this.cancel();
     this.session = { ...fresh(), fields, index: fields.length, stage: 'review', title: formTitle() };
     this.review('');
   }
 
   start(prefix = '') {
     const fields = discoverFields();
-    if (!fields.length) { this.session = null; this.say('ما لقيت نموذج في هذه الصفحة. قل لي وين تبي تروح وأفتحه لك.'); return; }
+    if (!fields.length) { this.cancel(); this.say('ما لقيت نموذج في هذه الصفحة. قل لي وين تبي تروح وأفتحه لك.'); return; }
+    this.cancel();
     this.session = { ...fresh(), fields, title: formTitle() };
     this.ask(`${prefix}تمام، بنعبي ${this.session.title} سوا. جاوبني على كل خانة وأنا أكتبها، وفي الآخر أقرأ لك كل شي مرة وحدة. وتقدر تقول: تخطي، أو ارجع، أو وقف، في أي وقت. `);
   }
 
-  cancel() { this.session = null; clearTarget(); }
+  cancel() { this.unwatch(); this.session = null; clearTarget(); }
 
   // Returns false when the words were not for the filling, so the caller answers them as usual.
   async handle(said: string): Promise<boolean> {
@@ -88,12 +93,20 @@ export class FillFlow {
     if (command === 'repeat') { this.prompt(); return true; }
     const asking = session.stage === 'ask' || session.stage === 'file';
     if (command === 'back' && asking) { session.index = Math.max(0, session.index - 1); session.stage = 'ask'; session.forceAsk = true; this.ask('رجعنا. '); return true; }
-    if (command === 'skip' && asking) { this.advance('تخطيناها. '); return true; }
+    if (command === 'skip' && asking) {
+      const field = this.field();
+      // A required attachment cannot be skipped: the form would refuse without it.
+      if (session.stage === 'file' && field?.required) { this.insist(field, 'required'); return true; }
+      this.advance('تخطيناها. ');
+      return true;
+    }
     switch (session.stage) {
       case 'ask': return this.answer(said);
       case 'file': {
-        if (command === 'done' || command === 'yes') { this.advance('تمام. '); return true; }
-        this.say('لما ترفع الملف قل: تم، أو قل: تخطي.');
+        const field = this.field();
+        if (!field) { this.advance(''); return true; }
+        if (readField(field) === 'مرفق') { this.advance('وصل الملف، تمام. '); return true; }
+        this.insist(field, 'missing');
         return true;
       }
       case 'review': {
@@ -125,7 +138,8 @@ export class FillFlow {
 
   private say(text: string) { if (text.trim()) this.options.tell(text.trim()); }
   private field(): FormField | null { const session = this.session; return session && session.index < session.fields.length ? session.fields[session.index] : null; }
-  private end(text: string) { this.session = null; clearTarget(); this.say(text); }
+  private end(text: string) { this.cancel(); this.say(text); }
+  private unwatch() { const session = this.session; if (session?.watch) { window.clearInterval(session.watch); session.watch = 0; } }
 
   // The current stage's words again.
   private prompt() {
@@ -150,7 +164,8 @@ export class FillFlow {
   }
 
   // Asks for the field at the index. A value already there is left alone (the read-back covers it); a value remembered
-  // from last time is written and said, and the next question follows in the same breath.
+  // from last time is written and said, and the next question follows in the same breath. An attachment is asked for
+  // with its picker opened and the field watched until the file arrives.
   private ask(prefix: string): void {
     const session = this.session!;
     while (session.index < session.fields.length && !session.fields[session.index].element.isConnected) session.index++;
@@ -158,18 +173,69 @@ export class FillFlow {
     if (!field) return this.wrap(prefix);
     const force = session.forceAsk;
     session.forceAsk = false;
-    if (!force && field.kind !== 'file' && readField(field)) { session.index++; return this.ask(prefix); }
+    if (!force && readField(field)) { session.index++; return this.ask(prefix); }
     revealField(field);
+    if (field.kind === 'file') {
+      session.stage = 'file';
+      this.openPicker(field);
+      this.watchFile(field);
+      this.say(prefix + question(field));
+      return;
+    }
     const saved = !force && ['text', 'tel', 'email', 'textarea'].includes(field.kind) ? recall(this.options.profile(), field.label) : undefined;
     if (saved && this.write(field, { value: saved, spoken: saved })) { session.index++; return this.ask(`${prefix}حطيت ${topic(field.label)} من المرة الماضية: ${saved}. `); }
-    session.stage = field.kind === 'file' ? 'file' : 'ask';
+    session.stage = 'ask';
     this.say(prefix + question(field));
+  }
+
+  // Opens the phone's file chooser straight away where the browser allows it. It needs a recent tap: after a typed
+  // answer it opens, after a spoken one it stays closed and the highlighted button is the way.
+  private openPicker(field: FormField) {
+    const input = field.element as HTMLInputElement & { showPicker?: () => void };
+    try { if (typeof input.showPicker === 'function') input.showPicker(); else input.click(); } catch { /* no recent tap: the button is highlighted instead */ }
+  }
+
+  // Watches the attachment field until the file shows up, then carries on by itself.
+  private watchFile(field: FormField) {
+    const session = this.session!;
+    this.unwatch();
+    const stop = () => { window.clearInterval(session.watch); session.watch = 0; };
+    session.watch = window.setInterval(() => {
+      if (this.session !== session || session.stage !== 'file' || this.field() !== field) { stop(); return; }
+      if (readField(field) === 'مرفق') { stop(); this.advance('وصل الملف، تمام. '); }
+    }, 400);
+  }
+
+  // Nothing has arrived yet: the picker is opened again (where the browser allows it) and the button pointed at. A
+  // required attachment is asked for until it comes; an optional one can be skipped.
+  private insist(field: FormField, why: 'required' | 'missing') {
+    this.openPicker(field);
+    const name = topic(field.label);
+    const lead = why === 'required' ? `${name} إلزامي، والنموذج ما يقبل بدونه. ` : 'ما وصلني ملف بعد. ';
+    this.say(`${lead}اضغط الزر المحدد قدامك وارفع ${name}، وأنا أكمل أول ما يوصل.${field.required ? '' : ' أو قل: تخطي.'}`);
   }
 
   private async answer(said: string): Promise<boolean> {
     const session = this.session!, field = this.field();
     if (!field) { this.wrap(''); return true; }
-    const result: Interpretation = interpret(field, said);
+    let result: Interpretation = interpret(field, said);
+    // One sentence can carry several answers («اسمي خالد ورقمي…»): the other empty fields get theirs too, from the
+    // local rules at once, and from the server's extractor when the sentence seems to hold more than was asked.
+    const others = session.fields.filter(other => other !== field && other.element.isConnected && other.kind !== 'file' && !readField(other));
+    const wanted = 'ask' in result ? [field, ...others] : others;
+    let found = extractLocally(said, wanted);
+    if (wanted.length && ('ask' in result || carriesMore(said, field, others))) {
+      found = await extractValues(said, wanted, found);
+      if (this.session !== session || this.field() !== field || session.stage !== 'ask') return true;
+    }
+    const extras: { field: FormField; written: Written }[] = [];
+    for (const [label, raw] of Object.entries(found)) {
+      const target = wanted.find(candidate => candidate.label === label);
+      if (!target) continue;
+      const parsed = interpret(target, raw);
+      if (!('value' in parsed)) continue;
+      if (target === field) result = parsed; else extras.push({ field: target, written: parsed });
+    }
     if ('ask' in result) {
       // A choice that lives in another group on the page (the services groups, say) is taken there instead.
       if (field.kind === 'checkboxes') {
@@ -184,24 +250,27 @@ export class FillFlow {
           return true;
         }
       }
-      this.say(result.ask);
+      // What was understood is kept even when the asked field is still open.
+      for (const extra of extras) this.write(extra.field, extra.written);
+      this.say(`${extras.length ? `كتبت ${extras.map(extra => topic(extra.field.label)).join(' و')}. ` : ''}${result.ask}`);
       return true;
     }
     if ('command' in result) { if (result.command === 'done' && field.kind === 'file') this.advance('تمام. '); else this.say(question(field)); return true; }
     if (!this.write(field, result)) { this.advance('ما قدرت أكتب في هذي الخانة، نكمل. '); return true; }
-    await this.written();
+    for (const extra of extras) this.write(extra.field, extra.written);
+    await this.written(extras.length ? `تم، وكتبت كمان ${extras.map(extra => topic(extra.field.label)).join(' و')}. ` : 'تم. ');
     return true;
   }
 
   // Written: straight on to the next field, or back to the read-back when this was a change after it.
-  private async written() {
+  private async written(prefix = 'تم. ') {
     const session = this.session!;
     // The page gets a moment to show what a choice brings with it (a chosen service's own fields, say) before the next
     // field is looked for.
     await wait(80);
     if (this.session !== session) return;
     if (session.reviewing) { session.reviewing = false; await this.returnToReview(); return; }
-    this.advance('تم. ');
+    this.advance(prefix);
   }
 
   // After the read-back: a named field is changed, with its new value when it came in the same breath. A field from an
@@ -234,6 +303,7 @@ export class FillFlow {
   // On to the next field. The form is read again first: a choice can make new fields appear right after it.
   private advance(prefix: string) {
     const session = this.session!;
+    this.unwatch();
     const current = this.field();
     session.fields = discoverFields();
     const at = current ? indexOf(session.fields, current.element) : -1;
@@ -261,12 +331,12 @@ export class FillFlow {
     this.say(`${lead}${summary ? `راجع معي: ${summary}. ` : ''}كله مظبوط؟ قل نعم وأرسل الطلب، أو قل لي أي خانة أعدّلها.`);
   }
 
-  // Everything written so far, across the steps, then whatever else this step holds.
+  // Everything written so far, across the steps, then whatever else this step holds. Dates are said by month name.
   private summary() {
     const session = this.session!;
     const entries = new Map<string, string>(Object.entries(session.filled));
     for (const field of session.fields) {
-      const value = field.kind === 'file' || !field.element.isConnected ? '' : readField(field);
+      const value = field.kind === 'file' || !field.element.isConnected ? '' : field.kind === 'date' ? describeDate(readField(field)) : readField(field);
       if (value && !entries.has(field.label)) entries.set(field.label, value);
     }
     return [...entries].map(([label, value]) => `${topic(label)}: ${value}`).join('، ');

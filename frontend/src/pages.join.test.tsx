@@ -38,6 +38,18 @@ describe('join us service inquiry', () => {
 });
 
 describe('public form locations', () => {
+  it('sends light-service entry points and service cards to the logistics request form', () => {
+    renderRoute('/');
+    expect(screen.getByRole('link', { name: 'خدمات خفيفة' }).getAttribute('href')).toBe('/join-us/request-services');
+    cleanup(); renderRoute('/services');
+    expect(screen.getByRole('link', { name: /خدمات خفيفة/ }).getAttribute('href')).toBe('/join-us/request-services');
+    expect(screen.getByRole('link', { name: /خدمات وعقود/ }).getAttribute('href')).toBe('/services/contracts');
+    cleanup();
+    const { container } = renderRoute('/services/light');
+    const cards = container.querySelectorAll('.interior-service-grid a');
+    expect(cards.length).toBeGreaterThan(0);
+    for (const card of cards) expect(card.getAttribute('href')).toBe('/join-us/request-services');
+  });
   it('opens the road transport form from contracts and Join Us', () => {
     renderRoute('/services/contracts');
     expect(screen.getByRole('link', { name: 'نموذج النقل البري' }).getAttribute('href')).toBe('/join-us/road-transport');

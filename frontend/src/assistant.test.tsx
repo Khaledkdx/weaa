@@ -232,6 +232,77 @@ describe('site assistant', () => {
     expect(document.querySelector('main [role="status"]')).toBeNull();
   });
 
+  it('asks for a required attachment until it arrives, then carries on by itself', async () => {
+    localStorage.setItem('weaa-assistant-voice', 'off');
+    // A file picker the way the site builds them: the input carries the label, a remove button shows once a file is in.
+    function FakeAttachForm() {
+      const [file, setFile] = useState('');
+      return <main><h1>نموذج مرفق</h1><form onSubmit={event => event.preventDefault()}>
+        <label className="form-control"><span>الاسم *</span><input required /></label>
+        <div className="form-control"><span>الهوية *</span><div className="file-picker"><input aria-label="الهوية" type="file" required={!file} onChange={event => setFile(event.target.files?.[0]?.name || '')} /></div>{file && <button className="inline-remove" type="button" onClick={() => setFile('')}>إزالة {file}</button>}</div>
+        <div className="form-footer"><button type="submit">إرسال الطلب</button></div>
+      </form></main>;
+    }
+    render(<MemoryRouter initialEntries={['/join-us/test']}><CmsProvider><div id="main-content"><FakeAttachForm /></div><SiteAssistant /><Location /></CmsProvider></MemoryRouter>);
+    fireEvent.click(screen.getByRole('button', { name: 'مساعد وعاء' }));
+    const ask = (text: string) => {
+      fireEvent.change(screen.getByRole('textbox', { name: 'اسأل مساعد وعاء' }), { target: { value: text } });
+      fireEvent.click(screen.getByRole('button', { name: 'إرسال' }));
+    };
+    ask('عبي لي النموذج');
+    await screen.findByText(/وش اسمك؟/);
+    ask('اسمي خالد');
+    await screen.findByText(/^تم. مطلوب منك مرفق الهوية. اضغط الزر المحدد قدامك/);
+    // Required: a skip is refused, and «تم» without a file is not believed.
+    ask('تخطي');
+    await screen.findByText(/الهوية إلزامي، والنموذج ما يقبل بدونه/);
+    ask('تم');
+    await screen.findByText(/ما وصلني ملف بعد/);
+    // The file comes in through the page's own picker; the orb notices and moves on by itself.
+    fireEvent.change(screen.getByLabelText('الهوية'), { target: { files: [new File(['x'], 'id.png', { type: 'image/png' })] } });
+    await screen.findByText(/^وصل الملف، تمام. خلصنا. راجع معي: الاسم: خالد. كله مظبوط؟/, {}, { timeout: 3000 });
+    ask('وقف');
+    await screen.findByText(/وقفت التعبئة/);
+  });
+
+  it('takes several answers from one sentence and skips the fields they filled', async () => {
+    localStorage.setItem('weaa-assistant-voice', 'off');
+    render(<MemoryRouter initialEntries={['/join-us/test']}><CmsProvider><div id="main-content"><main><h1>نموذج تجريبي</h1><form onSubmit={event => event.preventDefault()}>
+      <label className="form-control"><span>الاسم *</span><input required /></label>
+      <label className="form-control"><span>رقم الجوال *</span><input type="tel" required /></label>
+      <label className="form-control"><span>المدينة</span><select defaultValue=""><option value="">اختر</option><option value="riyadh">الرياض</option><option value="jeddah">جدة</option></select></label>
+      <div className="form-footer"><button type="submit">إرسال الطلب</button></div>
+    </form></main></div><SiteAssistant /><Location /></CmsProvider></MemoryRouter>);
+    fireEvent.click(screen.getByRole('button', { name: 'مساعد وعاء' }));
+    const ask = (text: string) => {
+      fireEvent.change(screen.getByRole('textbox', { name: 'اسأل مساعد وعاء' }), { target: { value: text } });
+      fireEvent.click(screen.getByRole('button', { name: 'إرسال' }));
+    };
+    ask('عبي لي النموذج');
+    await screen.findByText(/وش اسمك؟/);
+    ask('اسمي خالد محمد ورقمي 0512345678');
+    await screen.findByText('تم، وكتبت كمان رقم الجوال. المدينة: اختر من: الرياض، جدة.');
+    expect((screen.getByLabelText(/^الاسم/) as HTMLInputElement).value).toBe('خالد محمد');
+    expect((screen.getByLabelText(/رقم الجوال/) as HTMLInputElement).value).toBe('0512345678');
+    ask('وقف');
+    await screen.findByText(/وقفت التعبئة/);
+  });
+
+  it('dials the company in one go when asked to call, with the button as the tap a browser may want', async () => {
+    localStorage.setItem('weaa-assistant-voice', 'off');
+    const dial = vi.spyOn(HTMLElement.prototype, 'click').mockImplementation(() => {});
+    try {
+      renderAt('/');
+      fireEvent.click(screen.getByRole('button', { name: 'مساعد وعاء' }));
+      fireEvent.change(screen.getByRole('textbox', { name: 'اسأل مساعد وعاء' }), { target: { value: 'عاوز اتصل على الشركة' } });
+      fireEvent.click(screen.getByRole('button', { name: 'إرسال' }));
+      await screen.findByText(/جاري الاتصال على/);
+      expect(dial).toHaveBeenCalledOnce();
+      expect(screen.getByRole('link', { name: /اتصل الآن/ }).getAttribute('href')).toMatch(/^tel:\+?\d+$/);
+      expect(screen.getByTestId('location').textContent).toBe('/');
+    } finally { dial.mockRestore(); }
+  });
+
   it('greets a remembered visitor by name and forgets them on request', async () => {
     localStorage.setItem('weaa-assistant-voice', 'off');
     localStorage.setItem('weaa-assistant-profile', JSON.stringify({ name: 'خالد', values: { 'الاسم': 'خالد محمد' }, savedAt: 1 }));

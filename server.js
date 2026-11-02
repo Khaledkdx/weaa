@@ -134,7 +134,7 @@ function serveFile(response, filePath) {
 }
 
 const server = http.createServer((request, response) => {
-  if (['/api/assistant', '/api/assistant/speech', '/api/assistant/transcribe'].includes((request.url || '').split('?')[0])) {
+  if (['/api/assistant', '/api/assistant/speech', '/api/assistant/transcribe', '/api/assistant/extract'].includes((request.url || '').split('?')[0])) {
     void handleAssistant(request, response, request.url.split('?')[0]);
     return;
   }

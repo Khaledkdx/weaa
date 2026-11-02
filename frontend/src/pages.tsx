@@ -22,11 +22,14 @@ function youtubeEmbed(url?: string) {
   } catch { return null; }
 }
 function cardTarget(card: HomeCard, cms: CmsContent) {
-  if (card.destinationType === 'service') return cms.serviceModels.find(item => item.id === card.target)?.slug ? `/services/${cms.serviceModels.find(item => item.id === card.target)!.slug}` : null;
+  if (card.destinationType === 'service') {
+    const service = [...cms.serviceModels, ...cms.generalInfo].find(item => item.id === card.target);
+    return service?.serviceCategory === 'light' ? '/join-us/request-services' : service?.slug ? `/services/${service.slug}` : null;
+  }
   if (card.destinationType === 'form') return cms.joinForms.find(form => form.id === card.target)?.slug ? `/join-us/${cms.joinForms.find(form => form.id === card.target)!.slug}` : null;
   if (card.destinationType === 'external' || card.destinationType === 'download') return safeExternal(card.target);
   if (card.destinationType === 'contact') return card.id === 'sell' || /بيع.*شركة/.test(card.title) ? salePath : '/contact';
-  return card.target.startsWith('/') && !card.target.startsWith('//') ? card.target : null;
+  return card.target === '/services/light' ? '/join-us/request-services' : card.target.startsWith('/') && !card.target.startsWith('//') ? card.target : null;
 }
 // The label says what the destination does; "explore" on every card told the reader nothing.
 function defaultActionLabel(target: string) {
@@ -153,7 +156,7 @@ function imageKey(src: string) {
 }
 
 const categories = [
-  { title: 'خدمات خفيفة', to: '/services/light', image: editorialImages.delivery },
+  { title: 'خدمات خفيفة', to: '/join-us/request-services', image: editorialImages.delivery },
   { title: 'خدمات وعقود', to: '/services/contracts', image: editorialImages.yard },
   { title: 'النقل البري', to: roadTransportPath, image: editorialImages.freight },
   { title: 'عالم التقبيل', to: '/company-market', image: editorialImages.market },
@@ -232,13 +235,13 @@ function HomeSectionView({ section, cms, index, cardMedia, listingMedia, bioMedi
 
 function ServicesHub() {
   const { cms } = useCms(); const page = cms.pages.services || { kicker: 'الخدمات', title: 'خدمات وعاء', body: '' };
-  return <Shell><main className="site-container page-body interior-page"><InteriorIntro eyebrow={page.kicker} title={page.title} body={page.body}><Action to="/join-us/request-services" icon="solar:arrow-left-linear">اطلب خدمة الآن</Action></InteriorIntro><div className="interior-category-grid"><ContentCard title="خدمات خفيفة" description="خدمات مرنة للأعمال والأفراد." to="/services/light" index={0} media={interiorImage('hub-light')} actionLabel="استكشف الخدمات" /><ContentCard title="خدمات وعقود" description="حلول تشغيلية بعقود واضحة." to="/services/contracts" index={1} media={interiorImage('hub-contracts')} actionLabel="استكشف العقود" /><ContentCard title="النقل البري" description="سجّل احتياجك للنقل أو اعرض مركباتك كمزود خدمة." to={roadTransportPath} index={2} media={editorialImages.freight} illustrative actionLabel="افتح النموذج" /></div></main></Shell>;
+  return <Shell><main className="site-container page-body interior-page"><InteriorIntro eyebrow={page.kicker} title={page.title} body={page.body}><Action to="/join-us/request-services" icon="solar:arrow-left-linear">اطلب خدمة الآن</Action></InteriorIntro><div className="interior-category-grid"><ContentCard title="خدمات خفيفة" description="خدمات مرنة للأعمال والأفراد." to="/join-us/request-services" index={0} media={interiorImage('hub-light')} actionLabel="اطلب الخدمة" /><ContentCard title="خدمات وعقود" description="حلول تشغيلية بعقود واضحة." to="/services/contracts" index={1} media={interiorImage('hub-contracts')} actionLabel="استكشف العقود" /><ContentCard title="النقل البري" description="سجّل احتياجك للنقل أو اعرض مركباتك كمزود خدمة." to={roadTransportPath} index={2} media={editorialImages.freight} illustrative actionLabel="افتح النموذج" /></div></main></Shell>;
 }
 function RequestServices() { return <Shell><main className="page-body service-inquiry-page"><div className="service-inquiry-content"><Link className="back-link" to="/join-us"><Icon icon="solar:arrow-right-linear" /> العودة إلى الفئات</Link><header className="service-inquiry-intro"><img src={`${import.meta.env.BASE_URL}images/weaa-logo.jpeg`} alt="شعار وعاء" /><h1>نموذج الخدمات اللوجستية</h1><p>اختر الخدمات التي تحتاجها وسنتواصل معك في أقرب وقت.</p></header><ServiceInquiry /></div></main></Shell>; }
 function ServiceListing({ category }: { category?: string }) {
   const { cms } = useCms(); const items = [...cms.generalInfo, ...cms.serviceModels].filter(item => !category || item.serviceCategory === category);
   const title = category === 'light' ? 'خدمات خفيفة' : category === 'contracts' ? 'خدمات وعقود' : 'جميع الخدمات';
-  return <Shell><main className="site-container page-body interior-page"><Link className="back-link" to="/services"><Icon icon="solar:arrow-right-linear" /> جميع الخدمات</Link><InteriorIntro eyebrow="خدمات وعاء" title={title} body="اختر ما يناسب أعمالك، ثم اطلع على التفاصيل واختر نموذج الطلب من انضم إلينا.">{category === 'contracts' && <Action to={roadTransportPath} icon="solar:arrow-left-linear">نموذج النقل البري</Action>}</InteriorIntro><div className="interior-service-grid">{items.map((item, index) => { const fallback = serviceImages[item.slug || ''] ? `list-${serviceImages[item.slug || '']}` : undefined; return <ContentCard key={item.id || item.titleAr} title={item.titleAr} description={item.description} to={item.slug ? `/services/${item.slug}` : '/contact'} index={index} media={imageFor(item.imageUrl, fallback)} fallbackMedia={fallback ? interiorImage(fallback) : undefined} actionLabel="تفاصيل الخدمة" />; })}</div></main></Shell>;
+  return <Shell><main className="site-container page-body interior-page"><Link className="back-link" to="/services"><Icon icon="solar:arrow-right-linear" /> جميع الخدمات</Link><InteriorIntro eyebrow="خدمات وعاء" title={title} body={category === 'light' ? 'اختر الخدمة المناسبة لفتح نموذج طلب الخدمات اللوجستية.' : 'اختر ما يناسب أعمالك، ثم اطلع على التفاصيل واختر نموذج الطلب من انضم إلينا.'}>{category === 'contracts' && <Action to={roadTransportPath} icon="solar:arrow-left-linear">نموذج النقل البري</Action>}</InteriorIntro><div className="interior-service-grid">{items.map((item, index) => { const fallback = serviceImages[item.slug || ''] ? `list-${serviceImages[item.slug || '']}` : undefined; return <ContentCard key={item.id || item.titleAr} title={item.titleAr} description={item.description} to={item.serviceCategory === 'light' ? '/join-us/request-services' : item.slug ? `/services/${item.slug}` : '/contact'} index={index} media={imageFor(item.imageUrl, fallback)} fallbackMedia={fallback ? interiorImage(fallback) : undefined} actionLabel={item.serviceCategory === 'light' ? 'اطلب الخدمة' : 'تفاصيل الخدمة'} />; })}</div></main></Shell>;
 }
 function ServiceDetail() {
   const { slug } = useParams(); const { cms } = useCms(); const service = cms.serviceModels.find(item => item.slug === slug) || cms.generalInfo.find(item => item.slug === slug);

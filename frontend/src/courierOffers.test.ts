@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { courierOfferDetails, internalCourierOffers, internalCourierConditions } from './courierOffers';
+import { courierOfferDetails, internalCourierOffers, internalCourierConditions, waitingOfferLabel } from './courierOffers';
 
 describe('internal courier offers', () => {
   it('stores one or both offers using the supplied figures without recalculating totals', () => {
@@ -17,5 +17,11 @@ describe('internal courier offers', () => {
   it('rejects missing or unknown offers', () => {
     expect(() => courierOfferDetails([])).toThrow();
     expect(() => courierOfferDetails(['unknown'])).toThrow();
+    expect(() => courierOfferDetails(['waiting', 'jeddah'])).toThrow();
+  });
+  it('records waiting for another offer without applying to an existing offer', () => {
+    const details = courierOfferDetails(['waiting']);
+    expect(details['العروض المختارة']).toBe(waitingOfferLabel);
+    expect(details['تفاصيل العروض المختارة']).toBe(waitingOfferLabel);
   });
 });

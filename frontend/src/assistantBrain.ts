@@ -200,14 +200,15 @@ const offersToOpen = (text: string) => /[؟?]/.test(text) && /(افتح|تفتح
 let remoteUnavailable = false;
 const compact = (entries: SiteEntry[]) => entries.map(({ id, title, description, path, kind }) => ({ id, title, description: clip(description, 220), path, kind }));
 
-export async function askAssistant(query: string, history: AssistantTurn[], cms: CmsContent, pathname: string): Promise<AssistantReply> {
+// page is what the visitor sees now (title, step, fields), so questions about the page itself get answered.
+export async function askAssistant(query: string, history: AssistantTurn[], cms: CmsContent, pathname: string, page = ''): Promise<AssistantReply> {
   const index = buildSiteIndex(cms);
   const trimmed = query.trim().slice(0, 500);
   if (!remoteUnavailable) {
     try {
       const { phone, email, headquarters } = cms.company;
       // A slow or unreachable function must never leave the panel "thinking": after 8s the local matcher answers instead.
-      const body = { query: trimmed, history: history.slice(-8), index: compact(index), pathname, company: { phone, email, headquarters } };
+      const body = { query: trimmed, history: history.slice(-8), index: compact(index), pathname, page: page.slice(0, 800), company: { phone, email, headquarters } };
       const response = await fetch('/api/assistant', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) });
       const data = response.ok ? await response.json() : null;
       const error = response.ok ? null : { context: { status: response.status } };

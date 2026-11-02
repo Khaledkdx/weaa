@@ -10,7 +10,7 @@ export type Command = 'stop' | 'skip' | 'back' | 'repeat' | 'read' | 'done' | 'y
 export type Interpretation = { value: string; spoken: string; values?: string[] } | { ask: string } | { command: Command };
 
 // Arabic-Indic and Persian digits become the digits the inputs take.
-const asciiDigits = (text: string) => text.replace(/[٠-٩۰-۹]/g, digit => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit) >= 0 ? '٠١٢٣٤٥٦٧٨٩'.indexOf(digit) : '۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)));
+export const asciiDigits = (text: string) => text.replace(/[٠-٩۰-۹]/g, digit => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit) >= 0 ? '٠١٢٣٤٥٦٧٨٩'.indexOf(digit) : '۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)));
 const tokens = (text: string) => normalizeArabic(asciiDigits(text)).split(' ').filter(Boolean);
 
 export function commandOf(text: string): Command | null {
@@ -99,26 +99,107 @@ export function spokenDigits(text: string): string {
   }
   return out;
 }
-const months: Record<string, number> = { يناير: 1, فبراير: 2, مارس: 3, ابريل: 4, افريل: 4, مايو: 5, يونيو: 6, يوليو: 7, اغسطس: 8, سبتمبر: 9, اكتوبر: 10, نوفمبر: 11, ديسمبر: 12 };
-export function spokenDate(text: string): string | null {
-  const plain = normalizeArabic(text);
-  const numeric = plain.match(/(\d{1,4})\s*[/\-. ]\s*(\d{1,2})\s*[/\-. ]\s*(\d{1,4})/);
-  let day: number | undefined, month: number | undefined, year: number | undefined;
-  if (numeric) {
-    const [a, b, c] = [Number(numeric[1]), Number(numeric[2]), Number(numeric[3])];
-    if (numeric[1].length === 4) { year = a; month = b; day = c; } else { day = a; month = b; year = c; }
-  } else {
-    const named = Object.keys(months).find(name => plain.includes(name));
-    const rest = named ? plain.replace(named, ' ') : plain;
-    const numbers = numberGroups(rest);
-    year = numbers.find(n => n >= 1900 && n <= 2200);
-    const small = numbers.filter(n => n !== year);
-    if (named) { month = months[named]; day = small.find(n => n >= 1 && n <= 31); }
-    else { day = small[0]; month = small[1]; }
+// ---------- Dates, however they are said ----------
+const gregorianNames = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+const hijriNames = ['محرم', 'صفر', 'ربيع الأول', 'ربيع الآخر', 'جمادى الأولى', 'جمادى الآخرة', 'رجب', 'شعبان', 'رمضان', 'شوال', 'ذو القعدة', 'ذو الحجة'];
+// Month names as people say them, normalized: Egyptian and Gulf, Levantine and Iraqi, English, and the Hijri months.
+const gregorianMonths: Record<string, number> = { يناير: 1, فبراير: 2, مارس: 3, ابريل: 4, افريل: 4, مايو: 5, يونيو: 6, يونيه: 6, يوليو: 7, يوليه: 7, اغسطس: 8, سبتمبر: 9, اكتوبر: 10, نوفمبر: 11, ديسمبر: 12, 'كانون الثاني': 1, شباط: 2, اذار: 3, نيسان: 4, ايار: 5, حزيران: 6, تموز: 7, اب: 8, ايلول: 9, 'تشرين الاول': 10, 'تشرين الثاني': 11, 'كانون الاول': 12, january: 1, february: 2, march: 3, april: 4, may: 5, june: 6, july: 7, august: 8, september: 9, october: 10, november: 11, december: 12 };
+const hijriMonths: Record<string, number> = { محرم: 1, صفر: 2, 'ربيع الاول': 3, 'ربيع الثاني': 4, 'ربيع الاخر': 4, 'جمادي الاولي': 5, 'جمادي الاول': 5, 'جمادي الاخره': 6, 'جمادي الثانيه': 6, 'جمادي الاخر': 6, رجب: 7, شعبان: 8, رمضان: 9, شوال: 10, 'ذو القعده': 11, 'ذي القعده': 11, 'ذو الحجه': 12, 'ذي الحجه': 12 };
+const ordinalUnits: Record<string, number> = { الاول: 1, الحادي: 1, الثاني: 2, التاني: 2, الثالث: 3, التالت: 3, الرابع: 4, الخامس: 5, السادس: 6, السابع: 7, الثامن: 8, التامن: 8, التاسع: 9, العاشر: 10 };
+const fillers = new Set(['من', 'في', 'تاريخ', 'بتاريخ', 'سنه', 'عام', 'يوم', 'هجري', 'هجريه', 'هجريا', 'ميلادي', 'ميلاديه', 'ميلاديا', 'ه', 'م', 'تقريبا', 'الموافق', 'يعني', 'هو', 'هي', 'شهر', 'الشهر']);
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// The first (longest) month name in the words, and the words with a break word in its place so the numbers around it stay
+// apart (punctuation would be stripped by the normalizer, and «15 ألف…» would read as 15450).
+function takeMonth(plain: string, names: Record<string, number>): { month: number; rest: string } | null {
+  const found = Object.keys(names).filter(name => new RegExp(`(^|\\s)${escapeRegExp(name)}(\\s|$)`).test(plain)).sort((a, b) => b.length - a.length)[0];
+  if (!found) return null;
+  return { month: names[found], rest: plain.replace(new RegExp(`(^|\\s)${escapeRegExp(found)}(?=\\s|$)`), ' فاصل ') };
+}
+// «الشهر الخامس», «شهر 5», «الشهر الحادي عشر».
+function takeMonthNumber(plain: string): { month: number; rest: string } | null {
+  const match = plain.match(/(?:^|\s)(?:شهر|الشهر)\s+(\S+)(\s+عشر)?/);
+  if (!match) return null;
+  const word = ordinalsToDigits(`${match[1]}${match[2] || ''}`);
+  const month = /^\d+$/.test(word) ? Number(word) : spokenNumber(word);
+  if (!month || month < 1 || month > 12) return null;
+  return { month, rest: plain.replace(match[0], ' فاصل ') };
+}
+// «التاسع عشر» and «الخامس والعشرين» become 19 and 25, so the number reader can take them.
+function ordinalsToDigits(plain: string) {
+  const tokens = plain.split(' ').filter(Boolean), out: string[] = [];
+  for (let i = 0; i < tokens.length; i++) {
+    const word = tokens[i].replace(/ه$/, ''), next = (tokens[i + 1] || '').replace(/ه$/, '');
+    if (word === 'العشرين') { out.push('20'); continue; }
+    if (word === 'الثلاثين') { out.push('30'); continue; }
+    const unit = ordinalUnits[word];
+    if (unit === undefined) { out.push(tokens[i]); continue; }
+    if (next === 'عشر' && unit < 10) { out.push(String(10 + unit)); i++; }
+    else if (next === 'والعشرين') { out.push(String(20 + unit)); i++; }
+    else if (next === 'والثلاثين' && unit === 1) { out.push('31'); i++; }
+    else out.push(String(unit));
   }
-  if (!day || !month || !year || day < 1 || day > 31 || month < 1 || month > 12 || year < 1900 || year > 2200) return null;
-  if (year < 100) return null;
-  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  return out.join(' ');
+}
+// Hijri to Gregorian by the tabular calendar: within a day of the Umm al-Qura date, near enough for a form's field.
+function hijriToGregorian(y: number, m: number, d: number) {
+  const jd = Math.floor((11 * y + 3) / 30) + 354 * y + 30 * m - Math.floor((m - 1) / 2) + d + 1948440 - 385;
+  let l = jd + 68569;
+  const n = Math.floor((4 * l) / 146097);
+  l -= Math.floor((146097 * n + 3) / 4);
+  const i = Math.floor((4000 * (l + 1)) / 1461001);
+  l = l - Math.floor((1461 * i) / 4) + 31;
+  const j = Math.floor((80 * l) / 2447);
+  const day = l - Math.floor((2447 * j) / 80);
+  l = Math.floor(j / 11);
+  return { year: 100 * (n - 49) + i + l, month: j + 2 - 12 * l, day };
+}
+const isoDate = (y: number, m: number, d: number) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+// A date as an input value, said by month name. Dates are taken however they come: numerals with any separator or
+// none, month names in any dialect, ordinal days, two-digit years, and Hijri dates, converted and said both ways.
+export type ParsedDate = { iso: string; spoken: string };
+export function parseDate(text: string): ParsedDate | null {
+  let plain = normalizeArabic(asciiDigits(text)).replace(/\sو\s(?=\S)/g, ' و');
+  const hijri = takeMonth(plain, hijriMonths);
+  const gregorian = hijri ? null : takeMonth(plain, gregorianMonths);
+  const named = hijri || gregorian || (plain.includes('شهر') ? takeMonthNumber(plain) : null);
+  if (named) plain = named.rest;
+  const saidHijri = !!hijri || /(^|\s)(هجري|هجريه|هجريا|ه)(\s|$)/.test(plain);
+  plain = ordinalsToDigits(plain.split(' ').filter(token => token && !fillers.has(token)).join(' '));
+  const numbers = numberGroups(plain);
+  let day: number | undefined, month = named?.month, year: number | undefined;
+  if (month !== undefined) {
+    const big = numbers.find(n => n >= 100);
+    const rest = numbers.filter(n => n !== big);
+    year = big ?? (rest.length >= 2 ? rest[1] : undefined);
+    day = rest[0];
+  } else {
+    if (numbers.length < 3) return null;
+    if (numbers[0] > 31) [year, month, day] = numbers; else [day, month, year] = numbers;
+  }
+  if (!day || !month || year === undefined) return null;
+  const isHijri = saidHijri || (year >= 1300 && year <= 1500);
+  if (year < 100) year += isHijri ? 1400 : year <= (new Date().getFullYear() + 20) % 100 ? 2000 : 1900;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  if (isHijri) {
+    if (year < 1300 || year > 1500 || day > 30) return null;
+    const g = hijriToGregorian(year, month, day);
+    return { iso: isoDate(g.year, g.month, g.day), spoken: `${day} ${hijriNames[month - 1]} ${year} هجري، يعني ${g.day} ${gregorianNames[g.month - 1]} ${g.year} ميلادي تقريباً` };
+  }
+  if (year < 1900 || year > 2200) return null;
+  return { iso: isoDate(year, month, day), spoken: `${day} ${gregorianNames[month - 1]} ${year}` };
+}
+export const spokenDate = (text: string) => parseDate(text)?.iso ?? null;
+// An input's date value said by month name.
+export function describeDate(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  return match ? `${Number(match[3])} ${gregorianNames[Number(match[2]) - 1] || match[2]} ${match[1]}` : value;
+}
+// A name or a city said in one breath with more («خالد محمد ورقمي…»): only the part before the next piece.
+const connector = /^(?:و(?:رقمي|جوالي|الجوال|رقم|تلفوني|موبايلي|ايميلي|بريدي|الايميل|عمري|سني|مدينتي|شركتي|الشركه|عندي|ابغي|ابغى|اسكن|ساكن|من|في|انا)|رقمي|جوالي|تلفوني|موبايلي|ايميلي|بريدي|عمري|سني|مدينتي|شركتي)$/;
+export function firstPart(text: string) {
+  const raw = text.trim().split(/\s+/);
+  const cut = raw.findIndex((token, index) => index > 0 && (connector.test(normalizeArabic(token)) || /[،,]$/.test(raw[index - 1])));
+  return cut > 0 ? raw.slice(0, cut).join(' ') : text;
 }
 const spelledParts: [RegExp, string][] = [[/\s*(?:@|\bat\b|آت|ات|اد)\s*/g, '@'], [/\s*(?:\.|\bdot\b|دوت|نقطه|نقطة)\s*/g, '.'], [/جي ?ميل|جيميل/g, 'gmail'], [/هوت ?ميل/g, 'hotmail'], [/ياهو/g, 'yahoo'], [/اوت ?لوك|آوت ?لوك/g, 'outlook'], [/كوم/g, 'com'], [/\s+/g, '']];
 export function spokenEmail(text: string): string | null {
@@ -199,12 +280,17 @@ export function question(field: FieldInfo): string {
   switch (field.kind) {
     case 'tel': return `قل لي ${label} رقم رقم.`;
     case 'number': return /عدد|كم|سن|عمر|سنه|سعه|حموله/.test(plain) ? `كم ${label}؟` : `قل لي ${label} بالأرقام.`;
-    case 'date': return `${label}: قل اليوم والشهر والسنة.`;
+    case 'date': return `${label}: قل التاريخ بأي شكل، مثل: 19 مايو 2030، أو بالهجري.`;
     case 'email': return `${label}: قله حرف حرف، أو اكتبه بنفسك في الخانة وقل تم.`;
-    case 'select': case 'radio': return `${label}: اختر من: ${list(field.options || [])}.`;
+    case 'select': case 'radio': {
+      // «هل تملك سيارة؟» is asked as it is, with «نعم أو لا» when those are the choices.
+      const yesNo = (field.options || []).length === 2 && (field.options || []).every(option => ['نعم', 'لا'].includes(option.label.trim()));
+      if (isQuestion(label)) return `${label.replace(/[؟?]/g, '').trim()}؟ ${yesNo ? 'قل نعم أو لا.' : `اختر من: ${list(field.options || [])}.`}`;
+      return `${label}: اختر من: ${list(field.options || [])}.`;
+    }
     case 'checkboxes': return `${label}: تقدر تختار أكثر من واحد من: ${list(field.options || [])}.`;
     case 'checkbox': return `${label}؟ قل نعم أو لا.`;
-    case 'file': return `${label}: هذي تحتاج ملف أو صورة. اضغط زر اختيار الملف المحدد قدامك وارفعه، ولما تخلص قل تم، أو قل تخطي.`;
+    case 'file': return `مطلوب منك مرفق ${label}. اضغط الزر المحدد قدامك وصوّره أو اختره من جوالك، وأنا أكمل أول ما يوصل.${field.required ? '' : ' ولو ما عندك قل: تخطي.'}`;
     case 'textarea': return `قل لي ${label}، بكلمات بسيطة.`;
     default:
       if (/الاسم الكامل|الاسم الرباعي/.test(plain)) return 'قل لي اسمك الكامل.';
@@ -237,10 +323,9 @@ export function interpret(field: FieldInfo, said: string): Interpretation {
       return { value: String(digits), spoken: String(digits) };
     }
     case 'date': {
-      const date = spokenDate(said);
-      if (!date) return { ask: `ما فهمت التاريخ. قل اليوم ثم الشهر ثم السنة، مثل: عشرين، خمسة، ألفين وثلاثين.` };
-      const [year, month, day] = date.split('-');
-      return { value: date, spoken: `${Number(day)} / ${Number(month)} / ${year}` };
+      const date = parseDate(said);
+      if (!date) return { ask: 'ما فهمت التاريخ. قله بأي شكل، مثل: 19 مايو 2030، أو 19 5 2030، أو بالهجري.' };
+      return { value: date.iso, spoken: date.spoken };
     }
     case 'email': {
       const email = spokenEmail(said);
@@ -265,7 +350,7 @@ export function interpret(field: FieldInfo, said: string): Interpretation {
     case 'file':
       return command === 'done' ? { command: 'done' } : { ask: 'لما ترفع الملف قل تم، أو قل تخطي.' };
     default: {
-      const value = cleanText(said, field.label);
+      const value = cleanText(field.kind === 'text' ? firstPart(said) : said, field.label);
       if (!value) return { ask: `ما سمعت ${field.label}. قلها مرة ثانية.` };
       return { value, spoken: value };
     }
