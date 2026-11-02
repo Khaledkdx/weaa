@@ -13,6 +13,10 @@ export function normalizeCms(raw: unknown): CmsContent {
   const merged = { ...structuredClone(seed), ...value } as CmsContent;
   merged.company = { ...seed.company, ...(value.company || {}) };
   if (merged.company.phone.replace(/\D/g, '') === '966567018977') merged.company.phone = seed.company.phone;
+  // Earlier headquarters texts (the Jeddah placeholder and the rough Riyadh one) give way to the address on the map.
+  if (/المروه|المروة|عبدالله اليماني/.test(merged.company.headquarters) || /^الرياض\s*,\s*حي الملز\s*,\s*شارع صلاح الدين الايوبي$/.test(merged.company.headquarters.trim())) merged.company.headquarters = seed.company.headquarters;
+  if (!merged.company.mapUrl?.trim()) merged.company.mapUrl = seed.company.mapUrl;
+  if (!merged.company.mapLocation?.trim()) merged.company.mapLocation = seed.company.mapLocation;
   merged.pages = value.pages ? { ...value.pages } : { ...seed.pages };
   const legacyServiceSlugs: Record<string, string> = {
     'service:التخزين': 'warehousing',

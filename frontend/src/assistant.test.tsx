@@ -325,6 +325,29 @@ describe('site assistant', () => {
     } finally { dial.mockRestore(); }
   });
 
+  it('opens the map at once when asked where the company is, and takes the visitor to the map on the contact page', async () => {
+    localStorage.setItem('weaa-assistant-voice', 'off');
+    const opened: HTMLAnchorElement[] = [];
+    const click = vi.spyOn(HTMLElement.prototype, 'click').mockImplementation(function (this: HTMLElement) { if (this instanceof HTMLAnchorElement) opened.push(this); });
+    try {
+      renderAt('/');
+      fireEvent.click(screen.getByRole('button', { name: 'مساعد وعاء' }));
+      const ask = (text: string) => {
+        fireEvent.change(screen.getByRole('textbox', { name: 'اسأل مساعد وعاء' }), { target: { value: text } });
+        fireEvent.click(screen.getByRole('button', { name: 'إرسال' }));
+      };
+      ask('ارسل لي اللوكيشن');
+      await screen.findByText('مقرنا في الرياض، حي الملز، طريق صلاح الدين الأيوبي، 12836. فتحت لك الخريطة.');
+      expect(opened).toHaveLength(1);
+      expect(opened[0].target).toBe('_blank');
+      expect(opened[0].href).toContain('ftid=0x3e2f05c347e3a157');
+      expect(screen.getByRole('link', { name: /افتح الخريطة/ }).getAttribute('href')).toContain('ftid=0x3e2f05c347e3a157');
+      await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/contact'));
+      ask('وين موقعكم؟');
+      await waitFor(() => expect(opened).toHaveLength(2));
+    } finally { click.mockRestore(); }
+  });
+
   it('greets a remembered visitor by name and forgets them on request', async () => {
     localStorage.setItem('weaa-assistant-voice', 'off');
     localStorage.setItem('weaa-assistant-profile', JSON.stringify({ name: 'خالد', values: { 'الاسم': 'خالد محمد' }, savedAt: 1 }));

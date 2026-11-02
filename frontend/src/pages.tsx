@@ -1,4 +1,5 @@
 import React from 'react';
+import { mapEmbed, mapLink } from './location';
 import { Icon } from '@iconify/react';
 import { Link, Navigate, Route, Routes, useParams } from 'react-router-dom';
 import { useCms, supabase } from './data';
@@ -303,9 +304,13 @@ function Contact() {
       <a className="contact-channel" href={`mailto:${cms.company.email}`}>
         <Icon icon="solar:letter-linear" /><span>البريد الإلكتروني</span><strong><bdi dir="ltr">{cms.company.email}</bdi></strong><span className="channel-action">راسلنا <Icon icon="solar:arrow-left-up-linear" /></span>
       </a>
-      <a className="contact-channel" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cms.company.headquarters)}`} target="_blank" rel="noopener noreferrer">
+      <a className="contact-channel" href={mapLink(cms.company)} target="_blank" rel="noopener noreferrer">
         <Icon icon="solar:map-point-linear" /><span>المقر</span><strong>{cms.company.headquarters}</strong><span className="channel-action">افتح في الخرائط <Icon icon="solar:arrow-left-up-linear" /></span>
       </a>
+    </section>
+    <section className="contact-map" id="map" aria-label="موقعنا على الخريطة">
+      <iframe title="موقع وعاء على الخريطة" src={mapEmbed(cms.company)} loading="lazy" referrerPolicy="no-referrer-when-downgrade" allowFullScreen />
+      <a className="contact-map-open" href={mapLink(cms.company)} target="_blank" rel="noopener noreferrer"><Icon icon="solar:map-point-linear" /> افتح في خرائط Google</a>
     </section>
   </main></Shell>;
 }

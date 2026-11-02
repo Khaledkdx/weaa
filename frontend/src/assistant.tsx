@@ -6,10 +6,11 @@ import { askAssistant, defaultSuggestions, normalizeArabic, type AssistantTurn }
 import { listen, releaseMicrophone, speak, speechSupport, stopSpeaking, type Listener, type ListenStatus, type SpeechProblem } from './assistantSpeech';
 import { AssistantGuide } from './assistantGuide';
 import { FillFlow } from './assistantFillFlow';
+import { mapLink } from './location';
 import { describePage } from './assistantForm';
 import { forgetProfile, loadProfile, type Profile } from './assistantMemory';
 
-type Message = AssistantTurn & { id: number; suggestions?: string[]; call?: string };
+type Message = AssistantTurn & { id: number; suggestions?: string[]; call?: string; map?: string };
 type PetState = 'idle' | 'listening' | 'thinking' | 'speaking';
 type Mood = 'neutral' | 'happy' | 'sad';
 // A momentary action on the page, shown on top of the state: the orb writing into a field.
@@ -35,6 +36,20 @@ const asksToForget = (words: string) => /^(انسى|انس|امسح|احذف)\s*
 const asksToCall = (words: string) => /(^|\s)(اتصل|اتصال|اتصلي|كلم|كلمني|كلمهم|اكلم|اكلمهم|اتكلم|رن|ارن|دق|ادق)(\s|$)/.test(words)
   && !/(^|\s)(كيف|ازاي|وش|ايش|ما هو|متى|رقم|الرقم)(\s|$)/.test(words) && !/(اتصل|كلم)\S*\s+(فيني|بي|عليي|لي)(\s|$)/.test(words) && !/(اتصل|كلم)\S*\s+علي$/.test(words);
 // («اتصل على الشركة» and «اتصلوا عليّ» normalize alike; only the second ends there.)
+// «وين موقعكم؟» or «ارسل لي اللوكيشن»: the map opens at once. The website («الموقع الالكتروني») is not a place.
+const asksForLocation = (words: string) => !/(الكتروني|الالكتروني|ويب|رابط الموقع)/.test(words) && (
+  /(^|\s)(لوكيشن|لوكيشين|لوكيشان|اللوكيشن|location|خريطه|الخريطه|الخرايط|ماب|خرايط|عنوانكم|العنوان|مقركم|المقر|موقعكم|مكانكم|مكتبكم|وينكم|فينكم|الاتجاهات)(\s|$)/.test(words)
+  || /(وين|فين|كيف اوصل|كيف اجي|ازاي اوصل|ازاي اجي)\s.*(الشركه|شركتكم|مكتب|مقر|مكانكم|موقعكم|وعاء)/.test(words)
+  || /(^|\s)(كيف اوصلكم|كيف اجيكم|ازاي اوصلكم)(\s|$)/.test(words));
+// The map opens in a new tab, which a phone hands to its maps app. A browser that wants a fresh tap keeps it closed,
+// and the map button in the reply, with the contact page's own map, remain.
+function openMap(href: string) {
+  try { const link = document.createElement('a'); link.href = href; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.style.display = 'none'; document.body.appendChild(link); link.click(); link.remove(); } catch { /* the button in the reply remains */ }
+}
+// The contact page scrolls to its top on arrival; the map below the channels is brought into view after that.
+function showMapOnPage() {
+  for (const delay of [450, 1000]) window.setTimeout(() => document.getElementById('map')?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'center' }), delay);
+}
 const telHref = (phone: string) => `tel:${phone.replace(/[^\d+]/g, '')}`;
 // A hidden link is clicked for the call, as a tap on the call button would do it. A browser that wants a fresh tap keeps
 // the dialer closed, and the call button in the reply is that tap.
@@ -440,6 +455,27 @@ export function SiteAssistant() {
       settleTurn();
       return;
     }
+    if (asksForLocation(words)) {
+      const href = mapLink(cms.company);
+      openMap(href);
+      const text = `مقرنا في ${cms.company.headquarters}. فتحت لك الخريطة.`;
+      push({ role: 'assistant', text, map: href });
+      if (voiceRef.current || liveRef.current) say(text);
+      feel('happy');
+      if (pathname !== '/contact') {
+        if (voiceModeRef.current) await pullPageTo('/contact', epoch);
+        else navigate('/contact');
+        if (epoch !== conversationEpoch.current) return;
+      }
+      showMapOnPage();
+      // On a phone the panel is a full sheet; it steps aside so the map shows, unless the visitor is talking or typing.
+      if (typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 700px)').matches && !voiceRef.current && !liveRef.current) {
+        const shownAt = Date.now();
+        window.setTimeout(() => { if (!liveRef.current && !speakingRef.current && interactedAt.current < shownAt) setOpen(false); }, 2500);
+      }
+      settleTurn();
+      return;
+    }
     if (form && asksToFill(words)) { feel('happy'); fill.start(); settleTurn(); return; }
     if (form && asksToSend(words)) { fill.offerSubmit(); settleTurn(); return; }
     const reply = await askAssistant(query, history, cms, pathname, describePage());
@@ -585,6 +621,7 @@ export function SiteAssistant() {
         {messages.map(message => <div key={message.id} className={`assistant-msg is-${message.role}`}>
           <p>{message.text}</p>
           {message.call && <a className="assistant-call" href={message.call}><Icon icon="solar:phone-calling-linear" /> اتصل الآن</a>}
+          {message.map && <a className="assistant-call" href={message.map} target="_blank" rel="noopener noreferrer"><Icon icon="solar:map-point-linear" /> افتح الخريطة</a>}
           {message.suggestions && message.suggestions.length > 0 && <div className="assistant-chips">{message.suggestions.map(suggestion => <button key={suggestion} type="button" onClick={() => void send(suggestion)}>{suggestion}</button>)}</div>}
         </div>)}
         {interim && <div className="assistant-msg is-user is-interim"><p>{interim}</p></div>}
@@ -603,6 +640,7 @@ export function SiteAssistant() {
         <span className="assistant-live-status" aria-live="polite">{status}</span>
         {(interim || lastReply) && <p className="assistant-live-caption">{interim || lastReply}</p>}
         {!interim && lastMessage?.call && <a className="assistant-call is-small" href={lastMessage.call}><Icon icon="solar:phone-calling-linear" /> اتصل الآن</a>}
+        {!interim && lastMessage?.map && <a className="assistant-call is-small" href={lastMessage.map} target="_blank" rel="noopener noreferrer"><Icon icon="solar:map-point-linear" /> افتح الخريطة</a>}
         {onForm && <AssistantGuide pathname={pathname} />}
       </div>
       <div className="assistant-live-controls">

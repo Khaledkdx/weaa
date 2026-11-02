@@ -175,3 +175,10 @@ a.contact-channel:hover{border-color:var(--gold);background:var(--surface-2)}
 .transport-choice:focus-within{outline:2px solid var(--gold);outline-offset:3px}
 .road-transport-page h2:focus{outline:none}
 @media(max-width:600px){.transport-choice-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.transport-steps{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.transport-steps li{font-size:12px}}
+
+/* The headquarters map under the contact channels: rounded like the cards, with its own open-in-Maps link. */
+.contact-map{position:relative;margin-top:24px;border-radius:var(--r-lg,22px);overflow:hidden;border:1px solid var(--line);background:var(--surface);box-shadow:var(--shadow-sm,none)}
+.contact-map iframe{display:block;width:100%;height:clamp(280px,45vw,440px);border:0}
+.contact-map-open{position:absolute;inset-inline-start:16px;top:16px;display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border-radius:999px;background:var(--surface);color:var(--text);font-weight:700;text-decoration:none;box-shadow:var(--shadow-md,0 4px 16px rgba(0,0,0,.15))}
+.contact-map-open svg{color:var(--gold)}
+@media (max-width:700px){.contact-map iframe{height:320px}}

@@ -2,6 +2,8 @@ export type PageContent = { kicker: string; title: string; body: string; imageUr
 export type Company = {
   nameAr: string; nameEn: string; taglineAr: string; taglineEn: string;
   phone: string; email: string; website: string; headquarters: string;
+  // The headquarters on the map: a Google Maps link to the place, and its coordinates («lat,lng») for the embedded map.
+  mapUrl: string; mapLocation: string;
   vat: string; cr: string; vision: string; mission: string;
 };
 export type Review = { customer: string; body: string; dateLabel: string; rating: number };

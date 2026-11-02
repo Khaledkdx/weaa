@@ -9,6 +9,14 @@ describe('CMS compatibility', () => {
     expect(result.company.nameAr).toBe('عنوان معدل');
     expect(result.homepageSections.map(section => section.id)).toEqual(['founder', 'intro']);
   });
+  it('replaces the earlier headquarters texts with the address on the map, and keeps an address set in the dashboard', () => {
+    for (const old of ['جدة، حي المروة، شارع عبدالله اليماني', 'الرياض, حي الملز , شارع صلاح الدين الايوبي']) {
+      const result = normalizeCms({ ...seed, company: { ...seed.company, headquarters: old, mapUrl: '', mapLocation: '' } });
+      expect(result.company.headquarters).toBe('الرياض، حي الملز، طريق صلاح الدين الأيوبي، 12836');
+      expect(result.company.mapLocation).toBe('24.6680315,46.7308749');
+    }
+    expect(normalizeCms({ ...seed, company: { ...seed.company, headquarters: 'الرياض، حي العليا' } }).company.headquarters).toBe('الرياض، حي العليا');
+  });
   it('removes the old heavy transport card without changing other homepage cards', () => {
     const transport = seed.homepageSections.find(section => section.id === 'transport')!;
     const legacy = { ...transport, cards: [{ ...transport.cards[0], id: 'transport-0', title: 'النقل الثقيل' }, ...transport.cards] };

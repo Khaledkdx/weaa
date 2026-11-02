@@ -88,6 +88,15 @@ describe('public form locations', () => {
     expect(screen.getByRole('link', { name: /11 511 0441/ }).getAttribute('href')).toBe('tel:+966115110441');
   });
 
+  it('shows the headquarters on a map under the contact details', () => {
+    const { container } = renderRoute('/contact');
+    expect(screen.getByText('الرياض، حي الملز، طريق صلاح الدين الأيوبي، 12836')).toBeTruthy();
+    const map = container.querySelector('#map iframe') as HTMLIFrameElement;
+    expect(map.title).toBe('موقع وعاء على الخريطة');
+    expect(map.getAttribute('src')).toBe('https://maps.google.com/maps?q=24.6680315%2C46.7308749&hl=ar&z=17&output=embed');
+    expect(screen.getByRole('link', { name: /افتح في خرائط Google/ }).getAttribute('href')).toContain('ftid=0x3e2f05c347e3a157:0xf1dd332d14451cf8');
+  });
+
   it('opens the Join Us form from a service without embedding a form', () => {
     const { container } = renderRoute('/services/warehousing');
     expect(container.querySelector('form')).toBeNull();
