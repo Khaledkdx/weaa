@@ -22,11 +22,12 @@ type Side = 'left' | 'right';
 // A visitor the orb remembers (their say-so, on their own device) is greeted by name and can ask to be forgotten.
 const welcomeFor = (profile: Profile | null): Message => ({
   id: 0, role: 'assistant',
-  text: `هلا والله${profile?.name ? ` يا ${profile.name}` : ''}! أنا مساعد وعاء بالذكاء الاصطناعي، وصوتي مولّد آليًا. قل لي وش تحتاج، كتابة أو بالصوت، وأدلّك على المكان المناسب، وأقدر أعبي معك أي نموذج.`,
+  text: `هلا والله${profile?.name ? ` يا ${profile.name}` : ''}! أنا مساعد وعاء بالذكاء الاصطناعي، وصوتي مولّد آليًا. قل لي وش تحتاج، كتابة أو بالصوت، وأدلّك على المكان المناسب.`,
   suggestions: profile ? [...defaultSuggestions, 'انسَ بياناتي'] : defaultSuggestions,
 });
 // Things the visitor can ask the orb to do on the page itself, before any question goes to the brain.
-const asksToFill = (words: string) => /(عبي|عبئ|املا|املأ|املي|تعبئه|نعبي|اعبي|اعبى|تعبي|ساعدني)/.test(words);
+// Filling starts only when the visitor asks for it: a fill verb, or a request for help that names the form.
+const asksToFill = (words: string) => /(عبي|عبئ|املا|املأ|املي|تعبئه|نعبي|اعبي|اعبى|تعبي)/.test(words) || /(ساعدني|مساعده|ساعدوني)/.test(words) && /(نموذج|النموذج|الفورم|فورم|استماره|الخانات|البيانات)/.test(words);
 const asksToRead = (words: string) => /^(اقرا|اقرأ|اقرالي|اقرا لي)/.test(words) || /^(وش|ايش|ماذا) (في|مكتوب)/.test(words);
 const asksToSend = (words: string) => /^(ارسل|ارسال|ارسله|ارسلها|ارسل الطلب|ابعت|ابعته)/.test(words);
 const asksToForget = (words: string) => /^(انسى|انس|امسح|احذف)\s*(بياناتي|معلوماتي|اسمي|كل شي)/.test(words);
@@ -447,12 +448,9 @@ export function SiteAssistant() {
     const destination = reply.navigateTo && reply.navigateTo !== pathname ? reply.navigateTo : undefined;
     feel(moodOf(reply.text, !!destination));
     const spoken = viaVoice || voiceRef.current;
-    // Arriving at a form in voice mode, the orb offers to fill it; one "yes" starts that.
-    const toForm = !!destination && voiceModeRef.current && destination.startsWith('/join-us/');
-    // The orb talks while it works: a spoken «أفتح لك…» and the page pull happen together.
-    if (spoken) say(reply.text + (toForm ? ' وصلنا للنموذج. تبيني أعبيه معك؟ قل نعم.' : ''));
-    else if (toForm) push({ role: 'assistant', text: 'وصلنا للنموذج. تبيني أعبيه معك؟ قل نعم.' });
-    if (toForm) fill.offer();
+    // The orb talks while it works: a spoken «أفتح لك…» and the page pull happen together. Arriving at a form it does
+    // not offer to fill it; filling starts only when the visitor asks.
+    if (spoken) say(reply.text);
     if (destination) {
       if (voiceModeRef.current) await pullPageTo(destination, epoch);
       else navigate(destination);

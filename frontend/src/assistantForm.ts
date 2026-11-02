@@ -185,7 +185,7 @@ export function describePage(root: ParentNode = document) {
   const step = clean(main.querySelector('form h2, .inquiry-heading h2')?.textContent);
   const fields = discoverFields(root);
   const parts = [title ? `هذه صفحة ${title}.` : '', lead, step ? `الخطوة الحالية: ${step}.` : ''];
-  if (fields.length) parts.push(`فيها نموذج من ${fields.length} خانات: ${fields.slice(0, 12).map(field => field.label).join('، ')}${fields.length > 12 ? '، وغيرها' : ''}. قل: عبّي لي النموذج، وأعبيه معك.`);
+  if (fields.length) parts.push(`فيها نموذج من ${fields.length} خانات: ${fields.slice(0, 12).map(field => field.label).join('، ')}${fields.length > 12 ? '، وغيرها' : ''}.`);
   else {
     const headings = Array.from(main.querySelectorAll('h2')).map(heading => clean(heading.textContent)).filter(Boolean).slice(0, 6);
     if (headings.length) parts.push(`أقسامها: ${headings.join('، ')}.`);

@@ -9,7 +9,7 @@ import { recall, rememberValues, type Profile } from './assistantMemory';
 import { carriesMore, extractLocally, extractValues } from './assistantExtract';
 import { normalizeArabic } from './assistantBrain';
 
-type Stage = 'offer' | 'ask' | 'file' | 'review' | 'fix' | 'save';
+type Stage = 'ask' | 'file' | 'review' | 'fix' | 'save';
 type Written = { value: string; spoken: string; values?: string[] };
 // reviewing: the field being asked was named after the read-back, so its answer leads back to the read-back.
 // forceAsk: the field at the index is asked even though it holds a value, because the form rejected that value.
@@ -17,14 +17,15 @@ type Written = { value: string; spoken: string; values?: string[] };
 // finalStep is the step the read-back happens on, so a change to an earlier field can travel back and forward again.
 // pressing: one of the form's buttons has been pressed and its answer is awaited; words said meanwhile wait.
 // watch: the timer that looks out for an attachment to arrive.
-type Session = { fields: FormField[]; index: number; stage: Stage; filled: Record<string, string>; title: string; reviewing: boolean; forceAsk: boolean; step: number; finalStep: number; steps: Record<string, number>; pressing: boolean; watch: number };
+// opened: the first field has been asked, which is the one introduced as «أول خانة».
+type Session = { fields: FormField[]; index: number; stage: Stage; filled: Record<string, string>; title: string; reviewing: boolean; forceAsk: boolean; step: number; finalStep: number; steps: Record<string, number>; pressing: boolean; watch: number; opened: boolean };
 // acting is told the moment the orb writes into a field, so its body can show the pen.
 export type FillFlowOptions = { tell(text: string): void; profile(): Profile | null; remembered?(profile: Profile | null): void; acting?(what: 'writing'): void };
 
 const formTitle = () => (document.querySelector('main h1')?.textContent || 'النموذج').replace(/\s+/g, ' ').trim();
 const stepTitle = () => (document.querySelector('main form h2')?.textContent || '').replace(/\s+/g, ' ').trim();
 const wait = (ms: number) => new Promise<void>(resolve => window.setTimeout(resolve, ms));
-const fresh = (): Session => ({ fields: [], index: 0, stage: 'ask', filled: {}, title: '', reviewing: false, forceAsk: false, step: 0, finalStep: 0, steps: {}, pressing: false, watch: 0 });
+const fresh = (): Session => ({ fields: [], index: 0, stage: 'ask', filled: {}, title: '', reviewing: false, forceAsk: false, step: 0, finalStep: 0, steps: {}, pressing: false, watch: 0, opened: false });
 // The field some words name: the longest field name the words contain, else the closest one.
 function nameField<T extends { label: string }>(candidates: T[], said: string): T | null {
   const words = normalizeArabic(said);
@@ -54,9 +55,6 @@ export class FillFlow {
   get active() { return this.session !== null; }
   get stage() { return this.session?.stage ?? null; }
 
-  // After the orb has opened a form: one "yes" starts the filling, anything else is an ordinary question.
-  offer() { this.cancel(); this.session = { ...fresh(), stage: 'offer' }; }
-
   // «أرسل»: the form is read back once and the yes is asked for.
   offerSubmit() {
     const fields = discoverFields();
@@ -71,7 +69,7 @@ export class FillFlow {
     if (!fields.length) { this.cancel(); this.say('ما لقيت نموذج في هذه الصفحة. قل لي وين تبي تروح وأفتحه لك.'); return; }
     this.cancel();
     this.session = { ...fresh(), fields, title: formTitle() };
-    this.ask(`${prefix}تمام، بنعبي ${this.session.title} سوا. جاوبني على كل خانة وأنا أكتبها، وفي الآخر أقرأ لك كل شي مرة وحدة. وتقدر تقول: تخطي، أو ارجع، أو وقف، في أي وقت. `);
+    this.ask(`${prefix}تمام، بنعبي ${this.session.title} سوا. أقول لك اسم كل خانة وأنت جاوبني، وفي الآخر أقرأ لك كل شي مرة وحدة. وتقدر تقول: تخطي، أو ارجع، أو وقف، في أي وقت. `);
   }
 
   cancel() { this.unwatch(); this.session = null; clearTarget(); }
@@ -81,12 +79,6 @@ export class FillFlow {
     const session = this.session;
     if (!session) return false;
     const command = commandOf(said);
-    if (session.stage === 'offer') {
-      if (command === 'yes') { this.start(); return true; }
-      if (command === 'no') { this.end('تمام، أنا هنا لو احتجتني. تقدر تقول: عبّي لي النموذج، في أي وقت.'); return true; }
-      this.session = null;
-      return false;
-    }
     if (command === 'stop') { this.end('تمام، وقفت التعبئة. لو تبي نكمل قل: عبّي لي النموذج.'); return true; }
     if (session.pressing) { this.say('لحظة…'); return true; }
     if (command === 'read') { const field = this.field(); this.say(`${describePage()} ${field ? question(field) : ''}`.trim()); return true; }
@@ -179,13 +171,21 @@ export class FillFlow {
       session.stage = 'file';
       this.openPicker(field);
       this.watchFile(field);
-      this.say(prefix + question(field));
+      this.say(prefix + this.lead() + question(field));
       return;
     }
     const saved = !force && ['text', 'tel', 'email', 'textarea'].includes(field.kind) ? recall(this.options.profile(), field.label) : undefined;
     if (saved && this.write(field, { value: saved, spoken: saved })) { session.index++; return this.ask(`${prefix}حطيت ${topic(field.label)} من المرة الماضية: ${saved}. `); }
     session.stage = 'ask';
-    this.say(prefix + question(field));
+    this.say(prefix + this.lead() + question(field));
+  }
+
+  // The first field asked in a filling is introduced as the first, so the visitor hears where it begins.
+  private lead() {
+    const session = this.session;
+    if (!session || session.opened) return '';
+    session.opened = true;
+    return 'أول خانة، ';
   }
 
   // Opens the phone's file chooser straight away where the browser allows it. It needs a recent tap: after a typed

@@ -91,7 +91,7 @@ supabase secrets set ASSISTANT_MODEL=claude-haiku-5-5
 | فهم الإجابة | `frontend/src/assistantFill.ts` | قواعد محلية بلا خادم: الأرقام المنطوقة («صفر خمسة واحد…»، «خمسة وعشرين»، «ألفين وثلاثين»)، التواريخ، البريد المنطوق، مطابقة الخيارات («نقل خفيف»، «الثالث»، «ما عندي رخصة» → «لا توجد رخصة»)، تنظيف النص («اسمي خالد» → «خالد»)، والأوامر: وقف، تخطي، ارجع، عيد، اقرأ، تم. |
 | المحادثة | `frontend/src/assistantFillFlow.ts` | حقلاً حقلاً بلا توقف: تسأل بصوتها، تكتب، تقول «تم» وتنتقل للحقل التالي من دون إعادة قراءة ولا «صح؟». تضغط «التالي» بنفسها بين الخطوات، وفي نهاية النموذج تقرأ كل القيم مرة واحدة: «كله مظبوط؟ قل نعم وأرسل الطلب، أو قل لي أي خانة أعدّلها»، ولا تُرسل إلا بـ«نعم» صريحة. من يسمّي خانة بعد المراجعة (ومعها القيمة الجديدة في الجملة نفسها إن شاء) تُعدَّل ويُعاد قراءة النموذج مرة أخرى؛ ولو كانت الخانة في خطوة سابقة ترجع لها بزر «رجوع» ثم تتقدم بزر «التالي» إلى المراجعة من جديد. قبل كل ضغطة زر تنتظر لحظة حتى تلتقط الصفحة ما كُتب، ولا تكرر ضغطة لم تغيّر شيئاً. تقرأ أخطاء النموذج وترجع للحقل المعني. المرفقات لا تُرفع بالصوت: تشير للزر وتنتظر «تم». |
 
-تبدأ بقول «عبّي لي النموذج» (كتابة أو صوتاً)، أو بـ«نعم» بعد عرضها لما تفتح نموذجاً في وضع الصوت. «اقرأ لي الصفحة» يقرأ أي صفحة، و«أرسل» يعرض الملخص ويطلب التأكيد.
+تبدأ فقط إذا طلبها الزائر: «عبّي لي النموذج»، أو طلب مساعدة يذكر النموذج مثل «ساعدني في الفورم» (كتابة أو صوتاً). المساعد لا يعرض التعبئة من نفسه، لا عند فتح نموذج ولا في الترحيب ولا عند قراءة الصفحة، وموجّه الخادم يمنعه من اقتراحها. كل سؤال يبدأ باسم الخانة («رقم الجوال: عطني الرقم رقم رقم.»)، وأول سؤال يبدأ بـ«أول خانة،». «اقرأ لي الصفحة» يقرأ أي صفحة، و«أرسل» يعرض الملخص ويطلب التأكيد.
 
 ## التنقل المباشر وبلا روابط
 
@@ -125,7 +125,12 @@ Run Node >=20.12 with `WEAA_PREVIEW=1 PORT=3007 node server.js` after building
 the frontend. Vite dev mode proxies assistant requests to port 3008.
 For production, set the secret in host environment variables, never in Vite
 variables or static assets. Optional server-only model overrides:
-`ASSISTANT_CHAT_MODEL` and `ASSISTANT_AUDIO_MODEL`.
+`ASSISTANT_CHAT_MODEL`, `ASSISTANT_AUDIO_MODEL` and `ASSISTANT_VOICE` (default `alloy`).
+
+The speech route reads replies as a native Riyadh speaker in white Saudi dialect
+(`SPEECH_STYLE` in `assistant-server.cjs`): Saudi ج and ق, no MSA case endings,
+never Egyptian or Levantine. Digit runs of six or more, such as phone numbers,
+are spaced before reading so they are said digit by digit.
 
 Limits: 64 KiB request bodies, 600-character spoken replies, concurrency 3,
 12 requests/minute per socket IP, 200 requests/hour per Node process. These

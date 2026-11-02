@@ -104,11 +104,13 @@ describe('interpreting an answer for a field', () => {
     expect(interpret({ kind: 'file', label: 'الهوية', required: true }, 'تم')).toEqual({ command: 'done' });
   });
   it('asks for each kind of field in its own words', () => {
-    expect(question({ kind: 'text', label: 'الاسم الكامل', required: true })).toBe('قل لي اسمك الكامل.');
-    expect(question({ kind: 'tel', label: 'رقم الجوال', required: true })).toContain('رقم رقم');
+    expect(question({ kind: 'text', label: 'الاسم الكامل', required: true })).toBe('الاسم الكامل: وش اسمك الكامل؟');
+    expect(question({ kind: 'text', label: 'الاسم', required: true })).toBe('الاسم: وش اسمك؟');
+    expect(question({ kind: 'text', label: 'اسم الشركة', required: true })).toBe('اسم الشركة: وش أكتب فيها؟');
+    expect(question({ kind: 'tel', label: 'رقم الجوال', required: true })).toBe('رقم الجوال: عطني الرقم رقم رقم.');
     expect(question(license)).toContain('خصوصي، عمومي');
-    expect(question({ kind: 'select', label: 'هل تملك سيارة؟', required: true, options: [{ label: 'نعم', value: '1' }, { label: 'لا', value: '0' }] })).toBe('هل تملك سيارة؟ قل نعم أو لا.');
-    expect(question({ kind: 'file', label: 'الهوية', required: true })).toContain('مطلوب منك مرفق الهوية');
+    expect(question({ kind: 'select', label: 'هل تملك سيارة؟', required: true, options: [{ label: 'نعم', value: '1' }, { label: 'لا', value: '0' }] })).toBe('هل تملك سيارة؟ قول إيه أو لا.');
+    expect(question({ kind: 'file', label: 'الهوية', required: true })).toContain('الهوية: مطلوب منك مرفق الهوية');
     expect(question({ kind: 'file', label: 'مستندات إضافية', required: false })).toContain('قل: تخطي');
   });
 });

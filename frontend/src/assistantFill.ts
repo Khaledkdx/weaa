@@ -273,30 +273,32 @@ const list = (options: { label: string }[]) => {
 // Some forms word a label as a question ("في أي مدينة"); it is asked as it is, and named by its subject elsewhere.
 export const isQuestion = (label: string) => /^(في اي|في أي|كم|هل|وش|ايش|أي|اي|متى|ما هو|ما هي)\s/.test(normalizeArabic(label)) || label.includes('؟');
 export const topic = (label: string) => isQuestion(label) ? label.replace(/^(في أي|في اي|كم|هل|وش|ايش|أي|اي|متى|ما هو|ما هي)\s+/, '').replace(/؟/g, '').trim() || label : label;
+// Every question opens with the field's own name, so the visitor always knows which box is being filled.
 export function question(field: FieldInfo): string {
   const { label } = field;
   const plain = normalizeArabic(label);
-  if (isQuestion(label) && !['select', 'radio', 'checkboxes', 'file'].includes(field.kind)) return `${label.replace(/؟/g, '')}؟`;
+  const name = label.replace(/[؟?:]/g, '').trim();
+  if (isQuestion(label) && !['select', 'radio', 'checkboxes', 'file'].includes(field.kind)) return `${name}؟`;
   switch (field.kind) {
-    case 'tel': return `قل لي ${label} رقم رقم.`;
-    case 'number': return /عدد|كم|سن|عمر|سنه|سعه|حموله/.test(plain) ? `كم ${label}؟` : `قل لي ${label} بالأرقام.`;
-    case 'date': return `${label}: قل التاريخ بأي شكل، مثل: 19 مايو 2030، أو بالهجري.`;
-    case 'email': return `${label}: قله حرف حرف، أو اكتبه بنفسك في الخانة وقل تم.`;
+    case 'tel': return `${name}: عطني الرقم رقم رقم.`;
+    case 'number': return /عدد|كم|سن|عمر|سنه|سعه|حموله/.test(plain) ? `${name}: كم؟` : `${name}: عطني الرقم.`;
+    case 'date': return `${name}: قول التاريخ بأي شكل، مثل: 19 مايو 2030، أو بالهجري.`;
+    case 'email': return `${name}: قوله حرف حرف، أو اكتبه بنفسك في الخانة وقل تم.`;
     case 'select': case 'radio': {
-      // «هل تملك سيارة؟» is asked as it is, with «نعم أو لا» when those are the choices.
+      // «هل تملك سيارة؟» is asked as it is, with «إيه أو لا» when those are the choices.
       const yesNo = (field.options || []).length === 2 && (field.options || []).every(option => ['نعم', 'لا'].includes(option.label.trim()));
-      if (isQuestion(label)) return `${label.replace(/[؟?]/g, '').trim()}؟ ${yesNo ? 'قل نعم أو لا.' : `اختر من: ${list(field.options || [])}.`}`;
-      return `${label}: اختر من: ${list(field.options || [])}.`;
+      if (isQuestion(label)) return `${name}؟ ${yesNo ? 'قول إيه أو لا.' : `اختر وحدة من: ${list(field.options || [])}.`}`;
+      return `${name}: اختر وحدة من: ${list(field.options || [])}.`;
     }
-    case 'checkboxes': return `${label}: تقدر تختار أكثر من واحد من: ${list(field.options || [])}.`;
-    case 'checkbox': return `${label}؟ قل نعم أو لا.`;
-    case 'file': return `مطلوب منك مرفق ${label}. اضغط الزر المحدد قدامك وصوّره أو اختره من جوالك، وأنا أكمل أول ما يوصل.${field.required ? '' : ' ولو ما عندك قل: تخطي.'}`;
-    case 'textarea': return `قل لي ${label}، بكلمات بسيطة.`;
+    case 'checkboxes': return `${name}: تقدر تختار أكثر من وحدة من: ${list(field.options || [])}.`;
+    case 'checkbox': return `${name}؟ قول إيه أو لا.`;
+    case 'file': return `${name}: مطلوب منك مرفق ${name}. اضغط الزر المحدد قدامك وصوّره أو اختره من جوالك، وأنا أكمل أول ما يوصل.${field.required ? '' : ' ولو ما عندك قل: تخطي.'}`;
+    case 'textarea': return `${name}: قوله بكلمات بسيطة.`;
     default:
-      if (/الاسم الكامل|الاسم الرباعي/.test(plain)) return 'قل لي اسمك الكامل.';
-      if (/^الاسم$|^اسمك/.test(plain)) return 'وش اسمك؟';
-      if (/مدينه/.test(plain) && !/شركه/.test(plain)) return plain === 'المدينه' ? 'في أي مدينة؟' : `${label}: في أي مدينة؟`;
-      return `قل لي ${label}.`;
+      if (/الاسم الكامل|الاسم الرباعي/.test(plain)) return `${name}: وش اسمك الكامل؟`;
+      if (/^الاسم$|^اسمك/.test(plain)) return `${name}: وش اسمك؟`;
+      if (/مدينه/.test(plain) && !/شركه/.test(plain)) return `${name}: في أي مدينة؟`;
+      return `${name}: وش أكتب فيها؟`;
   }
 }
 export function confirmation(field: FieldInfo, spoken: string): string {

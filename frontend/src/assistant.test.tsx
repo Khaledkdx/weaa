@@ -151,6 +151,28 @@ describe('site assistant', () => {
     expect(screen.getByRole('button', { name: 'تشغيل المايك' }).getAttribute('aria-pressed')).toBe('true');
   });
 
+  it('fills a form only when the visitor asks for that, never on its own', async () => {
+    localStorage.setItem('weaa-assistant-voice', 'off');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 503 })));
+    render(<MemoryRouter initialEntries={['/join-us/test']}><CmsProvider><div id="main-content"><main><h1>نموذج تجريبي</h1><form>
+      <label className="form-control"><span>الاسم *</span><input required /></label>
+    </form></main></div><SiteAssistant /></CmsProvider></MemoryRouter>);
+    fireEvent.click(screen.getByRole('button', { name: 'مساعد وعاء' }));
+    const log = () => document.querySelector('.assistant-log')!.textContent || '';
+    expect(log()).not.toMatch(/أعبي|عبّي/);
+    const ask = (text: string) => {
+      fireEvent.change(screen.getByRole('textbox', { name: 'اسأل مساعد وعاء' }), { target: { value: text } });
+      fireEvent.click(screen.getByRole('button', { name: 'إرسال' }));
+    };
+    ask('اقرأ لي الصفحة');
+    await screen.findByText(/فيها نموذج من 1 خانات: الاسم\.$/);
+    ask('ساعدني');
+    await waitFor(() => expect(document.querySelectorAll('.assistant-msg.is-assistant:not(.is-typing)').length).toBeGreaterThan(2));
+    expect(screen.queryByText(/بنعبي/)).toBeNull();
+    ask('ساعدني في الفورم');
+    await screen.findByText(/بنعبي نموذج تجريبي سوا.*أول خانة، الاسم: وش اسمك؟/);
+  });
+
   it('fills a form straight through, reads it back once, changes a named field, sends on a yes and remembers the visitor on a yes', async () => {
     localStorage.setItem('weaa-assistant-voice', 'off');
     // The shapes the site's forms use, with the form's own submit handler and success message.
@@ -171,15 +193,15 @@ describe('site assistant', () => {
     };
     const name = screen.getByLabelText(/^الاسم/) as HTMLInputElement, phone = screen.getByLabelText(/رقم الجوال/) as HTMLInputElement, city = screen.getByLabelText('المدينة') as HTMLSelectElement;
     ask('عبي لي النموذج');
-    await screen.findByText(/بنعبي نموذج تجريبي سوا.*وش اسمك؟/);
+    await screen.findByText(/بنعبي نموذج تجريبي سوا.*أول خانة، الاسم: وش اسمك؟/);
     ask('اسمي خالد محمد');
     // Written and straight on to the next field: nothing read back, no «صح؟».
-    await screen.findByText('تم. قل لي رقم الجوال رقم رقم.');
+    await screen.findByText('تم. رقم الجوال: عطني الرقم رقم رقم.');
     expect(name.value).toBe('خالد محمد');
     // The pen shows on the orb the moment it writes.
     expect(document.querySelector('.orb .orb-badge.is-writing')?.textContent).toContain('يكتب');
     ask('صفر خمسة واحد اثنين ثلاثة أربعة خمسة ستة سبعة ثمانية');
-    await screen.findByText(/^تم. المدينة: اختر من: الرياض، جدة/);
+    await screen.findByText(/^تم. المدينة: اختر وحدة من: الرياض، جدة/);
     expect(phone.value).toBe('0512345678');
     ask('جدة');
     // The one read-back, with the send folded into its yes; nothing has been sent yet.
@@ -220,7 +242,7 @@ describe('site assistant', () => {
     ask('اسمي خالد');
     // The step's last field written: the next button is pressed without asking, and the new step's field comes up.
     await screen.findByText('تم. خلصنا خانات هذي الخطوة، ننتقل للي بعدها.');
-    await screen.findByText('المدينة: اختر من: الرياض، جدة.', {}, { timeout: 4000 });
+    await screen.findByText('المدينة: اختر وحدة من: الرياض، جدة.', {}, { timeout: 4000 });
     ask('جدة');
     await screen.findByText(/^تم، خلصنا. راجع معي: الاسم: خالد، المدينة: جدة. كله مظبوط؟/);
     // The name lives on the first step: back to it, changed, forward again, and read back once more.
@@ -252,7 +274,7 @@ describe('site assistant', () => {
     ask('عبي لي النموذج');
     await screen.findByText(/وش اسمك؟/);
     ask('اسمي خالد');
-    await screen.findByText(/^تم. مطلوب منك مرفق الهوية. اضغط الزر المحدد قدامك/);
+    await screen.findByText(/^تم. الهوية: مطلوب منك مرفق الهوية. اضغط الزر المحدد قدامك/);
     // Required: a skip is refused, and «تم» without a file is not believed.
     ask('تخطي');
     await screen.findByText(/الهوية إلزامي، والنموذج ما يقبل بدونه/);
@@ -281,7 +303,7 @@ describe('site assistant', () => {
     ask('عبي لي النموذج');
     await screen.findByText(/وش اسمك؟/);
     ask('اسمي خالد محمد ورقمي 0512345678');
-    await screen.findByText('تم، وكتبت كمان رقم الجوال. المدينة: اختر من: الرياض، جدة.');
+    await screen.findByText('تم، وكتبت كمان رقم الجوال. المدينة: اختر وحدة من: الرياض، جدة.');
     expect((screen.getByLabelText(/^الاسم/) as HTMLInputElement).value).toBe('خالد محمد');
     expect((screen.getByLabelText(/رقم الجوال/) as HTMLInputElement).value).toBe('0512345678');
     ask('وقف');

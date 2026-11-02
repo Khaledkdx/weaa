@@ -52,3 +52,11 @@ test('extracts the named fields off a sentence and drops fields that were not as
     assert.equal(output.includes('test-secret'), false);
   } finally { global.fetch = original; if (key === undefined) delete process.env.OPENROUTER_API_KEY; else process.env.OPENROUTER_API_KEY = key; }
 });
+
+test('speech is read in a Saudi voice, with phone numbers said digit by digit', () => {
+  const { spokenForm, SPEECH_STYLE } = require('./assistant-server.cjs');
+  assert.equal(spokenForm('رقمك 0512345678، صح؟'), 'رقمك 0 5 1 2 3 4 5 6 7 8، صح؟');
+  assert.equal(spokenForm('19 مايو 2030'), '19 مايو 2030');
+  assert.match(SPEECH_STYLE, /Saudi/);
+  assert.match(SPEECH_STYLE, /Never sound Egyptian/);
+});
