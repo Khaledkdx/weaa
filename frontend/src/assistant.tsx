@@ -48,7 +48,7 @@ function openMap(href: string) {
 }
 // The contact page scrolls to its top on arrival; the map below the channels is brought into view after that.
 function showMapOnPage() {
-  for (const delay of [450, 1000]) window.setTimeout(() => document.getElementById('map')?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'center' }), delay);
+  return [450, 1000].map(delay => window.setTimeout(() => document.getElementById('map')?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'center' }), delay));
 }
 const telHref = (phone: string) => `tel:${phone.replace(/[^\d+]/g, '')}`;
 // A hidden link is clicked for the call, as a tap on the call button would do it. A browser that wants a fresh tap keeps
@@ -159,6 +159,8 @@ export function SiteAssistant() {
   const silentEnds = useRef(0);
   const heardSomething = useRef(false);
   const interactedAt = useRef(0);
+  // Timers that bring the contact page's map into view; cleared when the assistant goes away.
+  const mapTimers = useRef<number[]>([]);
   const hidden = pathname.startsWith('/admin');
   // On a form page the orb sits above the full-width submit button that phones render at the bottom.
   const onForm = pathname.startsWith('/join-us/');
@@ -467,11 +469,11 @@ export function SiteAssistant() {
         else navigate('/contact');
         if (epoch !== conversationEpoch.current) return;
       }
-      showMapOnPage();
+      mapTimers.current.push(...showMapOnPage());
       // On a phone the panel is a full sheet; it steps aside so the map shows, unless the visitor is talking or typing.
       if (typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 700px)').matches && !voiceRef.current && !liveRef.current) {
         const shownAt = Date.now();
-        window.setTimeout(() => { if (!liveRef.current && !speakingRef.current && interactedAt.current < shownAt) setOpen(false); }, 2500);
+        mapTimers.current.push(window.setTimeout(() => { if (!liveRef.current && !speakingRef.current && interactedAt.current < shownAt) setOpen(false); }, 2500));
       }
       settleTurn();
       return;
@@ -521,7 +523,7 @@ export function SiteAssistant() {
     if (restoreFocus.current) { restoreFocus.current = false; buttonRef.current?.focus(); }
   }, [open, exitVoice, fill]);
   useEffect(() => { if (hidden) { setOpen(false); stopListening(); stopSpeaking(); } }, [hidden, stopListening]);
-  useEffect(() => () => { conversationEpoch.current++; listenerRef.current?.stop(); releaseMicrophone(); stopSpeaking(); motions.current.forEach(animation => animation.cancel()); sheetRef.current?.remove(); window.clearTimeout(moodTimer.current); window.clearTimeout(doingTimer.current); }, []);
+  useEffect(() => () => { mapTimers.current.forEach(timer => window.clearTimeout(timer)); conversationEpoch.current++; listenerRef.current?.stop(); releaseMicrophone(); stopSpeaking(); motions.current.forEach(animation => animation.cancel()); sheetRef.current?.remove(); window.clearTimeout(moodTimer.current); window.clearTimeout(doingTimer.current); }, []);
   // The page keeps its last stretch clear of the voice bar, and the call button steps aside (assistant.css).
   useEffect(() => {
     document.documentElement.classList.toggle('has-voice-bar', voiceMode);
