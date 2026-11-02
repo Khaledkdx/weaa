@@ -370,55 +370,6 @@ body { background: var(--bg); color: var(--text); }
 .inquiry-actions .action-primary { background: var(--gold); color: var(--gold-text); border-color: var(--gold); }
 .inquiry-actions .action-primary:hover { background: var(--gold-bright); border-color: var(--gold-bright); }
 
-/* ---------- 8b. Floating call button ---------- */
-/* Gold is the one accent, so the pill reads as the primary action on any page. It springs in once per session, nudges
-   once a few seconds later, then rests: a persistent element that kept bouncing would be decoration the eye learns to
-   ignore. Transform and opacity only; both animations are finite and run off the main thread. */
-.call-fab {
-  position: fixed;
-  inset-inline-end: 20px;
-  bottom: max(20px, env(safe-area-inset-bottom));
-  z-index: 9;
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 56px;
-  padding: 0 18px;
-  border-radius: var(--r-pill);
-  background: var(--gold);
-  color: var(--gold-text);
-  font-weight: 900;
-  font-size: 14px;
-  box-shadow: var(--shadow-md);
-  transition: background-color var(--dur-hover) var(--ease-out), transform var(--dur-hover) var(--ease-spring), box-shadow var(--dur-hover) var(--ease-out);
-  animation: call-fab-in .6s var(--ease-spring) 1.2s backwards, call-fab-nudge .7s var(--ease-out) 6s;
-}
-.call-fab svg { font-size: 24px; flex: none; }
-.call-fab.is-settled { animation: none; }
-@media (hover: hover) and (pointer: fine) {
-  .call-fab:hover { background: var(--gold-bright); box-shadow: var(--shadow-lg); }
-}
-.call-fab:active { transform: scale(.96); box-shadow: var(--shadow-sm); transition-duration: var(--dur-press); }
-@keyframes call-fab-in {
-  from { opacity: 0; transform: translateY(24px) scale(.9); }
-  to { opacity: 1; transform: none; }
-}
-@keyframes call-fab-nudge {
-  0%, 100% { transform: none; }
-  30% { transform: translateY(-10px); }
-  55% { transform: translateY(0); }
-  75% { transform: translateY(-4px); }
-}
-@media (max-width: 700px) {
-  .call-fab { padding: 0 16px; min-height: 54px; }
-  .call-fab span { display: none; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .call-fab { animation: call-fab-fade .2s ease backwards; }
-  .call-fab:active { transform: none; }
-  @keyframes call-fab-fade { from { opacity: 0; } to { opacity: 1; } }
-}
-
 /* ---------- 9. Forms: solid surfaces (never light glass on glass), soft focus ring ---------- */
 .form-grid, .interior-form-page .form-grid {
   background: var(--surface);

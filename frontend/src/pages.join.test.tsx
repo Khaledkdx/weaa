@@ -88,6 +88,13 @@ describe('public form locations', () => {
     expect(screen.getByRole('link', { name: /11 511 0441/ }).getAttribute('href')).toBe('tel:+966115110441');
   });
 
+  it('opens the map from the headquarters in the contact band', () => {
+    const { container } = renderRoute('/');
+    const band = [...container.querySelectorAll('.contact-band-channels a')].find(link => link.textContent?.includes('المقر')) as HTMLAnchorElement;
+    expect(band.getAttribute('href')).toContain('ftid=0x3e2f05c347e3a157');
+    expect(band.target).toBe('_blank');
+  });
+
   it('shows the headquarters on a map under the contact details', () => {
     const { container } = renderRoute('/contact');
     expect(screen.getByText('الرياض، حي الملز، طريق صلاح الدين الأيوبي، 12836')).toBeTruthy();

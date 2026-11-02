@@ -232,7 +232,7 @@
 /* ---------- Voice mode: a bar at the foot of the screen, the page stays usable ----------
    Pressing the mic swaps the panel for a pill with the orb at its start, the live caption in the middle and two round
    controls (mute, end) at its end. Nothing covers the page: the visitor can scroll, read and fill things in while the
-   orb listens and answers. The page's last stretch is kept clear of the bar, and the call button steps aside. */
+   orb listens and answers. The page's last stretch is kept clear of the bar. */
 .assistant-live {
   position: fixed; inset-inline: 0; bottom: max(14px, env(safe-area-inset-bottom)); margin-inline: auto;
   width: min(640px, calc(100vw - 28px)); min-height: 64px;
@@ -244,7 +244,6 @@
 }
 @starting-style { .assistant-live { opacity: 0; transform: translateY(10px); } }
 html.has-voice-bar .site-shell { padding-bottom: 96px; }
-html.has-voice-bar .call-fab { opacity: 0; pointer-events: none; transition: opacity 200ms var(--ease-out); }
 .orb.is-live { --orb: 72px; flex: none; margin: -8px 0; transition: none; will-change: transform; }
 /* In the bar the badge floats above the orb, pointing down at it, and keeps only its animation: the bar says the words. */
 .orb.is-live .orb-badge { bottom: calc(100% + 10px); inset-inline-start: auto; left: 50%; translate: -50% 0; padding: 6px 9px; }

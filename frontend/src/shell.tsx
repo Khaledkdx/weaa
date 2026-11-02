@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { mapLink } from './location';
 import { Icon } from '@iconify/react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
@@ -100,19 +101,10 @@ export function Shell({ children, compact = false }: { children: ReactNode; comp
       {/* The legal name and registration numbers live here, not in the header. */}
       <div className="footer-brand"><strong>وعاء</strong><p>{cms.company.nameAr}</p><p>حلول لوجستية وإدارية تبدأ من احتياجك.</p></div>
       <div className="footer-links"><Link to="/services">الخدمات</Link><Link to="/join-us">انضم إلينا</Link><Link to="/contact">تواصل</Link></div>
-      <div className="footer-contact"><a href={`tel:${cms.company.phone.replace(/[^\d+]/g, '')}`}><bdi dir="ltr">{cms.company.phone}</bdi></a><a href={`mailto:${cms.company.email}`}><bdi dir="ltr">{cms.company.email}</bdi></a><span>{cms.company.headquarters}</span>{(cms.company.cr || cms.company.vat) && <span className="footer-legal">{cms.company.cr && `س.ت ${cms.company.cr}`}{cms.company.cr && cms.company.vat && ' · '}{cms.company.vat && `الرقم الضريبي ${cms.company.vat}`}</span>}</div>
+      <div className="footer-contact"><a href={`tel:${cms.company.phone.replace(/[^\d+]/g, '')}`}><bdi dir="ltr">{cms.company.phone}</bdi></a><a href={`mailto:${cms.company.email}`}><bdi dir="ltr">{cms.company.email}</bdi></a><a href={mapLink(cms.company)} target="_blank" rel="noopener noreferrer" aria-label={`المقر على الخريطة: ${cms.company.headquarters}`}>{cms.company.headquarters}</a>{(cms.company.cr || cms.company.vat) && <span className="footer-legal">{cms.company.cr && `س.ت ${cms.company.cr}`}{cms.company.cr && cms.company.vat && ' · '}{cms.company.vat && `الرقم الضريبي ${cms.company.vat}`}</span>}</div>
       <small>© {new Date().getFullYear()} وعاء للخدمات اللوجستية والإدارية</small>
     </footer>
-    {/* Not on form pages: at phone width it would sit on the full-width submit button, and the form is already the call to action. */}
-    {!compact && !pathname.startsWith('/join-us/') && <CallButton phone={cms.company.phone} />}
   </div>;
-}
-
-function CallButton({ phone }: { phone: string }) {
-  // The button is on every public page, so its entrance plays once per session rather than on every navigation.
-  const [settled] = useState(() => { try { return sessionStorage.getItem('weaa-call-fab') === '1'; } catch { return false; } });
-  useEffect(() => { try { sessionStorage.setItem('weaa-call-fab', '1'); } catch { /* The button still shows when browser storage is unavailable. */ } }, []);
-  return <a className={settled ? 'call-fab is-settled' : 'call-fab'} href={`tel:${phone.replace(/[^\d+]/g, '')}`} aria-label={`اتصل بنا ${phone}`}><Icon icon="solar:phone-calling-linear" /><span>اتصل بنا</span></a>;
 }
 
 export function Action({ to, children, secondary = false, icon }: { to: string; children: ReactNode; secondary?: boolean; icon?: string }) {

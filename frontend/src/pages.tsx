@@ -223,7 +223,7 @@ function HomeSectionView({ section, cms, index, cardMedia, listingMedia, bioMedi
     <div className="contact-band-channels">
       <a href={`tel:${cms.company.phone.replace(/[^\d+]/g, '')}`}><Icon icon="solar:phone-calling-linear" /><span>الهاتف</span><b><bdi dir="ltr">{cms.company.phone}</bdi></b></a>
       <a href={`mailto:${cms.company.email}`}><Icon icon="solar:letter-linear" /><span>البريد</span><b><bdi dir="ltr">{cms.company.email}</bdi></b></a>
-      <div><Icon icon="solar:map-point-linear" /><span>المقر</span><b>{cms.company.headquarters}</b></div>
+      <a href={mapLink(cms.company)} target="_blank" rel="noopener noreferrer"><Icon icon="solar:map-point-linear" /><span>المقر</span><b>{cms.company.headquarters}</b></a>
     </div>
   </div></section>;
   const cards = section.cards.filter(card => card.enabled && cardTarget(card, cms));
