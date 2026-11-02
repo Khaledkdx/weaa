@@ -61,35 +61,32 @@ flutter run -d chrome \
 If the Supabase values are missing, the site falls back to seeded in-memory
 content so the public pages still render.
 
-## GitHub Pages build
+## Hosting
 
-```bash
-flutter build web --base-href /weaa/ \
-  --dart-define=SUPABASE_URL=YOUR_URL \
-  --dart-define=SUPABASE_ANON_KEY=YOUR_ANON_KEY
-```
+The live site, www.weaa-sa.com, is a Node app on Hostinger. It runs
+`npm start`, which starts `server.js`. That server serves the built React site
+from `site/` and answers the assistant and service-inquiry API routes.
 
-Then copy `build/web/` to the repository root, keep `.nojekyll`, copy
-`index.html` to `404.html`, commit, and push to `main`.
+To publish a change:
 
-## Hostinger auto deploy
+1. Build the React site in `frontend/` with `npm run build`, then copy
+   `frontend/dist/` over `site/`.
+2. Commit and push to `main`.
+3. In Hostinger hPanel, open the Node app for weaa-sa.com and redeploy it from
+   `main`, unless automatic deployment is turned on there.
 
-The workflow in `.github/workflows/deploy-hostinger.yml` builds the Flutter Web
-site for the root domain and uploads `build/web/` to Hostinger on every push to
-`main`.
-
-Add these GitHub Actions secrets in the repository settings:
+Set these environment variables on the Hostinger Node app:
 
 ```text
-SUPABASE_URL
-SUPABASE_ANON_KEY
-HOSTINGER_FTP_SERVER
-HOSTINGER_FTP_USERNAME
-HOSTINGER_FTP_PASSWORD
-HOSTINGER_FTP_DIR
+OPENROUTER_API_KEY        the assistant's AI brain, voice and form extraction
+RESEND_API_KEY            email for new service inquiries
+NOTIFICATION_EMAIL
+NOTIFICATION_FROM_EMAIL
 ```
 
-Use `/public_html/` for `HOSTINGER_FTP_DIR` when deploying to the main domain.
+The workflow in `.github/workflows/check-site.yml` runs the server tests, the
+site tests and a production build on every push to `main`. It uploads nothing.
+GitHub Pages is turned off; the domain points to Hostinger.
 
 ## Admin
 

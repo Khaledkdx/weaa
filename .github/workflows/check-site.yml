@@ -1,0 +1,49 @@
+name: Check site
+
+# The live site runs as a Node app on Hostinger (server.js serving site/).
+# Hostinger pulls the code from GitHub itself; this workflow only checks that
+# what lands on main builds and passes its tests. It uploads nothing.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Test server and React site
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Server tests
+        run: npm test
+
+      - name: Install site dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Site tests
+        working-directory: frontend
+        run: npm test
+
+      - name: Type check and build
+        working-directory: frontend
+        run: npm run build
+
+      - name: Check the committed site build exists
+        run: test -f site/index.html && grep -q 'assets/index-' site/index.html
